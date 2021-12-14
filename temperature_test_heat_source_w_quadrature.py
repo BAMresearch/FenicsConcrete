@@ -61,6 +61,8 @@ T_ref = 25 # degree celsius
 # start with "real" fenics problem
 # Define variational problem
 T = Function(V) #temperature
+T_ = TrialFunction(V)
+dT = Function(V) #temperature
 alpha = Function(V) #alpha, degree of hydration
 vT = TestFunction(V)
 valpha = TestFunction(V)
@@ -92,16 +94,12 @@ dxm = dx(metadata=metadata)
 
 # heat problem
 # test problem with heatsource as x*temperature for testing purposes
-F_T = vol_heat_cap*(T)*vT*dxm + dt*dot(themal_cond_eff*grad(T), grad(vT))*dxm - vol_heat_cap*T_n*vT*dxm - dummy*T*vT*dxm
+F_T_ufl = vol_heat_cap*(T)*vT*dxm + dt*dot(themal_cond_eff*grad(T), grad(vT))*dxm - vol_heat_cap*T_n*vT*dxm
+F_T = F_T_ufl - dummy*T*vT*dxm
 
-a = vol_heat_cap*(T)*vT*dxm + dt*dot(themal_cond_eff*grad(T), grad(vT))*dxm - dummy*T*vT*dxm
-L = vol_heat_cap*T_n*vT*dxm
-#a = lhs(F_T)
-#L = rhs(F_T)
-
-#a = vol_heat_cap*(T)*vT*dx + dt*dot(themal_cond_eff*grad(T), grad(vT))*dx - dummy*T*vT*dx
-#L = vol_heat_cap*T_n*vT*dx
-
+# derivtive
+dF_T_ufl =derivative(F_T_ufl,T)
+dF_T = dF_T_ufl - dummy*T_*vT*dxm
 
 
 t = dt
@@ -123,11 +121,37 @@ pv_file.write(doh,0) # Save solution to file in XDMF format
 # plot data fields
 plot_data = [[[],[],[]],[[],[],[]],[[],[],[]]]
 
+class Problem(NonlinearProblem):
+    def __init__(self):
+        super().__init__()
+        self.assembler = SystemAssembler(dF_T, F_T, bc)
+
+    def F(self, b, x):
+        #if not self.assembler:
+        #    raise RuntimeError("You need to `.set_bcs(bcs)` before the solve!")
+        #self.evaluate_material()
+        self.assembler.assemble(b, x)
+
+    def J(self, A, x):
+        self.assembler.assemble(A)
+
+problem=Problem()
+solver = NewtonSolver()
+
+#time
 while t <= time:
     print('time =', t)
 
     print('Solving: T')
+    solver.solve(problem, T.vector())
     # solve temperature
+   # ass_dF_T, ass_F_T= assemble_system(dF_T,F_T,bc,x0 = T.vector())
+    #ass_F_T= assemble(F_T)
+    #bc.apply(ass_dF_T,ass_F_T)
+    #solve(ass_dF_T,dT.vector(),ass_F_T)
+
+    #T.assign(T - dT)
+    print(T.vector()[:])
 
     #A = assemble(a)
     #b = assemble(L)
@@ -137,8 +161,10 @@ while t <= time:
 
 
 
-    solve(a - L == 0, T, bc)
+    #solve(a - L == 0, T, bc)
     #solve(F_T == 0, T, bc)
+
+    #print(T.vector()[:])
 
     # prepare next timestep
     t += dt
