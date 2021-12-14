@@ -94,10 +94,10 @@ dxm = dx(metadata=metadata)
 # test problem with heatsource as x*temperature for testing purposes
 F_T = vol_heat_cap*(T)*vT*dxm + dt*dot(themal_cond_eff*grad(T), grad(vT))*dxm - vol_heat_cap*T_n*vT*dxm - dummy*T*vT*dxm
 
+a = vol_heat_cap*(T)*vT*dxm + dt*dot(themal_cond_eff*grad(T), grad(vT))*dxm - dummy*T*vT*dxm
+L = vol_heat_cap*T_n*vT*dxm
 #a = lhs(F_T)
 #L = rhs(F_T)
-a = lhs(F_T)
-L = rhs(F_T)
 
 #a = vol_heat_cap*(T)*vT*dx + dt*dot(themal_cond_eff*grad(T), grad(vT))*dx - dummy*T*vT*dx
 #L = vol_heat_cap*T_n*vT*dx
@@ -129,15 +129,15 @@ while t <= time:
     print('Solving: T')
     # solve temperature
 
-    A = assemble(a)
-    b = assemble(L)
-    bc.apply(A,b)
+    #A = assemble(a)
+    #b = assemble(L)
+    #bc.apply(A,b)
 
-    solve(A,T.vector(),b)
+    #solve(A,T.vector(),b)
 
 
 
-    #solve(a - L == 0, T, bc)
+    solve(a - L == 0, T, bc)
     #solve(F_T == 0, T, bc)
 
     # prepare next timestep
