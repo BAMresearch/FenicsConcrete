@@ -76,30 +76,30 @@ cell = mesh.ufl_cell()
 q_dim = 1 # only temperature...
 deg_q = 1 # I think...
 
-QV = VectorElement(q, cell, deg_q, quad_scheme="default", dim=q_dim)
-QT = TensorElement(q, cell, deg_q, quad_scheme="default", shape=(q_dim, q_dim))
-VQV, VQT = [FunctionSpace(mesh, Q) for Q in [QV, QT]]
+# "scalar element" is called FiniteElement, ... I think
+QV = FiniteElement(q, cell, deg_q, quad_scheme="default")
+VQV =  FunctionSpace(mesh, QV)
 
-q_source = Function(VQV, name="heat source")
-q_eps = Function(VQV, name="strains")
-q_dsource_dtemp = Function(VQT, name="source_temperature tangent")
+q_dummy = Function(VQV, name="heat source")
+q_temp = Function(VQV, name="temperature")
+q_ddummy_dtemp = Function(VQV, name="source_temperature tangent")
 
 metadata = {"quadrature_degree": deg_q, "quadrature_scheme": "default"}
 dxm = dx(metadata=metadata)
 
-# How do I define these... ???? ...???
-# R = -inner(eps(u_), q_sigma) * dxm
-# dR = inner(eps(du), dot(q_dsigma_deps, eps(u_))) * dxm
+# test
+q_dummy = Constant(1800)
+
 
 
 # heat problem
 # test problem with heatsource as x*temperature for testing purposes
 F_T_ufl = vol_heat_cap*(T)*vT*dxm + dt*dot(themal_cond_eff*grad(T), grad(vT))*dxm - vol_heat_cap*T_n*vT*dxm
-F_T = F_T_ufl - dummy*T*vT*dxm
+F_T = F_T_ufl - q_dummy*T*vT*dxm
 
-# derivtive
+# derivative
 dF_T_ufl =derivative(F_T_ufl,T)
-dF_T = dF_T_ufl - dummy*T_*vT*dxm
+dF_T = dF_T_ufl - q_dummy*T_*vT*dxm
 
 
 t = dt
@@ -120,6 +120,15 @@ pv_file.write(doh,0) # Save solution to file in XDMF format
 
 # plot data fields
 plot_data = [[[],[],[]],[[],[],[]],[[],[],[]]]
+
+
+# try to fill q_dummy with different values at each point
+#n_gauss = len(q_dummy.vector().get_local())
+
+
+
+
+
 
 class Problem(NonlinearProblem):
     def __init__(self):
@@ -145,26 +154,8 @@ while t <= time:
     print('Solving: T')
     solver.solve(problem, T.vector())
     # solve temperature
-   # ass_dF_T, ass_F_T= assemble_system(dF_T,F_T,bc,x0 = T.vector())
-    #ass_F_T= assemble(F_T)
-    #bc.apply(ass_dF_T,ass_F_T)
-    #solve(ass_dF_T,dT.vector(),ass_F_T)
 
-    #T.assign(T - dT)
     print(T.vector()[:])
-
-    #A = assemble(a)
-    #b = assemble(L)
-    #bc.apply(A,b)
-
-    #solve(A,T.vector(),b)
-
-
-
-    #solve(a - L == 0, T, bc)
-    #solve(F_T == 0, T, bc)
-
-    #print(T.vector()[:])
 
     # prepare next timestep
     t += dt
@@ -211,3 +202,41 @@ ax2.set_title('Degree of hydration')
 fig.suptitle('Some points', fontsize=16)
 
 plt.show()
+
+# some copied functions from fenics constitutive
+
+def set_q(q, values):
+    """
+    q:
+        quadrature function space
+    values:
+        entries for `q`
+    """
+    v = q.vector()
+    v.zero()
+    v.add_local(values.flat)
+    v.apply("insert")
+
+class LocalProjector:
+    def __init__(self, expr, V, dxm):
+        """
+        expr:
+            expression to project
+        V:
+            quadrature function space
+        dxm:
+            dolfin.Measure("dx") that matches V
+        """
+        dv = TrialFunction(V)
+        v_ = TestFunction(V)
+        a_proj = inner(dv, v_) * dxm
+        b_proj = inner(expr, v_) * dxm
+        self.solver = LocalSolver(a_proj, b_proj)
+        self.solver.factorize()
+
+    def __call__(self, u):
+        """
+        u:
+            function that is filled with the solution of the projection
+        """
+        self.solver.solve_local_rhs(u)
