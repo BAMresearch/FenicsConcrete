@@ -150,11 +150,14 @@ for i in range(n_gauss):
 set_q(q_dummy, dummy_list)
 
 # visualize dummy field
+#visu_space = FunctionSpace(mesh, "P", 1)
+#dummy_plot = project(q_dummy, visu_space, form_compiler_parameters={"quadrature_degree": 1})
 visu_space = FunctionSpace(mesh, "DG", 0)
 dummy_plot = project(q_dummy, visu_space)
-#dummy_plot.rename("dummy" , "dummy")
+dummy_plot.rename("dummy" , "dummy")
 f = XDMFFile("dummy_plot.xdmf")
-f.write(dummy_plot,0.)
+f.write(dummy_plot,0., encoding=XDMFFile.Encoding.ASCII)
+#f.write(dummy_plot,0.)
 print('Moin')
 
 
