@@ -14,7 +14,7 @@ from PIL import Image
 
 
 # Create mesh and define function space
-nx = ny = 4
+nx = ny = 10
 mesh = UnitSquareMesh(nx, ny)
 V = FunctionSpace(mesh, 'P', 1)
 
@@ -81,14 +81,14 @@ QV = FiniteElement(q, cell, deg_q, quad_scheme="default")
 VQV =  FunctionSpace(mesh, QV)
 
 q_dummy = Function(VQV, name="heat source")
-q_temp = Function(VQV, name="temperature")
-q_ddummy_dtemp = Function(VQV, name="source_temperature tangent")
+#q_temp = Function(VQV, name="temperature")
+#q_ddummy_dtemp = Function(VQV, name="source_temperature tangent")
 
 metadata = {"quadrature_degree": deg_q, "quadrature_scheme": "default"}
 dxm = dx(metadata=metadata)
 
 # test
-q_dummy = Constant(1800)
+#q_dummy = Constant(1800)
 
 
 
@@ -123,8 +123,39 @@ plot_data = [[[],[],[]],[[],[],[]],[[],[],[]]]
 
 
 # try to fill q_dummy with different values at each point
-#n_gauss = len(q_dummy.vector().get_local())
+def set_q(q, values):
+    """
+    q:
+        quadrature function space
+    values:
+        entries for `q`
+    """
+    v = q.vector()
+    v.zero()
+    v.add_local(values.flat)
+    v.apply("insert")
 
+
+
+n_gauss = len(q_dummy.vector())
+print(n_gauss)
+dummy_list = np.zeros(n_gauss)
+# applying different values at each quadrature point, as a test
+for i in range(n_gauss):
+    #dummy_list[i] = i/n_gauss*3600 # 1800
+    if i%13 == 0:
+        dummy_list[i] = 3600  # 1800
+        #print(i)
+
+set_q(q_dummy, dummy_list)
+
+# visualize dummy field
+visu_space = FunctionSpace(mesh, "DG", 0)
+dummy_plot = project(q_dummy, visu_space)
+#dummy_plot.rename("dummy" , "dummy")
+f = XDMFFile("dummy_plot.xdmf")
+f.write(dummy_plot,0.)
+print('Moin')
 
 
 
@@ -205,17 +236,6 @@ plt.show()
 
 # some copied functions from fenics constitutive
 
-def set_q(q, values):
-    """
-    q:
-        quadrature function space
-    values:
-        entries for `q`
-    """
-    v = q.vector()
-    v.zero()
-    v.add_local(values.flat)
-    v.apply("insert")
 
 class LocalProjector:
     def __init__(self, expr, V, dxm):
