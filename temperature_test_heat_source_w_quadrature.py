@@ -59,14 +59,14 @@ class concrete_material_data:
         self.specific_heat_capacity = Constant(900)  # effective specific heat capacity in J kg⁻1 K⁻1
         self.vol_heat_cap = self.density * self.specific_heat_capacity
         # values from book for CEM I 52.5
-        self.Q_inf = Constant(505900)  # potential heat approx. in J/kg?? ... TODO : maybe change units to kg??? or mutiply with some binder value...
-        self.B1 = Constant(3.79E-4)  # in 1/s
-        self.B2 = Constant(6E-5)  # -
-        self.eta = Constant(5.8)  # something about diffusion
-        self.alpha_max = Constant(0.85)  # also possible to approximate based on equation with w/c
-        self.E_act = 38300  # activation energy in Jmol^-1
-        self.T_ref_celsius = 25  # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
-        self.T_ref = self.T_ref_celsius + self.zeroC # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
+        #self.Q_inf = Constant(505900)  # potential heat approx. in J/kg?? ... TODO : maybe change units to kg??? or mutiply with some binder value...
+        #self.B1 = Constant(3.79E-4)  # in 1/s
+        #self.B2 = Constant(6E-5)  # -
+        #self.eta = Constant(5.8)  # something about diffusion
+        #self.alpha_max = Constant(0.85)  # also possible to approximate based on equation with w/c
+        #self.E_act = 38300  # activation energy in Jmol^-1
+        #self.T_ref_celsius = 25  # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
+        #self.T_ref = self.T_ref_celsius + self.zeroC # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
 
         # Young's modulus          [N/mm²]
         #self.E = 20000.0
@@ -99,8 +99,6 @@ class concrete_temp_hydration_model(NonlinearProblem):
     def __init__(self, mesh, mat, **kwargs):
         NonlinearProblem.__init__(self) # apparently required to initialize things
         self.mat = mat # object with material data, parameters etc...
-        deg_d = 2  #???
-        deg_e = 2  #???
         deg_q = 1  # quadrature degree, TODO, should/could this be based on the mesh?
 
         metadata = {"quadrature_degree": deg_q, "quadrature_scheme": "default"}
