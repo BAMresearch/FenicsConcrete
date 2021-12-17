@@ -175,22 +175,40 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         self.project_T(self.q_T)
 
         t_vector = self.q_T.vector().get_local()
+        dummy = 1800*300
 
         n_gauss = len(self.q_dummy.vector())
         dummy_list = np.zeros(n_gauss)
         alpha_list = np.zeros(n_gauss)
+        dalpha_dT_list = np.zeros(n_gauss)
         # applying different values at each quadrature point, as a test
         for i in range(n_gauss):
-            dummy_list[i] = i / n_gauss * 3600  # 1800
+            # this is working x*T
+            #alpha_list[i] = dummy * t_vector[i]
+            #dalpha_dT_list[i] = dummy
+            #print(i,alpha_list[i],dalpha_dT_list[i])
+
+
+            # this is not working x/T
+            #alpha_list[i] = dummy / t_vector[i]
+            #dalpha_dT_list[i] = - dummy / t_vector[i]**2.0
+            #print(i,t_vector[i])
+            #alpha_list[i] = (dummy * t_vector[i] **2 )**0.5
+            #dalpha_dT_list[i] = dummy**2.5/t_vector[i]
+
+
+
+            alpha_list[i] = dummy * self.mat.temp_adjust(t_vector[i])
+            dalpha_dT_list[i] = alpha_list[i] * self.mat.E_act/self.mat.igc/t_vector[i]**2
             #dummy_list[i] = 3600  # 1800
-            alpha_list[i] = t_vector[i]*dummy_list[i]
+           # alpha_list[i] = t_vector[i]*dummy_list[i]
             # if i%13 == 0:
             #    dummy_list[i] = 3600  # 1800
             # print(i)
 
 
         set_q(self.q_alpha, alpha_list)
-        set_q(self.q_dalpha_dT, dummy_list)
+        set_q(self.q_dalpha_dT, dalpha_dT_list)
 
 
         # get the actual values as vector???
@@ -236,7 +254,7 @@ class ConcreteTempHydrationModel(NonlinearProblem):
 
 
 # Create mesh and define function space
-nx = ny = 4
+nx = ny = 10
 mesh = UnitSquareMesh(nx, ny)
 
 mat = ConcreteMaterialData() # setting up some basic material things
@@ -258,6 +276,8 @@ concrete_problem.set_bcs(bc)
 # TODO is this correctly implemented, is there a better/easier way????
 # Initial temp. condition
 concrete_problem.T_n.interpolate(t0)
+# might be necessary for first interation step... TODO: what about boundary values???
+concrete_problem.T.interpolate(t0)
 
 # data for time stepping
 #time steps
