@@ -64,15 +64,21 @@ class ConcreteMaterialData:
         #self.B2 = Constant(6E-5)  # -
         #self.eta = Constant(5.8)  # something about diffusion
         #self.alpha_max = Constant(0.85)  # also possible to approximate based on equation with w/c
-        #self.E_act = 38300  # activation energy in Jmol^-1
-        #self.T_ref_celsius = 25  # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
-        #self.T_ref = self.T_ref_celsius + self.zeroC # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
+        self.E_act = 38300  # activation energy in Jmol^-1
+        self.igc = 8.3145  # ideal gas constant [JK −1 mol −1 ]
+        self.T_ref_celsius = 25  # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
+        self.T_ref = self.T_ref_celsius + self.zeroC # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
 
         # Young's modulus          [N/mm²]
         #self.E = 20000.0
         # damage law
         #self.dmg = damage_exponential
         # define some material paramers... maybe depending on concrete type??
+
+    # find out if this forumla deals with kelvin or celsius???
+    def temp_adjust(self, T):
+        # T is the temparature
+        return exp(-self.E_act/self.igc*(1/T-1/self.T_ref))
 
 
     #
@@ -116,12 +122,12 @@ class ConcreteTempHydrationModel(NonlinearProblem):
 
         # quadrature functions
         self.q_dummy = Function(q_V, name="dummy field")
-        #self.q_T = Function(q_V, name="temperature")
-        #self.q_alpha = Function(q_V, name="degree of hydration")
+        self.q_T = Function(q_V, name="temperature")
+        self.q_alpha = Function(q_V, name="degree of hydration")
         #self.q_A = Function(q_V, name="affinity")
         #self.q_g = Function(q_V, name="temperature correction")
 
-        #self.q_dalpha_dT = Function(q_V, name="current degree of hydration")
+        self.q_dalpha_dT = Function(q_V, name="current degree of hydration")
         #self.q_dg_dT = Function(q_V, name="temperature correction tangent")
 
         # Define variational problem
@@ -141,31 +147,23 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         self.dt = Constant(0)       # TODO somehow make sure this is reset!
 
 
-
-        # try to fill q_dummy with different values at each point
-        # n_gauss = len(self.q_dummy.vector())
-        # dummy_list = np.zeros(n_gauss)
-        # # applying different values at each quadrature point, as a test
-        # for i in range(n_gauss):
-        #     dummy_list[i] = i/n_gauss*3600 # 1800
-        # set_q(self.q_dummy, dummy_list)
-
         # test problem with heatsource as x*temperature for testing purposes
         # normal form
         R_ufl = mat.vol_heat_cap * (self.T) * vT * dxm
         R_ufl += self.dt * dot(mat.themal_cond * grad(self.T),grad(vT)) * dxm
         R_ufl += - mat.vol_heat_cap * self.T_n * vT * dxm
         self.R = R_ufl
-        self.R = R_ufl - self.q_dummy * self.T * vT * dxm
+        #self.R = R_ufl - self.q_dummy * self.T * vT * dxm
+        self.R = R_ufl - self.q_alpha * vT * dxm
         #self.R = R_ufl - self.q_dummy * self.q_T * vT * dxm
 
         # derivative
         dR_ufl = derivative(R_ufl, self.T)
         self.dR = dR_ufl
-        self.dR = dR_ufl - self.q_dummy * T_ * vT * dxm
+        self.dR = dR_ufl - self.q_dalpha_dT * T_ * vT * dxm
 
         # setup projector to project continuous funtionspace to quadrature
-        #self.project_T = LocalProjector(self.T, q_V, dxm)
+        self.project_T = LocalProjector(self.T, q_V, dxm)
 
         #self.calculate_eps = LocalProjector(eps(d), VQV, dxm)
         #self.calculate_e = LocalProjector(e, VQF, dxm)
@@ -174,22 +172,25 @@ class ConcreteTempHydrationModel(NonlinearProblem):
 
     def evaluate_material(self):
         # project stuff (temperautre) onto their quadrature spaces
-        #self.project_T(self.q_T)
+        self.project_T(self.q_T)
+
+        t_vector = self.q_T.vector().get_local()
 
         n_gauss = len(self.q_dummy.vector())
-        print(n_gauss)
         dummy_list = np.zeros(n_gauss)
+        alpha_list = np.zeros(n_gauss)
         # applying different values at each quadrature point, as a test
         for i in range(n_gauss):
             dummy_list[i] = i / n_gauss * 3600  # 1800
             #dummy_list[i] = 3600  # 1800
+            alpha_list[i] = t_vector[i]*dummy_list[i]
             # if i%13 == 0:
             #    dummy_list[i] = 3600  # 1800
             # print(i)
 
-        set_q(self.q_dummy, dummy_list)
-        #TODO add here the dummy values???
-        #self.q_dummy = Constant(1800)
+
+        set_q(self.q_alpha, alpha_list)
+        set_q(self.q_dalpha_dT, dummy_list)
 
 
         # get the actual values as vector???
