@@ -50,7 +50,7 @@ class LocalProjector:
         self.solver.solve_local_rhs(u)
 
 # stuff relevant to compute the degree of hydration at the integration points...
-class concrete_material_data:
+class ConcreteMaterialData:
     def __init__(self):
         self.zeroC = 273.15 # temperature in kelvon for zero degree celsius
         # Material parameter for concrete model with temperature and hydration
@@ -95,7 +95,7 @@ class concrete_material_data:
     # def update(self, e):
     #     self.kappa = self.kappa_kkt(e)
 
-class concrete_temp_hydration_model(NonlinearProblem):
+class ConcreteTempHydrationModel(NonlinearProblem):
     def __init__(self, mesh, mat, **kwargs):
         NonlinearProblem.__init__(self) # apparently required to initialize things
         self.mat = mat # object with material data, parameters etc...
@@ -127,7 +127,7 @@ class concrete_temp_hydration_model(NonlinearProblem):
         # Define variational problem
         self.T = Function(self.V)  # temperature
         self.T_n = Function(self.V)  # overwritten later...
-        #T_ = TrialFunction(self.V) # temperature
+        T_ = TrialFunction(self.V) # temperature
         #alpha = Function(self.V)  # alpha, degree of hydration
         vT = TestFunction(self.V)
         #valpha = TestFunction(self.V)
@@ -137,6 +137,7 @@ class concrete_temp_hydration_model(NonlinearProblem):
         # thermal con eff
         # vol heat cap
         # more????
+        # 60*60
         self.dt = Constant(0)       # TODO somehow make sure this is reset!
 
 
@@ -155,13 +156,13 @@ class concrete_temp_hydration_model(NonlinearProblem):
         R_ufl += self.dt * dot(mat.themal_cond * grad(self.T),grad(vT)) * dxm
         R_ufl += - mat.vol_heat_cap * self.T_n * vT * dxm
         self.R = R_ufl
-        #self.R = R_ufl - self.q_dummy * self.T * vT * dxm
+        self.R = R_ufl - self.q_dummy * self.T * vT * dxm
         #self.R = R_ufl - self.q_dummy * self.q_T * vT * dxm
 
         # derivative
         dR_ufl = derivative(R_ufl, self.T)
         self.dR = dR_ufl
-        #self.dR = dR_ufl - self.q_dummy * T_ * vT * dxm
+        self.dR = dR_ufl - self.q_dummy * T_ * vT * dxm
 
         # setup projector to project continuous funtionspace to quadrature
         #self.project_T = LocalProjector(self.T, q_V, dxm)
@@ -173,8 +174,23 @@ class concrete_temp_hydration_model(NonlinearProblem):
 
     def evaluate_material(self):
         # project stuff (temperautre) onto their quadrature spaces
-        pass
         #self.project_T(self.q_T)
+
+        n_gauss = len(self.q_dummy.vector())
+        print(n_gauss)
+        dummy_list = np.zeros(n_gauss)
+        # applying different values at each quadrature point, as a test
+        for i in range(n_gauss):
+            dummy_list[i] = i / n_gauss * 3600  # 1800
+            #dummy_list[i] = 3600  # 1800
+            # if i%13 == 0:
+            #    dummy_list[i] = 3600  # 1800
+            # print(i)
+
+        set_q(self.q_dummy, dummy_list)
+        #TODO add here the dummy values???
+        #self.q_dummy = Constant(1800)
+
 
         # get the actual values as vector???
         # temperature_vector = self.q_T.vector().get_local()
@@ -222,12 +238,12 @@ class concrete_temp_hydration_model(NonlinearProblem):
 nx = ny = 4
 mesh = UnitSquareMesh(nx, ny)
 
-mat = concrete_material_data() # setting up some basic material things
-concrete_problem = concrete_temp_hydration_model(mesh, mat)  #setting up the material problem, with material data and mesh
+mat = ConcreteMaterialData() # setting up some basic material things
+concrete_problem = ConcreteTempHydrationModel(mesh, mat)  #setting up the material problem, with material data and mesh
 
 # Define boundary and initial conditions
 t_boundary = 25+273.15  # input in celcius
-t_zero = 25+273.15 # input in celcius
+t_zero = 20+273.15 # input in celcius
 t0 = Expression('t_zero', t_zero=t_zero, degree= 0)
 u0 = Expression('t_boundary', t_boundary = t_boundary, degree= 1)
 
@@ -240,7 +256,7 @@ concrete_problem.set_bcs(bc)
 
 # TODO is this correctly implemented, is there a better/easier way????
 # Initial temp. condition
-concrete_problem.T_n = interpolate(t0, concrete_problem.V)
+concrete_problem.T_n.interpolate(t0)
 
 # data for time stepping
 #time steps
@@ -248,7 +264,9 @@ dt = 60*60# time step
 hours = 48
 time = hours*60*60          # total simulation time in s
 
-concrete_problem.dt = Constant(dt) # for time integration scheme
+# set them directly in the class
+# todo maybe rather add a function ".set_timestep(dt)" ???
+concrete_problem.dt.assign(Constant(dt)) # for time integration scheme
 
 t = dt # first time step time
 

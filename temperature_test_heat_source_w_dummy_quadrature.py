@@ -14,7 +14,7 @@ from PIL import Image
 
 
 # Create mesh and define function space
-nx = ny = 10
+nx = ny = 4
 mesh = UnitSquareMesh(nx, ny)
 V = FunctionSpace(mesh, 'P', 1)
 
@@ -142,9 +142,9 @@ print(n_gauss)
 dummy_list = np.zeros(n_gauss)
 # applying different values at each quadrature point, as a test
 for i in range(n_gauss):
-    #dummy_list[i] = i/n_gauss*3600 # 1800
-    if i%13 == 0:
-        dummy_list[i] = 3600  # 1800
+    dummy_list[i] = i/n_gauss*3600 # 1800
+    #if i%13 == 0:
+    #    dummy_list[i] = 3600  # 1800
         #print(i)
 
 set_q(q_dummy, dummy_list)
