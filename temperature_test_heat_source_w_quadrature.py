@@ -11,6 +11,7 @@ from fenics import *
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
+from scipy.optimize import newton
 
 # helper functions...
 def set_q(q, values):
@@ -60,10 +61,10 @@ class ConcreteMaterialData:
         self.vol_heat_cap = self.density * self.specific_heat_capacity
         # values from book for CEM I 52.5
         #self.Q_inf = Constant(505900)  # potential heat approx. in J/kg?? ... TODO : maybe change units to kg??? or mutiply with some binder value...
-        #self.B1 = Constant(3.79E-4)  # in 1/s
-        #self.B2 = Constant(6E-5)  # -
-        #self.eta = Constant(5.8)  # something about diffusion
-        #self.alpha_max = Constant(0.85)  # also possible to approximate based on equation with w/c
+        self.B1 = Constant(3.79E-4)  # in 1/s
+        self.B2 = Constant(6E-5)  # -
+        self.eta = Constant(5.8)  # something about diffusion
+        self.alpha_max = Constant(0.85)  # also possible to approximate based on equation with w/c
         self.E_act = 38300  # activation energy in Jmol^-1
         self.igc = 8.3145  # ideal gas constant [JK −1 mol −1 ]
         self.T_ref_celsius = 25  # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
@@ -199,12 +200,19 @@ class ConcreteTempHydrationModel(NonlinearProblem):
 
 
             alpha_list[i] = dummy * self.mat.temp_adjust(t_vector[i])
+            #todo the function temp adjust i mut into material field... should the derrivative be there as welll???
             dalpha_dT_list[i] = alpha_list[i] * self.mat.E_act/self.mat.igc/t_vector[i]**2
             #dummy_list[i] = 3600  # 1800
            # alpha_list[i] = t_vector[i]*dummy_list[i]
             # if i%13 == 0:
             #    dummy_list[i] = 3600  # 1800
             # print(i)
+
+        #testing stuff for solving for alpha!!!
+
+        alpha_n=0.5
+        #  function, estimate (last timestep),
+        print('testing:',alpha_n,newton(self.alpha_fkt,alpha_n))
 
 
         set_q(self.q_alpha, alpha_list)
@@ -224,6 +232,18 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         # set_q(self.q_sigma, self.mat.sigma)
         # set_q(self.q_dsigma_deps, self.mat.dsigma_deps)
         # set_q(self.q_dsigma_de, self.mat.dsigma_de)
+
+    #understand and use the scypy newton solver correctly!
+    def alpha_fkt(self,alpha):
+        alpha_n = 0.1
+        B1 = 3.79E-4 # in 1/s
+        B2 = 6E-5  # -
+        eta = 5.8  # something about diffusion
+        alpha_max = 0.85  # also possible to approximate based on equation with w/c
+        affinity = B1*(B2/alpha_max+alpha)*(alpha_max-alpha)*exp(-eta*alpha/alpha_max)
+        print(affinity)
+        alpha = affinity+alpha_n
+        return alpha
 
     def update(self):
         # when or what do I need to update???
