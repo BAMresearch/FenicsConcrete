@@ -154,13 +154,13 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         #R_ufl += - mat.Q_inf * self.q_delta_alpha * vT * dxm
         #R_ufl += - mat.Q_inf * self.q_delta_alpha * vT * dxm * self.T/290
 
-        self.R = R_ufl - mat.Q_inf * self.q_delta_alpha * self.T/270 * vT * dxm
+        self.R = R_ufl - mat.Q_inf * self.q_delta_alpha * vT * dxm
         #self.R = R_ufl - mat.Q_inf * self.q_alpha * vT * dxm
         #self.R = R_ufl - self.q_dummy * self.q_T * vT * dxm
 
         # derivative
         dR_ufl = derivative(R_ufl, self.T)
-        self.dR = dR_ufl - mat.Q_inf * self.q_delta_alpha/270 * T_ * vT * dxm
+        self.dR = dR_ufl - mat.Q_inf * self.q_dalpha_dT * T_ * vT * dxm
         #self.dR = dR_ufl - mat.Q_inf * self.q_dalpha_dT * T_ * vT * dxm
 
         # setup projector to project continuous funtionspace to quadrature
@@ -173,8 +173,8 @@ class ConcreteTempHydrationModel(NonlinearProblem):
 
     def evaluate_material(self):
         # project stuff (temperautre) onto their quadrature spaces
-        #self.project_T(self.q_T)
-        #t_vector = self.q_T.vector().get_local()
+        self.project_T(self.q_T)
+        t_vector = self.q_T.vector().get_local()
 
         #define the functions
         def affinity_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max):
@@ -188,11 +188,21 @@ class ConcreteTempHydrationModel(NonlinearProblem):
                             -eta / alpha_max) - B2 / alpha_max - 2 * (delta_alpha + alpha_n) + alpha_max)
             return affinity_prime
 
+        def temp_adjust(T, E_act, igc, T_ref):
+            # T is the temparature
+            return exp(-E_act / igc * (1 / T - 1 / T_ref))
+
         def delta_alpha_fkt(delta_alpha, alpha_n, dt, B1, B2, eta, alpha_max):
             return delta_alpha - dt * affinity_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max)
 
         def delta_alpha_prime(delta_alpha, alpha_n, dt, B1, B2, eta, alpha_max):
             return 1 - dt * affinity_prime_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max)
+
+        def delta_alpha_fkt_T(delta_alpha, alpha_n, dt, B1, B2, eta, alpha_max, T, E_act, igc, T_ref):
+            return delta_alpha - dt * affinity_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max) * temp_adjust(T, E_act, igc, T_ref)
+
+        def delta_alpha_prime_T(delta_alpha, alpha_n, dt, B1, B2, eta, alpha_max, T, E_act, igc, T_ref):
+            return 1 - dt * affinity_prime_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max) * temp_adjust(T, E_act, igc, T_ref)
 
         # get alpha values
         alpha_n_list = self.q_alpha_n.vector().get_local()
@@ -202,15 +212,24 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         n_gauss = len(self.q_alpha.vector())
 
         delta_alpha_list = np.zeros(n_gauss)
+        dalpha_dT_list = np.zeros(n_gauss)
 
         #loop over all gauss points "compute" new alpha
         for i in range(n_gauss):
 
             #solve for delta alpha
-            delta_alpha_list[i] = scipy.optimize.newton(delta_alpha_fkt, args=(alpha_n_list[i], float(self.dt), self.mat.B1, self.mat.B2, self.mat.eta, self.mat.alpha_max),
-                                                fprime=delta_alpha_prime, x0=0.2)
+            delta_alpha_list[i] = scipy.optimize.newton(delta_alpha_fkt_T, args=(alpha_n_list[i], float(self.dt), self.mat.B1, self.mat.B2, self.mat.eta, self.mat.alpha_max, t_vector[i], self.mat.E_act, self.mat.igc, self.mat.T_ref),
+                                                fprime=delta_alpha_prime_T, x0=0.2)
+            #print('new:', i, delta_alpha_list[i])
+            #delta_alpha_list[i] = scipy.optimize.newton(delta_alpha_fkt, args=(alpha_n_list[i], float(self.dt), self.mat.B1, self.mat.B2, self.mat.eta, self.mat.alpha_max),
+            #                                    fprime=delta_alpha_prime, x0=0.2)
+
+            #print('old:',  i, delta_alpha_list[i])
+            delta_alpha_list[i] = delta_alpha_list[i] # TODO add correct derrivative
+
 
             alpha_list[i] = alpha_n_list[i] + delta_alpha_list[i]
+            dalpha_dT_list[i] = dt * affinity_fkt(alpha_list[i], alpha_n_list[i], self.mat.B1, self.mat.B2, self.mat.eta, self.mat.alpha_max)* self.mat.E_act/self.mat.igc/t_vector[i]**2
 
 
 
@@ -224,7 +243,7 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         set_q(self.q_alpha, alpha_list)
         #set_q(self.q_alpha_n, alpha_n_list)
         set_q(self.q_delta_alpha, delta_alpha_list)
-        #set_q(self.q_dalpha_dT, dalpha_dT_list)
+        set_q(self.q_dalpha_dT, dalpha_dT_list)
 
 
 
@@ -271,7 +290,7 @@ concrete_problem = ConcreteTempHydrationModel(mesh, mat)  #setting up the materi
 
 # Define boundary and initial conditions
 t_boundary = 25+273.15  # input in celcius???
-t_zero = 20+273.15 # input in celcius???
+t_zero = 30+273.15 # input in celcius???
 alpha_zero = 0 # ... how to assigin that to function space???
 # TODO should initial condition be treated "inside" and controlled as "material" paramter????
 
@@ -293,9 +312,9 @@ concrete_problem.T.interpolate(t0)
 
 # data for time stepping
 #time steps
-dt = 60*60*3# time step
+dt = 60*60# time step
 hours = 48
-time = hours*60*60          # total simulation time in s
+time = hours*60*60         # total simulation time in s
 
 # set them directly in the class
 # todo maybe rather add a function ".set_timestep(dt)" ???
@@ -324,7 +343,7 @@ solver = NewtonSolver()
 
 #time
 #while t <= time:
-while t <= dt*30:
+while t <= time:
     print('time =', t)
     print('Solving: T')
     solver.solve(concrete_problem, concrete_problem.T.vector())
