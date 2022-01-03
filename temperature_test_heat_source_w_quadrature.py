@@ -151,17 +151,16 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         R_ufl = mat.vol_heat_cap * (self.T) * vT * dxm
         R_ufl += self.dt * dot(mat.themal_cond * grad(self.T),grad(vT)) * dxm
         R_ufl += - mat.vol_heat_cap * self.T_n * vT * dxm
-        R_ufl += - mat.Q_inf * self.q_delta_alpha * vT * dxm
+        #R_ufl += - mat.Q_inf * self.q_delta_alpha * vT * dxm
+        #R_ufl += - mat.Q_inf * self.q_delta_alpha * vT * dxm * self.T/290
 
-
-        self.R = R_ufl
-        #self.R = R_ufl - self.q_dummy * self.T * vT * dxm
+        self.R = R_ufl - mat.Q_inf * self.q_delta_alpha * self.T/270 * vT * dxm
         #self.R = R_ufl - mat.Q_inf * self.q_alpha * vT * dxm
         #self.R = R_ufl - self.q_dummy * self.q_T * vT * dxm
 
         # derivative
         dR_ufl = derivative(R_ufl, self.T)
-        self.dR = dR_ufl
+        self.dR = dR_ufl - mat.Q_inf * self.q_delta_alpha/270 * T_ * vT * dxm
         #self.dR = dR_ufl - mat.Q_inf * self.q_dalpha_dT * T_ * vT * dxm
 
         # setup projector to project continuous funtionspace to quadrature
