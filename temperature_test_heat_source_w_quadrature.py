@@ -70,32 +70,27 @@ class ConcreteMaterialData:
         self.T_ref_celsius = 25  # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
         self.T_ref = self.T_ref_celsius + self.zeroC # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
 
-
     #TODO find out if this forumla deals with kelvin or celsius???
+
+    # TODO how do I implement affinity function and temp adjust such that I can change them in material def but not in problem setting???
+
+    # temperature adjustmeent factor
     def temp_adjust(self, T):
-        # T is the temparature
         return exp(-self.E_act/self.igc*(1/T-1/self.T_ref))
 
+    # derivative of the temperature adjustment factor with respect to the temperature
+    def temp_adjust_tangent(self, T):
+        return self.E_act/self.igc/T**2
 
-    #
-    #
-    # def kappa_kkt(self, e):
-    #     if self.kappa is None:
-    #         self.kappa = self.ft / self.E
-    #     return np.maximum(e, self.kappa)
-    #
-    # def integrate(self, eps_flat, e):
-    #     kappa = self.kappa_kkt(e)
-    #     dkappa_de = (e >= kappa).astype(int)
-    #
-    #     eps = eps_flat.reshape(-1, 3)
-    #     self.sigma, self.dsigma_deps, self.dsigma_de = hooke(
-    #         self, eps, kappa, dkappa_de
-    #     )
-    #     self.eeq, self.deeq = modified_mises_strain_norm(self, eps_flat)
-    #
-    # def update(self, e):
-    #     self.kappa = self.kappa_kkt(e)
+    # affinity function
+    def affinity(self, delta_alpha, alpha_n):
+        affinity = self.B1 * (self.B2 / self.alpha_max + delta_alpha + alpha_n) * (self.alpha_max - (delta_alpha + alpha_n)) * np.exp(-self.eta * (delta_alpha + alpha_n) / self.alpha_max)
+        return affinity
+
+    # derivative of affinity with respect to delta alpha
+    def daffinity_ddalpha(self, delta_alpha, alpha_n):
+        affinity_prime = self.B1 * np.exp(-self.eta * (delta_alpha + alpha_n) / self.alpha_max) * ((self.alpha_max - (delta_alpha + alpha_n)) * (self.B2 / self.alpha_max + (delta_alpha + alpha_n)) * ( -self.eta / self.alpha_max) - self.B2 / self.alpha_max - 2 * (delta_alpha + alpha_n) + self.alpha_max)
+        return affinity_prime
 
 class ConcreteTempHydrationModel(NonlinearProblem):
     def __init__(self, mesh, mat, **kwargs):
@@ -137,12 +132,8 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         vT = TestFunction(self.V)
         #valpha = TestFunction(self.V)
 
-        # setup form and derivative
-        # material parameters from mat
-        # thermal con eff
-        # vol heat cap
-        # more????
-        # 60*60
+        # inital value TODO: check if it is reset
+        # TODO do I need it to be a Constant???
         self.dt = Constant(0)       # TODO somehow make sure this is reset!
 
 
@@ -151,58 +142,31 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         R_ufl = mat.vol_heat_cap * (self.T) * vT * dxm
         R_ufl += self.dt * dot(mat.themal_cond * grad(self.T),grad(vT)) * dxm
         R_ufl += - mat.vol_heat_cap * self.T_n * vT * dxm
-        #R_ufl += - mat.Q_inf * self.q_delta_alpha * vT * dxm
-        #R_ufl += - mat.Q_inf * self.q_delta_alpha * vT * dxm * self.T/290
-
+        # quadrature point part
         self.R = R_ufl - mat.Q_inf * self.q_delta_alpha * vT * dxm
-        #self.R = R_ufl - mat.Q_inf * self.q_alpha * vT * dxm
-        #self.R = R_ufl - self.q_dummy * self.q_T * vT * dxm
 
         # derivative
+        # normal form
         dR_ufl = derivative(R_ufl, self.T)
+        # quadrature part
         self.dR = dR_ufl - mat.Q_inf * self.q_dalpha_dT * T_ * vT * dxm
-        #self.dR = dR_ufl - mat.Q_inf * self.q_dalpha_dT * T_ * vT * dxm
 
         # setup projector to project continuous funtionspace to quadrature
         self.project_T = LocalProjector(self.T, q_V, dxm)
 
-        #self.calculate_eps = LocalProjector(eps(d), VQV, dxm)
-        #self.calculate_e = LocalProjector(e, VQF, dxm)
-
         self.assembler = None  #set as default, to check if bc have been added???
+
+
+    def delta_alpha_fkt(self,delta_alpha, alpha_n, T):
+        return delta_alpha - float(self.dt) * self.mat.affinity(delta_alpha, alpha_n) * self.mat.temp_adjust(T)
+
+    def delta_alpha_prime(self,delta_alpha, alpha_n, T):
+        return 1 - float(self.dt) * self.mat.daffinity_ddalpha(delta_alpha, alpha_n) * self.mat.temp_adjust(T)
 
     def evaluate_material(self):
         # project stuff (temperautre) onto their quadrature spaces
         self.project_T(self.q_T)
         t_vector = self.q_T.vector().get_local()
-
-        #define the functions
-        def affinity_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max):
-            affinity = B1 * (B2 / alpha_max + delta_alpha + alpha_n) * (alpha_max - (delta_alpha + alpha_n)) * np.exp(
-                -eta * (delta_alpha + alpha_n) / alpha_max)
-            return affinity
-
-        def affinity_prime_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max):
-            affinity_prime = B1 * np.exp(-eta * (delta_alpha + alpha_n) / alpha_max) * (
-                        (alpha_max - (delta_alpha + alpha_n)) * (B2 / alpha_max + (delta_alpha + alpha_n)) * (
-                            -eta / alpha_max) - B2 / alpha_max - 2 * (delta_alpha + alpha_n) + alpha_max)
-            return affinity_prime
-
-        def temp_adjust(T, E_act, igc, T_ref):
-            # T is the temparature
-            return exp(-E_act / igc * (1 / T - 1 / T_ref))
-
-        def delta_alpha_fkt(delta_alpha, alpha_n, dt, B1, B2, eta, alpha_max):
-            return delta_alpha - dt * affinity_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max)
-
-        def delta_alpha_prime(delta_alpha, alpha_n, dt, B1, B2, eta, alpha_max):
-            return 1 - dt * affinity_prime_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max)
-
-        def delta_alpha_fkt_T(delta_alpha, alpha_n, dt, B1, B2, eta, alpha_max, T, E_act, igc, T_ref):
-            return delta_alpha - dt * affinity_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max) * temp_adjust(T, E_act, igc, T_ref)
-
-        def delta_alpha_prime_T(delta_alpha, alpha_n, dt, B1, B2, eta, alpha_max, T, E_act, igc, T_ref):
-            return 1 - dt * affinity_prime_fkt(delta_alpha, alpha_n, B1, B2, eta, alpha_max) * temp_adjust(T, E_act, igc, T_ref)
 
         # get alpha values
         alpha_n_list = self.q_alpha_n.vector().get_local()
@@ -215,52 +179,31 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         dalpha_dT_list = np.zeros(n_gauss)
 
         #loop over all gauss points "compute" new alpha
+        # TODO vectorize this..., no need for loop -> SPEEEED!!!!
         for i in range(n_gauss):
+            delta_alpha_list[i] = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha_n_list[i], t_vector[i]),fprime=self.delta_alpha_prime, x0=0.2)
 
-            #solve for delta alpha
-            delta_alpha_list[i] = scipy.optimize.newton(delta_alpha_fkt_T, args=(alpha_n_list[i], float(self.dt), self.mat.B1, self.mat.B2, self.mat.eta, self.mat.alpha_max, t_vector[i], self.mat.E_act, self.mat.igc, self.mat.T_ref),
-                                                fprime=delta_alpha_prime_T, x0=0.2)
-            #print('new:', i, delta_alpha_list[i])
-            #delta_alpha_list[i] = scipy.optimize.newton(delta_alpha_fkt, args=(alpha_n_list[i], float(self.dt), self.mat.B1, self.mat.B2, self.mat.eta, self.mat.alpha_max),
-            #                                    fprime=delta_alpha_prime, x0=0.2)
-
-            #print('old:',  i, delta_alpha_list[i])
             delta_alpha_list[i] = delta_alpha_list[i] # TODO add correct derrivative
 
-
             alpha_list[i] = alpha_n_list[i] + delta_alpha_list[i]
-            dalpha_dT_list[i] = dt * affinity_fkt(alpha_list[i], alpha_n_list[i], self.mat.B1, self.mat.B2, self.mat.eta, self.mat.alpha_max)* self.mat.E_act/self.mat.igc/t_vector[i]**2
-
-
-
-
-
-        # there is a function implmented!!!
-        # self.mat.temp_adjust(t_vector[i]))
-        # do something with the derivative....
-        #     dalpha_dT_list[i] = alpha_list[i] * self.mat.E_act/self.mat.igc/t_vector[i]**2
+            dalpha_dT_list[i] = dt * self.mat.affinity(alpha_list[i], alpha_n_list[i])* self.mat.temp_adjust_tangent(t_vector[i])
 
         set_q(self.q_alpha, alpha_list)
-        #set_q(self.q_alpha_n, alpha_n_list)
         set_q(self.q_delta_alpha, delta_alpha_list)
         set_q(self.q_dalpha_dT, dalpha_dT_list)
 
 
-
     def update(self):
+        # TODO ???
         # when or what do I need to update???
         # self.calculate_e(self.q_e)
         # self.mat.update(self.q_e.vector().get_local())
         # set_q(self.q_k, self.mat.kappa)  # just for post processing
         pass
+
     def update_history(self):
-
-        self.T_n.assign(self.T)
-        self.q_alpha_n.assign(self.q_alpha)
-
-
-
-        pass
+        self.T_n.assign(self.T) # save temparature field
+        self.q_alpha_n.assign(self.q_alpha) # save alpha field
 
     def set_bcs(self, bcs):
         # Only now (with the bcs) can we initialize the assembler
@@ -286,12 +229,13 @@ mesh = UnitSquareMesh(nx, ny)
 
 # problem setup
 mat = ConcreteMaterialData() # setting up some basic material things
+# todo, maybe add degree as a paramter???
 concrete_problem = ConcreteTempHydrationModel(mesh, mat)  #setting up the material problem, with material data and mesh
 
 # Define boundary and initial conditions
 t_boundary = 25+273.15  # input in celcius???
 t_zero = 30+273.15 # input in celcius???
-alpha_zero = 0 # ... how to assigin that to function space???
+
 # TODO should initial condition be treated "inside" and controlled as "material" paramter????
 
 t0 = Expression('t_zero', t_zero=t_zero, degree= 0)
@@ -347,17 +291,10 @@ while t <= time:
     print('time =', t)
     print('Solving: T')
     solver.solve(concrete_problem, concrete_problem.T.vector())
-    # solve temperature
-
-    #print(concrete_problem.T.vector()[:])
 
     # prepare next timestep
     t += dt
     concrete_problem.update_history()
-    #concrete_problem.T_n.assign(concrete_problem.T)
-    #concrete_problem.q_alpha_n.assign(concrete_problem.q_alpha)
-    #concrete_problem.alpha_n.assign(concrete_problem.alpha)
-
 
     # Output Data
     # Plot displacements
