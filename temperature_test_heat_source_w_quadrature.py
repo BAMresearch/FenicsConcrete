@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 import scipy.optimize
+import time as timer
 
 # helper functions...
 def set_q(q, values):
@@ -69,6 +70,9 @@ class ConcreteMaterialData:
         self.igc = 8.3145  # ideal gas constant [JK −1 mol −1 ]
         self.T_ref_celsius = 25  # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
         self.T_ref = self.T_ref_celsius + self.zeroC # reference temperature in degree celsius #TODO figure out how/when where to wirk with celcisus and there with kelvin
+        # setting for temperature adjustment
+        # option: 'exponential' and 'off'
+        self.temp_adjust_law = 'exponential'
 
     #TODO find out if this forumla deals with kelvin or celsius???
 
@@ -76,11 +80,23 @@ class ConcreteMaterialData:
 
     # temperature adjustmeent factor
     def temp_adjust(self, T):
-        return exp(-self.E_act/self.igc*(1/T-1/self.T_ref))
+        val = 1
+        if self.temp_adjust_law == 'exponential':
+            val = np.exp(-self.E_act/self.igc*(1/T-1/self.T_ref))
+        elif self.temp_adjust_law == 'off':
+            pass
+        else:
+            #TODO throw correct error
+            print(f'Warning: Incorrect temp_adjust_law {self.temp_adjust_law} given')
+            print('*******  Only exponential and off implemented')
+        return val
 
     # derivative of the temperature adjustment factor with respect to the temperature
     def temp_adjust_tangent(self, T):
-        return self.E_act/self.igc/T**2
+        val = 0
+        if self.temp_adjust_law == 'exponential':
+            val = self.E_act/self.igc/T**2
+        return val
 
     # affinity function
     def affinity(self, delta_alpha, alpha_n):
@@ -160,33 +176,34 @@ class ConcreteTempHydrationModel(NonlinearProblem):
     def delta_alpha_fkt(self,delta_alpha, alpha_n, T):
         return delta_alpha - float(self.dt) * self.mat.affinity(delta_alpha, alpha_n) * self.mat.temp_adjust(T)
 
+
     def delta_alpha_prime(self,delta_alpha, alpha_n, T):
         return 1 - float(self.dt) * self.mat.daffinity_ddalpha(delta_alpha, alpha_n) * self.mat.temp_adjust(T)
+
 
     def evaluate_material(self):
         # project stuff (temperautre) onto their quadrature spaces
         self.project_T(self.q_T)
-        t_vector = self.q_T.vector().get_local()
+        temperature_list = self.q_T.vector().get_local()
 
         # get alpha values
         alpha_n_list = self.q_alpha_n.vector().get_local()
-        alpha_list = self.q_alpha.vector().get_local()
 
-        #get number of quass points TODO: should I add this a a "property"? self.ngauss?
-        n_gauss = len(self.q_alpha.vector())
 
-        delta_alpha_list = np.zeros(n_gauss)
-        dalpha_dT_list = np.zeros(n_gauss)
 
-        #loop over all gauss points "compute" new alpha
-        # TODO vectorize this..., no need for loop -> SPEEEED!!!!
-        for i in range(n_gauss):
-            delta_alpha_list[i] = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha_n_list[i], t_vector[i]),fprime=self.delta_alpha_prime, x0=0.2)
 
-            delta_alpha_list[i] = delta_alpha_list[i] # TODO add correct derrivative
 
-            alpha_list[i] = alpha_n_list[i] + delta_alpha_list[i]
-            dalpha_dT_list[i] = dt * self.mat.affinity(alpha_list[i], alpha_n_list[i])* self.mat.temp_adjust_tangent(t_vector[i])
+        guess = np.full(np.shape(alpha_n_list), 0.2)
+        # I need a numpy list for temp. alpha_n and the guess!!!
+        delta_alpha_list = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha_n_list, temperature_list),fprime=self.delta_alpha_prime, x0=guess)
+        alpha_list = alpha_n_list + delta_alpha_list
+        dalpha_dT_list = float(self.dt) * self.mat.affinity(alpha_list, alpha_n_list)* self.mat.temp_adjust_tangent(temperature_list)
+
+
+
+
+
+
 
         set_q(self.q_alpha, alpha_list)
         set_q(self.q_delta_alpha, delta_alpha_list)
@@ -224,16 +241,16 @@ class ConcreteTempHydrationModel(NonlinearProblem):
 # START PROBLEM DESCRIPTION!!!!!!!
 #-------------------------------------------
 # Create mesh and define function space
-nx = ny = 10
+nx = ny = 20
 mesh = UnitSquareMesh(nx, ny)
 
 # problem setup
 mat = ConcreteMaterialData() # setting up some basic material things
-# todo, maybe add degree as a paramter???
+# todo, maybe add linear/quadratic etc... as a paramter???
 concrete_problem = ConcreteTempHydrationModel(mesh, mat)  #setting up the material problem, with material data and mesh
 
 # Define boundary and initial conditions
-t_boundary = 25+273.15  # input in celcius???
+t_boundary = 30+273.15  # input in celcius???
 t_zero = 30+273.15 # input in celcius???
 
 # TODO should initial condition be treated "inside" and controlled as "material" paramter????
@@ -256,7 +273,7 @@ concrete_problem.T.interpolate(t0)
 
 # data for time stepping
 #time steps
-dt = 60*60# time step
+dt = 60*20# time step
 hours = 48
 time = hours*60*60         # total simulation time in s
 
