@@ -64,10 +64,6 @@ class ConcreteMaterialData:
         # option: 'exponential' and 'off'
         self.temp_adjust_law = 'exponential'
 
-    #TODO find out if this forumla deals with kelvin or celsius???
-
-    # TODO how do I implement affinity function and temp adjust such that I can change them in material def but not in problem setting???
-
     # temperature adjustment factor for affinity
     def temp_adjust(self, T):
         val = 1
@@ -193,7 +189,7 @@ class ConcreteTempHydrationModel(NonlinearProblem):
             print('AAAAAAHHHH, negative delta alpha!!!!')
             exit()
 
-        # save the delta alpha for next iteration as startin guess
+        # save the delta alpha for next iteration as starting guess
         self.delta_alpha_n_list = delta_alpha_list
 
         # compute current alpha
@@ -242,13 +238,14 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         self.assembler.assemble(A)
 
     def pv_plot(self,t = 0):
-
         # paraview export
 
+        # temperature plot
         T_plot = project(self.T, self.V)
         T_plot.rename("Temperature","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(T_plot, t, encoding=XDMFFile.Encoding.ASCII)
 
+        # degree of hydration plot
         alpha_plot = project(self.q_alpha, self.visu_space)
         alpha_plot.rename("DOH","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(alpha_plot, t, encoding=XDMFFile.Encoding.ASCII)
