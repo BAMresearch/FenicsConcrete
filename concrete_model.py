@@ -48,7 +48,7 @@ class ConcreteMaterialData:
         self.density = 2350  # in kg/m^3
         self.themal_cond = 1.6  # effective thermal conductivity, approx in Wm^-1K^-1
         self.specific_heat_capacity = 900  # effective specific heat capacity in J kg⁻1 K⁻1
-        self.vol_heat_cap = self.density * self.specific_heat_capacity # volumetric heat cap
+        #self.vol_heat_cap = self.density * self.specific_heat_capacity # volumetric heat cap
         # values from book for CEM I 52.5
         #self.Q_inf = 5059000  # potential heat approx. in J/kg?? ... TODO : maybe change units to kg??? or mutiply with some binder value...
         self.Q_inf = 50590000  # potential heat approx. in J/kg?? ... TODO : maybe change units to kg??? or mutiply with some binder value...
@@ -64,6 +64,53 @@ class ConcreteMaterialData:
         # option: 'exponential' and 'off'
         self.temp_adjust_law = 'exponential'
 
+    def set_parameters(self,name):
+        name_list = ['CostActionTeam2','working']
+        if name == 'working':
+            # Material parameter for concrete model with temperature and hydration
+            #self.density = 2350  # in kg/m^3
+            self.themal_cond = 2.0 # effective thermal conductivity, approx in Wm^-3K^-1
+            #self.specific_heat_capacity = 9000  # effective specific heat capacity in J kg⁻1 K⁻1
+            self.vol_heat_cap = 2.4e6 # volumetric heat cap J/(m3 K)
+
+            self.Q_inf = 50000000  # potential heat approx. in J/kg
+            self.B1 = 2.916E-4  # in 1/s
+            self.B2 = 0.0024229 # -
+            self.eta = 5.554  # something about diffusion
+            self.alpha_max = 0.875  # also possible to approximate based on equation with w/c
+            self.igc = 8.3145  # ideal gas constant [JK −1 mol −1 ]
+            self.E_act = 5653*self.igc  # activation energy in Jmol^-1
+            self.T_ref_celsius = 25  # reference temperature in degree celsius #TODO figure out how/when where to work with celcisus and there with kelvin
+            self.T_ref = self.T_ref_celsius + self.zeroC # reference temperature in degree celsius #TODO figure out how/when where to work with celcisus and there with kelvin
+            # setting for temperature adjustment
+            # option: 'exponential' and 'off'
+            self.temp_adjust_law = 'exponential'
+        elif name == 'CostActionTeam2':
+            # Material parameter for concrete model with temperature and hydration
+            #self.density = 2350  # in kg/m^3
+            self.themal_cond = 2.0 # effective thermal conductivity, approx in Wm^-3K^-1
+            #self.specific_heat_capacity = 9000  # effective specific heat capacity in J kg⁻1 K⁻1
+            self.vol_heat_cap = 2.4e6 # volumetric heat cap J/(m3 K)
+
+            self.Q_inf = 50000000  # potential heat approx. in J/kg
+            self.B1 = 2.916E-4  # in 1/s
+            self.B2 = 0.0024229 # -
+            self.eta = 5.554  # something about diffusion
+            self.alpha_max = 0.875  # also possible to approximate based on equation with w/c
+            self.igc = 8.3145  # ideal gas constant [JK −1 mol −1 ]
+            self.E_act = 5653*self.igc  # activation energy in Jmol^-1
+            self.T_ref_celsius = 25  # reference temperature in degree celsius #TODO figure out how/when where to work with celcisus and there with kelvin
+            self.T_ref = self.T_ref_celsius + self.zeroC # reference temperature in degree celsius #TODO figure out how/when where to work with celcisus and there with kelvin
+            # setting for temperature adjustment
+            # option: 'exponential' and 'off'
+            self.temp_adjust_law = 'exponential'
+        else:
+            print(f'Unknown name for paramter set: {name}')
+            print(f'Options: {name_list}')
+            exit()
+
+
+
     # temperature adjustment factor for affinity
     def temp_adjust(self, T):
         val = 1
@@ -74,7 +121,7 @@ class ConcreteMaterialData:
         else:
             #TODO throw correct error
             print(f'Warning: Incorrect temp_adjust_law {self.temp_adjust_law} given')
-            print('*******  Only exponential and off implemented')
+            print('*******  Only "exponential" and "off" implemented')
         return val
 
     # derivative of the temperature adjustment factor with respect to the temperature
@@ -94,6 +141,7 @@ class ConcreteMaterialData:
     def daffinity_ddalpha(self, delta_alpha, alpha_n):
         affinity_prime = self.B1 * np.exp(-self.eta * (delta_alpha + alpha_n) / self.alpha_max) * ((self.alpha_max - (delta_alpha + alpha_n)) * (self.B2 / self.alpha_max + (delta_alpha + alpha_n)) * ( -self.eta / self.alpha_max) - self.B2 / self.alpha_max - 2 * (delta_alpha + alpha_n) + self.alpha_max)
         return affinity_prime
+
 
 class ConcreteTempHydrationModel(NonlinearProblem):
     def __init__(self, mesh, mat, pv_name = 'output', **kwargs):
@@ -134,7 +182,11 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         self.q_ddalpha_dT = Function(q_V, name="derivative of delta alpha wrt temperature")
 
         # empfy list for newton iteration to compute delta alpha using the last value as starting point
-        self.delta_alpha_n_list = np.full(np.shape(self.q_alpha_n.vector().get_local() ), 0.0)
+        self.delta_alpha_n_list = np.full(np.shape(self.q_alpha_n.vector().get_local() ), 0.2)
+
+        # scalars for the analysis of the heat of hydration
+        self.alpha = 0
+        self.delta_alpha = 0
 
         # Define variational problem
         self.T = Function(self.V)  # temperature
@@ -167,6 +219,35 @@ class ConcreteTempHydrationModel(NonlinearProblem):
 
     def delta_alpha_prime(self,delta_alpha, alpha_n, T):
         return 1 - self.dt * self.mat.daffinity_ddalpha(delta_alpha, alpha_n) * self.mat.temp_adjust(T)
+
+
+    def get_heat_of_hydration(self,tmax,T):
+        t = 0
+        time = []
+        heat = []
+        alpha_list = []
+        alpha = 0
+        delta_alpha = 0.2
+        while t <= tmax:
+            time.append(t)
+            # compute delta_alpha
+            delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.mat.zeroC),
+                                  fprime=self.delta_alpha_prime, x0=delta_alpha)
+            # update alpha
+            alpha = delta_alpha + alpha
+            # save heat of hydration
+            alpha_list.append(delta_alpha)
+            heat.append(alpha*self.mat.Q_inf)
+
+
+
+
+            # timeupdate
+            t = t+self.dt
+
+
+
+        return np.asarray(time)/60/60, np.asarray(heat)/1000, np.asarray(alpha_list)
 
 
     def evaluate_material(self):
