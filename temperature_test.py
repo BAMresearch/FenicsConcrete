@@ -21,11 +21,11 @@ else:
 
 # problem setup
 mat = model.ConcreteMaterialData() # setting up some basic material things
-mat.set_parameters('working')
+mat.set_parameters('CostActionTeam2')
 concrete_problem = model.ConcreteTempHydrationModel(mesh, mat, pv_name='pv_output')  #setting up the material problem, with material data and mesh
 
 # Define boundary and initial conditions
-T_boundary = 20+273.15  # input in celcius???
+T_boundary = 10+273.15  # input in celcius???
 T_zero = 20+273.15 # input in celcius???
 
 # Initial temp. condition
