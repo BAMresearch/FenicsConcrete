@@ -60,32 +60,9 @@ Vm = VectorFunctionSpace(mesh, "Lagrange", 1)  # 2 for quadratic elements
 def bottom_surface(x, on_boundary):
     return on_boundary and near(x[1], 0)
 
-bcm = DirichletBC(Vm, Constant((0,0)), bottom_surface)
-
+bcm = DirichletBC(mechanics_problem.V, Constant((0,0)), bottom_surface)
 
 mechanics_problem.set_bcs(bcm)
-# Stress computation for linear elastic problem
-def sigma(v):
-    return 2.0 * mu * sym(grad(v)) + lmbda * tr(sym(grad(v))) * Identity(len(v))
-
-# Define variational problem
-grav = 9.81 # m/s2
-density = 2300 # kg/m3
-u = TrialFunction(Vm)
-v = TestFunction(Vm)
-a = inner(sigma(u), grad(v)) * dx
-# multiply with density or something
-f = Constant((0, -grav*density))  # applied gravitational force...
-L = inner(f, v) * dx
-
-# solve
-u = Function(Vm)
-
-# initialize mechanics paraview output
-pv_file = XDMFFile('pv_displ.xdmf')
-pv_file.parameters["flush_output"] = True
-pv_file.parameters["functions_share_mesh"] = True
-
 
 # data for time stepping
 #time steps
@@ -110,7 +87,7 @@ temperature_problem.set_timestep(dt) # for time integration scheme
 
 
 #initialize time
-t = 0 # first time step time
+t = dt # first time step time
 
 # plot data fields
 
@@ -129,14 +106,13 @@ mechanics_solver.parameters['relative_tolerance'] = 1e-8
 
 while t <= time:
     alpha = t/time # simulation some value between 0 and 1
-
     print('time =', t)
     print('Solving: T')
     temperature_solver.solve(temperature_problem, temperature_problem.T.vector())
     print('Solving: u')
+    mechanics_problem.E.assign(Constant(alpha*mechanics_problem.mat.E_28))
     mechanics_solver.solve(mechanics_problem,mechanics_problem.u.vector())
 
-    #E.assign(Constant(alpha*E_max))
     # solve the mechanics problem (again and again...)
     #solve(a == L, u, bcm)
 

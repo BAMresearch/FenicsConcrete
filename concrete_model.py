@@ -363,23 +363,24 @@ class ConcreteMechanicsModel(NonlinearProblem):
         v = TestFunction(self.V)
 
 
-        # Elasticity parameters
-        mu = self.mat.E_28 / (2.0 * (1.0 + self.mat.nu))
-        lmbda = self.mat.E_28 * self.mat.nu / ((1.0 + self.mat.nu) * (1.0 - 2.0 * self.mat.nu))
+        # Elasticity parameters without multiplication with E
+        x_mu = 1.0 / (2.0 * (1.0 + self.mat.nu))
+        x_lambda = 1.0 * self.mat.nu / ((1.0 + self.mat.nu) * (1.0 - 2.0 * self.mat.nu))
 
-        # Stress computation for linear elastic problem
-        def sigma(v):
-            return 2.0 * mu * sym(grad(v)) + lmbda * tr(sym(grad(v))) * Identity(len(v))
+        # Stress computation for linear elastic problem without multiplication with E
+        def x_sigma(v):
+            return 2.0 * x_mu * sym(grad(v)) + x_lambda * tr(sym(grad(v))) * Identity(len(v))
 
         # Volume force
-        #f = Constant((0, -self.mat.g * self.mat.density)
-        f = Constant((0, 1))
+        f = Constant((0, -self.mat.g * self.mat.density))
+        #f = Constant((10, 0))
 
         #E.assign(Constant(alpha * E_max))
         # solve the mechanics problem
-
+        self.E = Constant(self.mat.E_28)
+        #E.assign(Constant(self.alpha*self.mat.E_28))
         # normal form
-        R_ufl =  inner(sigma(self.u), sym(grad(v)))  * dxm
+        R_ufl =  self.E*inner(x_sigma(self.u), sym(grad(v)))  * dxm
         R_ufl += - inner(f, v) * dxm # add volumetric force, aka gravity (in this case)
         # quadrature point part
         self.R = R_ufl #- Constant(mat.Q_inf) * self.q_delta_alpha * vT * dxm
