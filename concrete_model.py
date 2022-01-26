@@ -65,6 +65,12 @@ class ConcreteMaterialData:
         # option: 'exponential' and 'off'
         self.temp_adjust_law = 'exponential'
 
+        ### paramters for mechanics problem
+        self.g = 9.81 # graviational acceleration in m/s²
+        self.E_28 = 2000000 # Youngs Modulus N/m2 or something... TODO: check units!
+        self.nu = 0.2 # Poissons Ratio
+
+
     def set_parameters(self,name):
         name_list = ['CostActionTeam2']
         if name == 'CostActionTeam2':
@@ -312,5 +318,161 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         alpha_plot = project(self.q_alpha, self.visu_space)
         alpha_plot.rename("DOH","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(alpha_plot, t, encoding=XDMFFile.Encoding.ASCII)
+
+        pass
+
+
+
+class ConcreteMechanicsModel(NonlinearProblem):
+    def __init__(self, mesh, mat, pv_name = 'mechanics_output', **kwargs):
+        NonlinearProblem.__init__(self) # apparently required to initialize things
+        self.mat = mat # object with material data, parameters, material functions etc...
+
+        #initialize possible paraview output
+        self.pv_file = XDMFFile( pv_name + '.xdmf')
+        self.pv_file.parameters["flush_output"] = True
+        self.pv_file.parameters["functions_share_mesh"] = True
+        # function space for single value per element, required for plot of quadrature space values
+        #self.visu_space = FunctionSpace(mesh, "DG", 0)
+
+        #initialize timestep, musst be reset using .set_timestep(dt)
+        #self.dt = 0
+        #self.dt_form = Constant(self.dt)
+
+        # TODO why does q_deg = 2 throw errors???
+        q_deg = 1
+
+        metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
+        dxm = dx(metadata=metadata)
+
+        # solution field
+        #self.V = VectorFunctionSpace(mesh, 'P', q_deg)
+        self.V = VectorFunctionSpace(mesh, 'Lagrange', q_deg)
+
+        # generic quadrature function space
+        #cell = mesh.ufl_cell()
+        #q = "Quadrature"
+        #quadrature_element = FiniteElement(q, cell, degree=q_deg, quad_scheme="default")
+        #q_V = FunctionSpace(mesh, quadrature_element)
+
+        # quadrature functions
+        #self.q_E = Function(q_V, name="youngs modulus")
+
+        # Define variational problem
+        self.u = Function(self.V)  # displacement
+        v = TestFunction(self.V)
+
+
+        # Elasticity parameters
+        mu = self.mat.E_28 / (2.0 * (1.0 + self.mat.nu))
+        lmbda = self.mat.E_28 * self.mat.nu / ((1.0 + self.mat.nu) * (1.0 - 2.0 * self.mat.nu))
+
+        # Stress computation for linear elastic problem
+        def sigma(v):
+            return 2.0 * mu * sym(grad(v)) + lmbda * tr(sym(grad(v))) * Identity(len(v))
+
+        # Volume force
+        f = Constant((0, -self.mat.g * self.mat.density))
+
+        #E.assign(Constant(alpha * E_max))
+        # solve the mechanics problem
+
+        # normal form
+        R_ufl =  inner(sigma(self.u), grad(v))  * dxm
+        R_ufl += - inner(f, v) * dxm # add volumetric force, aka gravity (in this case)
+        # quadrature point part
+        self.R = R_ufl #- Constant(mat.Q_inf) * self.q_delta_alpha * vT * dxm
+
+        # derivative
+        # normal form
+        dR_ufl = derivative(R_ufl, self.u)
+        # quadrature part
+        self.dR = dR_ufl #- Constant(mat.Q_inf) * self.q_ddalpha_dT * T_ * vT * dxm
+
+        # setup projector to project continuous funtionspace to quadrature
+        #self.project_T = LocalProjector(self.T, q_V, dxm)
+
+        self.assembler = None  #set as default, to check if bc have been added???
+
+
+
+
+
+    def evaluate_material(self):
+        # project temperautre onto quadrature spaces
+        #self.project_T(self.q_T)
+
+        # convert quadrature spaces to numpy vector
+        # temperature_list = self.q_T.vector().get_local()
+        # alpha_n_list = self.q_alpha_n.vector().get_local()
+        #
+        # # solve for alpha at each quadrature point
+        # # here the newton raphson method of the scipy package is used
+        # # the zero value of the delta_alpha_fkt is found for each entry in alpha_n_list is found. the corresponding temparature
+        # # is given in temperature_list and as starting point the value of last step used from delta_alpha_n
+        # delta_alpha_list = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha_n_list, temperature_list),fprime=self.delta_alpha_prime, x0=self.delta_alpha_n_list)
+        #
+        # # I dont trust the algorithim!!! check if only applicable results are obtained
+        # if np.any(delta_alpha_list<0.0):
+        #     # TODO: better error message ;)
+        #     print('AAAAAAHHHH, negative delta alpha!!!!')
+        #     exit()
+        #
+        # # save the delta alpha for next iteration as starting guess
+        # self.delta_alpha_n_list = delta_alpha_list
+        #
+        # # compute current alpha
+        # alpha_list = alpha_n_list + delta_alpha_list
+        # # compute derivative of delta alpha with respect to temperature for rhs
+        # ddalpha_dT_list = self.dt * self.mat.affinity(alpha_list, alpha_n_list)* self.mat.temp_adjust_tangent(temperature_list)
+        #
+        # # project lists onto quadrature spaces
+        # set_q(self.q_alpha, alpha_list)
+        # set_q(self.q_delta_alpha, delta_alpha_list)
+        # set_q(self.q_ddalpha_dT, ddalpha_dT_list)
+        pass
+
+
+    def update_history(self):
+        #self.T_n.assign(self.T) # save temparature field
+        #self.q_alpha_n.assign(self.q_alpha) # save alpha field
+        pass
+
+
+    def set_timestep(self, dt):
+        self.dt = dt
+        self.dt_form.assign(Constant(self.dt))
+
+
+
+    def set_bcs(self, bcs):
+        # Only now (with the bcs) can we initialize the assembler
+        self.assembler = SystemAssembler(self.dR, self.R, bcs)
+
+
+    def F(self, b, x):
+        #if self.dt <= 0:
+        #    raise RuntimeError("You need to `.set_timestep(dt)` larger than zero before the solve!")
+        if not self.assembler:
+            raise RuntimeError("You need to `.set_bcs(bcs)` before the solve!")
+        self.evaluate_material()
+        self.assembler.assemble(b, x)
+
+
+    def J(self, A, x):
+        self.assembler.assemble(A)
+
+    def pv_plot(self,t = 0):
+        # paraview export
+
+        # temperature plot
+        u_plot = project(self.u, self.V)
+        u_plot.rename("Displacement","test string, what does this do??")  # TODO: what does the second string do?
+        self.pv_file.write(u_plot, t, encoding=XDMFFile.Encoding.ASCII)
+
+        # youngsmodulus??
+        #alpha_plot = project(self.q_alpha, self.visu_space)
+        #alpha_plot.rename("DOH","test string, what does this do??")  # TODO: what does the second string do?
+        #self.pv_file.write(alpha_plot, t, encoding=XDMFFile.Encoding.ASCII)
 
         pass

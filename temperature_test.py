@@ -23,6 +23,7 @@ else:
 mat = model.ConcreteMaterialData() # setting up some basic material things
 mat.set_parameters('CostActionTeam2')
 temperature_problem = model.ConcreteTempHydrationModel(mesh, mat, pv_name='pv_output')  #setting up the material problem, with material data and mesh
+mechanics_problem = model.ConcreteMechanicsModel(mesh, mat)
 
 # Define boundary and initial conditions
 T_boundary = 10+273.15  # input in celcius???
@@ -60,6 +61,9 @@ def bottom_surface(x, on_boundary):
     return on_boundary and near(x[1], 0)
 
 bcm = DirichletBC(Vm, Constant((0,0)), bottom_surface)
+
+
+mechanics_problem.set_bcs(bcm)
 # Stress computation for linear elastic problem
 def sigma(v):
     return 2.0 * mu * sym(grad(v)) + lmbda * tr(sym(grad(v))) * Identity(len(v))
@@ -124,15 +128,16 @@ while t <= time:
     print('time =', t)
     print('Solving: T')
     solver.solve(temperature_problem, temperature_problem.T.vector())
+    solver.solve(mechanics_problem,mechanics_problem.u.vector())
 
     E.assign(Constant(alpha*E_max))
     # solve the mechanics problem (again and again...)
-    solve(a == L, u, bcm)
+    #solve(a == L, u, bcm)
 
     # temperature plot
-    u_plot = project(u, Vm)
-    u_plot.rename("Displacement","test string, what does this do??")  # TODO: what does the second string do?
-    pv_file.write(u_plot, t, encoding=XDMFFile.Encoding.ASCII)
+    #u_plot = project(u, Vm)
+    #u_plot.rename("Displacement","test string, what does this do??")  # TODO: what does the second string do?
+    #pv_file.write(u_plot, t, encoding=XDMFFile.Encoding.ASCII)
 
     # prepare next timestep
     t += dt
@@ -140,6 +145,7 @@ while t <= time:
 
     # Plot temperature and degree of hydration
     temperature_problem.pv_plot(t=t)
+    #mechanics_problem.pv_plot(t=t)
 
     #plot points
     plot_data[0].append(t)
