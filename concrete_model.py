@@ -328,6 +328,9 @@ class ConcreteMechanicsModel(NonlinearProblem):
         NonlinearProblem.__init__(self) # apparently required to initialize things
         self.mat = mat # object with material data, parameters, material functions etc...
 
+        #TODO: only temporary variable
+        self.alpha = 1
+
         #initialize possible paraview output
         self.pv_file = XDMFFile( pv_name + '.xdmf')
         self.pv_file.parameters["flush_output"] = True
@@ -350,13 +353,14 @@ class ConcreteMechanicsModel(NonlinearProblem):
         self.V = VectorFunctionSpace(mesh, 'Lagrange', q_deg)
 
         # generic quadrature function space
-        #cell = mesh.ufl_cell()
-        #q = "Quadrature"
-        #quadrature_element = FiniteElement(q, cell, degree=q_deg, quad_scheme="default")
-        #q_V = FunctionSpace(mesh, quadrature_element)
+        cell = mesh.ufl_cell()
+        q = "Quadrature"
+        quadrature_element = FiniteElement(q, cell, degree=q_deg, quad_scheme="default")
+        q_V = FunctionSpace(mesh, quadrature_element)
 
         # quadrature functions
-        #self.q_E = Function(q_V, name="youngs modulus")
+        self.q_E = Function(q_V, name="youngs modulus")
+        self.q_alpha = Function(q_V, name="degree of hydration")
 
         # Define variational problem
         self.u = Function(self.V)  # displacement
@@ -377,10 +381,12 @@ class ConcreteMechanicsModel(NonlinearProblem):
 
         #E.assign(Constant(alpha * E_max))
         # solve the mechanics problem
-        self.E = Constant(self.mat.E_28)
+        #self.E = Constant(self.mat.E_28)
         #E.assign(Constant(self.alpha*self.mat.E_28))
         # normal form
-        R_ufl =  self.E*inner(x_sigma(self.u), sym(grad(v)))  * dxm
+
+        # TODO: why is this working???, is q_E treated as a "constant"?
+        R_ufl =  self.q_E*inner(x_sigma(self.u), sym(grad(v)))  * dxm
         R_ufl += - inner(f, v) * dxm # add volumetric force, aka gravity (in this case)
         # quadrature point part
         self.R = R_ufl #- Constant(mat.Q_inf) * self.q_delta_alpha * vT * dxm
@@ -405,31 +411,23 @@ class ConcreteMechanicsModel(NonlinearProblem):
         #self.project_T(self.q_T)
 
         # convert quadrature spaces to numpy vector
-        # temperature_list = self.q_T.vector().get_local()
+        # only size relevant, values recomputed anyways...
+        E_list = self.q_E.vector().get_local()
         # alpha_n_list = self.q_alpha_n.vector().get_local()
-        #
-        # # solve for alpha at each quadrature point
-        # # here the newton raphson method of the scipy package is used
-        # # the zero value of the delta_alpha_fkt is found for each entry in alpha_n_list is found. the corresponding temparature
-        # # is given in temperature_list and as starting point the value of last step used from delta_alpha_n
-        # delta_alpha_list = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha_n_list, temperature_list),fprime=self.delta_alpha_prime, x0=self.delta_alpha_n_list)
-        #
-        # # I dont trust the algorithim!!! check if only applicable results are obtained
-        # if np.any(delta_alpha_list<0.0):
-        #     # TODO: better error message ;)
-        #     print('AAAAAAHHHH, negative delta alpha!!!!')
-        #     exit()
+
+        # start with simple loop, later vectorize this!
+        for i in range(len(E_list)):
+            E_list[i] = self.mat.E_28*i/len(E_list)*self.alpha+1000
+            #E_list[i] = self.mat.E_28*(len(E_list)-i)/len(E_list)+1000
+
+        #print(E_list)
+
         #
         # # save the delta alpha for next iteration as starting guess
         # self.delta_alpha_n_list = delta_alpha_list
-        #
-        # # compute current alpha
-        # alpha_list = alpha_n_list + delta_alpha_list
-        # # compute derivative of delta alpha with respect to temperature for rhs
-        # ddalpha_dT_list = self.dt * self.mat.affinity(alpha_list, alpha_n_list)* self.mat.temp_adjust_tangent(temperature_list)
-        #
+
         # # project lists onto quadrature spaces
-        # set_q(self.q_alpha, alpha_list)
+        set_q(self.q_E, E_list)
         # set_q(self.q_delta_alpha, delta_alpha_list)
         # set_q(self.q_ddalpha_dT, ddalpha_dT_list)
         pass
