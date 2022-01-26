@@ -340,7 +340,7 @@ class ConcreteMechanicsModel(NonlinearProblem):
         #self.dt_form = Constant(self.dt)
 
         # TODO why does q_deg = 2 throw errors???
-        q_deg = 2
+        q_deg = 1
 
         metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
         dxm = dx(metadata=metadata)
@@ -379,7 +379,7 @@ class ConcreteMechanicsModel(NonlinearProblem):
 
         # normal form
         R_ufl =  inner(sigma(self.u), sym(grad(v)))  * dxm
-        # R_ufl += - inner(f, v) * dxm # add volumetric force, aka gravity (in this case)
+        R_ufl += - inner(f, v) * dxm # add volumetric force, aka gravity (in this case)
         # quadrature point part
         self.R = R_ufl #- Constant(mat.Q_inf) * self.q_delta_alpha * vT * dxm
 

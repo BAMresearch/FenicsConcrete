@@ -150,7 +150,7 @@ while t <= time:
 
     # Plot temperature and degree of hydration
     temperature_problem.pv_plot(t=t)
-    #mechanics_problem.pv_plot(t=t)
+    mechanics_problem.pv_plot(t=t)
 
     #plot points
     plot_data[0].append(t)
