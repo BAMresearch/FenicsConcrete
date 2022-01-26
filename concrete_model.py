@@ -372,7 +372,8 @@ class ConcreteMechanicsModel(NonlinearProblem):
             return 2.0 * mu * sym(grad(v)) + lmbda * tr(sym(grad(v))) * Identity(len(v))
 
         # Volume force
-        f = Constant((0, -self.mat.g * self.mat.density))
+        #f = Constant((0, -self.mat.g * self.mat.density)
+        f = Constant((0, 1))
 
         #E.assign(Constant(alpha * E_max))
         # solve the mechanics problem

@@ -133,9 +133,10 @@ while t <= time:
     print('time =', t)
     print('Solving: T')
     temperature_solver.solve(temperature_problem, temperature_problem.T.vector())
+    print('Solving: u')
     mechanics_solver.solve(mechanics_problem,mechanics_problem.u.vector())
 
-    E.assign(Constant(alpha*E_max))
+    #E.assign(Constant(alpha*E_max))
     # solve the mechanics problem (again and again...)
     #solve(a == L, u, bcm)
 
