@@ -118,17 +118,22 @@ t = 0 # first time step time
 plot_data = [[],[],[],[],[],[],[],[],[]]
 
 # setting up the solver
-solver = NewtonSolver()
-solver.parameters['absolute_tolerance'] = 1e-9
-solver.parameters['relative_tolerance'] = 1e-8
+temperature_solver = NewtonSolver()
+temperature_solver.parameters['absolute_tolerance'] = 1e-9
+temperature_solver.parameters['relative_tolerance'] = 1e-8
+
+mechanics_solver = NewtonSolver()
+mechanics_solver.parameters['absolute_tolerance'] = 1e-9
+mechanics_solver.parameters['relative_tolerance'] = 1e-8
+
 
 while t <= time:
     alpha = t/time # simulation some value between 0 and 1
 
     print('time =', t)
     print('Solving: T')
-    solver.solve(temperature_problem, temperature_problem.T.vector())
-    solver.solve(mechanics_problem,mechanics_problem.u.vector())
+    temperature_solver.solve(temperature_problem, temperature_problem.T.vector())
+    mechanics_solver.solve(mechanics_problem,mechanics_problem.u.vector())
 
     E.assign(Constant(alpha*E_max))
     # solve the mechanics problem (again and again...)
