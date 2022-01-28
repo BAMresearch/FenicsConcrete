@@ -2,6 +2,7 @@ from __future__ import print_function
 from fenics import *
 import numpy as np
 import scipy.optimize
+import time
 
 # helper functions...
 def set_q(q, values):
@@ -69,6 +70,11 @@ class ConcreteMaterialData:
         self.g = 9.81 # graviational acceleration in m/s²
         self.E_28 = 2000000 # Youngs Modulus N/m2 or something... TODO: check units!
         self.nu = 0.2 # Poissons Ratio
+
+        #required paramters for alpha to E mapping
+        self.alpha_t = 0.2
+        self.alpha_0 = 0.05
+        self.exp = 0.6
 
 
     def set_parameters(self,name):
@@ -328,9 +334,6 @@ class ConcreteMechanicsModel(NonlinearProblem):
         NonlinearProblem.__init__(self) # apparently required to initialize things
         self.mat = mat # object with material data, parameters, material functions etc...
 
-        #TODO: only temporary variable
-        self.alpha = 1
-
         #initialize possible paraview output
         self.pv_file = XDMFFile( pv_name + '.xdmf')
         self.pv_file.parameters["flush_output"] = True
@@ -362,6 +365,12 @@ class ConcreteMechanicsModel(NonlinearProblem):
         # quadrature functions
         self.q_E = Function(q_V, name="youngs modulus")
         self.q_alpha = Function(q_V, name="degree of hydration")
+        # initialize degree of hydration to 1, in case machanics module is run without hydration coupling
+        alpha_list = self.q_alpha.vector().get_local()
+        alpha_list_ones = np.ones_like(alpha_list)
+        set_q(self.q_alpha, alpha_list_ones)
+
+
 
         # Define variational problem
         self.u = Function(self.V)  # displacement
@@ -408,32 +417,24 @@ class ConcreteMechanicsModel(NonlinearProblem):
 
 
 
+
+    def E_fkt(self,alpha):
+        if alpha < self.mat.alpha_t:
+            E = self.mat.E_28*alpha/self.mat.alpha_t*((self.mat.alpha_t-self.mat.alpha_0)/(1-self.mat.alpha_0))**self.mat.exp
+        else:
+            E = self.mat.E_28*((alpha-self.mat.alpha_0)/(1-self.mat.alpha_0))**self.mat.exp
+        return E
+
     def evaluate_material(self):
-        # project temperautre onto quadrature spaces
-        #self.project_T(self.q_T)
-
         # convert quadrature spaces to numpy vector
-        # only size relevant, values recomputed anyways...
-        E_list = self.q_E.vector().get_local()
         alpha_list = self.q_alpha.vector().get_local()
-        E_list = alpha_list*self.mat.E_28
-        #print(alpha_list)
 
-        # # start with simple loop, later vectorize this!
-        # for i in range(len(E_list)):
-        #     E_list[i] = self.mat.E_28*i/len(E_list)*self.alpha+1000
-        #     #E_list[i] = self.mat.E_28*(len(E_list)-i)/len(E_list)+1000
-
-        #print(E_list)
-
-        #
-        # # save the delta alpha for next iteration as starting guess
-        # self.delta_alpha_n_list = delta_alpha_list
+        # vectorize the function for speed up
+        E_fkt_vectorized = np.vectorize(self.E_fkt)
+        E_list = E_fkt_vectorized(alpha_list)
 
         # # project lists onto quadrature spaces
         set_q(self.q_E, E_list)
-        # set_q(self.q_delta_alpha, delta_alpha_list)
-        # set_q(self.q_ddalpha_dT, ddalpha_dT_list)
         pass
 
 
