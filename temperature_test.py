@@ -9,7 +9,7 @@ import concrete_model as model
 #-------------------------------------------
 # Create mesh and define function space
 dim = 2
-n = 10
+n = 20
 if dim == 2:
     mesh = UnitSquareMesh(n, n)
 elif dim == 3:
@@ -27,7 +27,9 @@ mechanics_problem = model.ConcreteMechanicsModel(mesh, mat)
 
 # Define boundary and initial conditions
 T_boundary = 10+273.15  # input in celcius???
-T_zero = 20+273.15 # input in celcius???
+T_zero = 10+273.15 # input in celcius???
+T_L = 50+273.15 # input in celcius???
+T_R = 10+273.15 # input in celcius???
 
 # Initial temp. condition
 temperature_problem.set_initialT(T_zero)
@@ -35,12 +37,23 @@ temperature_problem.set_initialT(T_zero)
 # Temperature boundary conditions
 def full_boundary(x, on_boundary):
     return on_boundary
+def L_boundary(x, on_boundary):
+    return on_boundary and near(x[0], 0)
+def LU_boundary(x, on_boundary):
+    return on_boundary and near(x[0], 0) or on_boundary and near(x[1], 0)
+def R_boundary(x, on_boundary):
+    return on_boundary and near(x[0], 1)
 def empty_boundary(x, on_boundary):
     return None
 
 T_bc = Expression('t_boundary', t_boundary = T_boundary, degree= 0)
+T_bcL = Expression('t_boundary', t_boundary = T_L, degree= 0)
+T_bcR = Expression('t_boundary', t_boundary = T_R, degree= 0)
 #bc = DirichletBC(concrete_problem.V, T_bc, empty_boundary)
-bc = DirichletBC(temperature_problem.V, T_bc, full_boundary)
+bc = []
+#bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
+bc.append(DirichletBC(temperature_problem.V, T_bcR, LU_boundary))
+bc.append(DirichletBC(temperature_problem.V, T_bcL, R_boundary))
 
 temperature_problem.set_bcs(bc)
 # stuff for mechanics problem
@@ -111,6 +124,8 @@ while t <= time:
     temperature_solver.solve(temperature_problem, temperature_problem.T.vector())
     print('Solving: u')
     #mechanics_problem.E.assign(Constant(alpha*mechanics_problem.mat.E_28))
+    # set current DOH
+    mechanics_problem.q_alpha = temperature_problem.q_alpha
     mechanics_problem.alpha = alpha
     mechanics_solver.solve(mechanics_problem,mechanics_problem.u.vector())
 

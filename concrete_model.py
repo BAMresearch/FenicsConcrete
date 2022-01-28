@@ -336,7 +336,8 @@ class ConcreteMechanicsModel(NonlinearProblem):
         self.pv_file.parameters["flush_output"] = True
         self.pv_file.parameters["functions_share_mesh"] = True
         # function space for single value per element, required for plot of quadrature space values
-        #self.visu_space = FunctionSpace(mesh, "DG", 0)
+        self.visu_space = FunctionSpace(mesh, "DG", 0)
+        self.visu_space_T = TensorFunctionSpace(mesh, "DG", 0)
 
         #initialize timestep, musst be reset using .set_timestep(dt)
         #self.dt = 0
@@ -386,6 +387,7 @@ class ConcreteMechanicsModel(NonlinearProblem):
         # normal form
 
         # TODO: why is this working???, is q_E treated as a "constant"?
+        self.sigma_ufl = self.q_E*x_sigma(self.u)
         R_ufl =  self.q_E*inner(x_sigma(self.u), sym(grad(v)))  * dxm
         R_ufl += - inner(f, v) * dxm # add volumetric force, aka gravity (in this case)
         # quadrature point part
@@ -413,12 +415,14 @@ class ConcreteMechanicsModel(NonlinearProblem):
         # convert quadrature spaces to numpy vector
         # only size relevant, values recomputed anyways...
         E_list = self.q_E.vector().get_local()
-        # alpha_n_list = self.q_alpha_n.vector().get_local()
+        alpha_list = self.q_alpha.vector().get_local()
+        E_list = alpha_list*self.mat.E_28
+        #print(alpha_list)
 
-        # start with simple loop, later vectorize this!
-        for i in range(len(E_list)):
-            E_list[i] = self.mat.E_28*i/len(E_list)*self.alpha+1000
-            #E_list[i] = self.mat.E_28*(len(E_list)-i)/len(E_list)+1000
+        # # start with simple loop, later vectorize this!
+        # for i in range(len(E_list)):
+        #     E_list[i] = self.mat.E_28*i/len(E_list)*self.alpha+1000
+        #     #E_list[i] = self.mat.E_28*(len(E_list)-i)/len(E_list)+1000
 
         #print(E_list)
 
@@ -470,9 +474,31 @@ class ConcreteMechanicsModel(NonlinearProblem):
         u_plot.rename("Displacement","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(u_plot, t, encoding=XDMFFile.Encoding.ASCII)
 
+        # stress plot???
+
+        #stress_plot = project(self.q_alpha, self.visu_space)
+        # some ufl thing....
+        # Stress computation for linear elastic problem without multiplication with E
+
+        # Elasticity parameters without multiplication with E
+        x_mu = 1.0 / (2.0 * (1.0 + self.mat.nu))
+        x_lambda = 1.0 * self.mat.nu / ((1.0 + self.mat.nu) * (1.0 - 2.0 * self.mat.nu))
+        def x_sigma(v):
+             return 2.0 * x_mu * sym(grad(v)) + x_lambda * tr(sym(grad(v))) * Identity(len(v))
+        # stress = assemble(x_sigma(self.u))
+
+        #Some_plot = project(x_sigma(self.u), self.visu_space_T)
+        Some_plot = project(self.sigma_ufl, self.visu_space_T)
+
+
+        E_plot = project(self.q_E, self.visu_space)
+        #print(stress)
+
         # youngsmodulus??
         #alpha_plot = project(self.q_alpha, self.visu_space)
-        #alpha_plot.rename("DOH","test string, what does this do??")  # TODO: what does the second string do?
-        #self.pv_file.write(alpha_plot, t, encoding=XDMFFile.Encoding.ASCII)
+        E_plot.rename("E","test string, what does this do??")  # TODO: what does the second string do?
+        Some_plot.rename("Something","test string, what does this do??")  # TODO: what does the second string do?
+        self.pv_file.write(E_plot, t, encoding=XDMFFile.Encoding.ASCII)
+        self.pv_file.write(Some_plot, t, encoding=XDMFFile.Encoding.ASCII)
 
         pass
