@@ -136,9 +136,80 @@ class ConcreteMaterialData:
         affinity_prime = self.B1 * np.exp(-self.eta * (delta_alpha + alpha_n) / self.alpha_max) * ((self.alpha_max - (delta_alpha + alpha_n)) * (self.B2 / self.alpha_max + (delta_alpha + alpha_n)) * ( -self.eta / self.alpha_max) - self.B2 / self.alpha_max - 2 * (delta_alpha + alpha_n) + self.alpha_max)
         return affinity_prime
 
+# full concrete model, including hydration-temperate and mechanics, including calls to solve etc.
+class ConcreteModel():
+    def __init__(self, mesh, mat, pv_name = 'pv_output_full', **kwargs):
+        # TODO: define global fields here
+        #       - alpha, V
+        #       - etc...
+        #       fix error related to quad degree (add as "global")
+        #       add mechanics paramter for fc and fct!!!
+        #       check logic about defined functions, classes etc...
+        #       add some sensor output options???
+
+        # setting up the two nonlinear problems
+        self.temperature_problem = ConcreteTempHydrationModel(mesh, mat, pv_name = pv_name)
+        self.mechanics_problem = ConcreteMechanicsModel(mesh, mat, pv_name = pv_name)
+        # coupling of the output files
+        self.mechanics_problem.pv_file = self.temperature_problem.pv_file
+
+        #initialize default concrete temperature
+        self.set_inital_T(21)
+        # flag to later check if it has been manually initialized
+        self.flag_T0 = False
+
+        # setting up the solvers
+        self.temperature_solver = NewtonSolver()
+        self.temperature_solver.parameters['absolute_tolerance'] = 1e-9
+        self.temperature_solver.parameters['relative_tolerance'] = 1e-8
+
+        self.mechanics_solver = NewtonSolver()
+        self.mechanics_solver.parameters['absolute_tolerance'] = 1e-9
+        self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
+
+    def solve(self):
+
+        print('Solving: T')
+        self.temperature_solver.solve(self.temperature_problem, self.temperature_problem.T.vector())
+
+        # set current DOH for computation of Young's modulus
+        self.mechanics_problem.q_alpha = self.temperature_problem.q_alpha
+
+        print('Solving: u')
+        self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
+
+        # history update
+        self.temperature_problem.update_history()
+
+
+    def pv_plot(self,t = 0):
+        self.temperature_problem.pv_plot(t=t)
+        self.mechanics_problem.pv_plot(t=t)
+
+
+    def set_inital_T(self,T):
+        # TODO, somehow check that this is initialized
+        self.temperature_problem.set_initial_T(T)
+        self.flag_T0 = True
+
+
+    def set_temperature_bcs(self,bc):
+        self.temperature_problem.set_bcs(bc)
+
+
+    def set_displacement_bcs(self,bc):
+        self.mechanics_problem.set_bcs(bc)
+
+
+    def set_timestep(self,dt):
+        self.temperature_problem.set_timestep(dt)
+
+
+
+
 
 class ConcreteTempHydrationModel(NonlinearProblem):
-    def __init__(self, mesh, mat, pv_name = 'output', **kwargs):
+    def __init__(self, mesh, mat, pv_name = 'temp_output', **kwargs):
         NonlinearProblem.__init__(self) # apparently required to initialize things
         self.mat = mat # object with material data, parameters, material functions etc...
 
@@ -288,9 +359,10 @@ class ConcreteTempHydrationModel(NonlinearProblem):
         self.dt_form.assign(Constant(self.dt))
 
 
-    def set_initialT(self,T):
-        # set initial temperature
-        T0 = Expression('t_zero', t_zero=T, degree=0)
+    def set_initial_T(self,T):
+        #
+        # set initial temperature, in kelvin
+        T0 = Expression('t_zero', t_zero=T+self.mat.zeroC, degree=0)
         self.T_n.interpolate(T0)
         self.T.interpolate(T0)
 
@@ -489,7 +561,7 @@ class ConcreteMechanicsModel(NonlinearProblem):
         # stress = assemble(x_sigma(self.u))
 
         #Some_plot = project(x_sigma(self.u), self.visu_space_T)
-        Some_plot = project(self.sigma_ufl, self.visu_space_T)
+        sigma_plot = project(self.sigma_ufl, self.visu_space_T)
 
 
         E_plot = project(self.q_E, self.visu_space)
@@ -497,9 +569,9 @@ class ConcreteMechanicsModel(NonlinearProblem):
 
         # youngsmodulus??
         #alpha_plot = project(self.q_alpha, self.visu_space)
-        E_plot.rename("E","test string, what does this do??")  # TODO: what does the second string do?
-        Some_plot.rename("Something","test string, what does this do??")  # TODO: what does the second string do?
+        E_plot.rename("Young's Modulus","test string, what does this do??")  # TODO: what does the second string do?
+        sigma_plot.rename("Stress","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(E_plot, t, encoding=XDMFFile.Encoding.ASCII)
-        self.pv_file.write(Some_plot, t, encoding=XDMFFile.Encoding.ASCII)
+        self.pv_file.write(sigma_plot, t, encoding=XDMFFile.Encoding.ASCII)
 
         pass
