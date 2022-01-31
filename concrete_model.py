@@ -139,6 +139,8 @@ class ConcreteMaterialData:
 # full concrete model, including hydration-temperate and mechanics, including calls to solve etc.
 class ConcreteModel():
     def __init__(self, mesh, mat, pv_name = 'pv_output_full', **kwargs):
+        # ideas is, (to be compatible with our current fenics module plans) have "experiment" as input
+        # currently this is the mesh, and later the calls to bc functions. TODO:
         # TODO: define global fields here
         #       - alpha, V
         #       - etc...
@@ -438,10 +440,7 @@ class ConcreteMechanicsModel(NonlinearProblem):
         self.q_E = Function(q_V, name="youngs modulus")
         self.q_alpha = Function(q_V, name="degree of hydration")
         # initialize degree of hydration to 1, in case machanics module is run without hydration coupling
-        alpha_list = self.q_alpha.vector().get_local()
-        alpha_list_ones = np.ones_like(alpha_list)
-        set_q(self.q_alpha, alpha_list_ones)
-
+        self.q_alpha.vector()[:] = 1
 
 
         # Define variational problem
