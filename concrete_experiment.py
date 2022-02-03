@@ -24,6 +24,8 @@ class Experiment:
         raise NotImplementedError()
 
 
+
+
 class Parameters(dict):
     """
     Dict that also allows to access the parameter
@@ -51,7 +53,7 @@ class ConcreteCubeExperiment(Experiment):
         p['T_0'] = 20  # inital concrete temperature
         p['T_bc1'] = 10  # temperature boundary value 1
         p['T_bc2'] = 50  # temperature boundary value 2
-        p['T_bc3'] = 10  # temperature boundary value 3
+        p['T_bc3'] = 20  # temperature boundary value 3
 
         # add and override input paramters
         if parameters == None:
@@ -61,7 +63,8 @@ class ConcreteCubeExperiment(Experiment):
 
         super().__init__()
 
-    def setup(self,dim = 2):
+    def setup(self,bc = 'full', dim = 2):
+        self.bc = bc # different boundary settings
         # elements per spacial direction
         n = 20
         if dim == 2:
@@ -74,10 +77,10 @@ class ConcreteCubeExperiment(Experiment):
 
         # define paramters???
         self.zero_C = 273.15 # to convert celcius to kelvin input to
-        self.parameters['T_0'] = 20 # inital concrete temperature
-        self.parameters['T_bc1'] = 10 # temperature boundary value 1
-        self.parameters['T_bc2'] = 50 # temperature boundary value 2
-        self.parameters['T_bc3'] = 10 # temperature boundary value 3
+        # self.parameters['T_0'] = 20 # inital concrete temperature
+        # self.parameters['T_bc1'] = 10 # temperature boundary value 1
+        # self.parameters['T_bc2'] = 50 # temperature boundary value 2
+        # self.parameters['T_bc3'] = 10 # temperature boundary value 3
 
 
     def create_temp_bcs(self,V):
@@ -101,6 +104,8 @@ class ConcreteCubeExperiment(Experiment):
         T_bc3 = df.Expression('t_boundary', t_boundary=self.parameters.T_bc3+self.zero_C, degree=0)
 
         temp_bcs = []
+        #if self.
+
         # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
         temp_bcs.append(df.DirichletBC(V, T_bc2, L_boundary))
         temp_bcs.append(df.DirichletBC(V, T_bc2, U_boundary))
@@ -130,8 +135,73 @@ class ConcreteCubeExperiment(Experiment):
 
         return displ_bcs
 
-
+# what is this for (exept for being fun but confusing)
 def get_experiment(name, parameters = None):
     # metaprogramming!
     cls_name = name + "Experiment"
     return eval(cls_name)(parameters)
+
+
+
+class Sensor:
+    def measure(self, u):
+        raise NotImplementedError()
+
+    @property
+    def name(self):
+        return self.__class__.__name__
+
+
+class DisplacementSensor(Sensor):
+    def __init__(self, where):
+        self.where = where
+        self.data = []
+        self.time = []
+
+    def measure(self, problem, t=1.0):
+        # get displacements
+        #print(type(problem.mechanics_problem.u(self.where)))
+        self.data.append(np.concatenate(([t],problem.mechanics_problem.u(self.where))))
+
+
+class TemperatureSensor(Sensor):
+    def __init__(self, where):
+        self.where = where
+        self.data = []
+        self.time = []
+
+    def measure(self, problem, t=1.0):
+        # get displacements
+        #print(type(problem.mechanics_problem.u(self.where)))
+        #T = 42
+        T = problem.temperature_problem.T(self.where) - problem.temperature_problem.zero_C
+        self.data.append([t,T])
+
+
+class DOHSensor(Sensor):
+    def __init__(self, where):
+        self.where = where
+        self.data = []
+        self.time = []
+
+    def measure(self, problem, t=1.0):
+        # get DOH
+        alpha_projected = df.project(problem.temperature_problem.q_alpha, problem.temperature_problem.visu_space)
+        alpha = alpha_projected(self.where)
+        self.data.append([t,alpha])
+
+
+class DOHHomogeneitySensor(Sensor):
+    # gives a measure of degree of homogeneity
+    # computes average DOH (only applicable if all elements same size)
+    # computes the square of the difference of each element and computes the sum
+    def __init__(self):
+        self.data = []
+        self.time = []
+
+    def measure(self, problem, t=1.0):
+        # get data
+        alpha_list = problem.temperature_problem.q_alpha.vector().get_local()
+        ave_DOH = np.average(alpha_list)
+        error = ((alpha_list-ave_DOH)**2).sum()
+        self.data.append([t,ave_DOH, error])

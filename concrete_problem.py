@@ -42,21 +42,41 @@ class LocalProjector:
         """
         self.solver.solve_local_rhs(u)
 
-# full concrete model, including hydration-temperate and mechanics, including calls to solve etc.
-class ConcreteThermoMechanical():
+class MaterialProblem():
     def __init__(self, experiment, parameters):
-        # ideas is, (to be compatible with our current fenics module plans) have "experiment" as input
-        # currently this is the mesh, and later the calls to bc functions. TODO:
-        # TODO: define global fields here
-        #       - alpha, V
-        #       - etc...
-        #       fix error related to quad degree (add as "global")
-        #       add mechanics paramter for fc and fct!!!
-        #       check logic about defined functions, classes etc...
-        #       add some sensor output options???
         self.experiment = experiment
         self.parameters = parameters
+        self.sensors = [] # list to hold attached sensors
         self.setup()
+
+    def setup(self):
+        # initialization of this specific problem
+        raise NotImplementedError()
+
+    def solve(self):
+        # define what to do, to solve this problem
+        raise NotImplementedError()
+
+
+    def add_sensor(self,sensor):
+        self.sensors.append(sensor)
+
+
+# full concrete model, including hydration-temperate and mechanics, including calls to solve etc.
+class ConcreteThermoMechanical(MaterialProblem):
+    # def __init__(self, experiment, parameters):
+    #     # ideas is, (to be compatible with our current fenics module plans) have "experiment" as input
+    #     # currently this is the mesh, and later the calls to bc functions. TODO:
+    #     # TODO: define global fields here
+    #     #       - alpha, V
+    #     #       - etc...
+    #     #       fix error related to quad degree (add as "global")
+    #     #       add mechanics paramter for fc and fct!!!
+    #     #       check logic about defined functions, classes etc...
+    #     #       add some sensor output options???
+    #     self.experiment = experiment
+    #     self.parameters = parameters
+    #     self.setup()
 
     def setup(self, pv_name = 'pv_output_full'):
         # setting up the two nonlinear problems
@@ -83,7 +103,7 @@ class ConcreteThermoMechanical():
         self.mechanics_solver.parameters['absolute_tolerance'] = 1e-9
         self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
 
-    def solve(self):
+    def solve(self, t=1.0):
 
         print('Solving: T')
         self.temperature_solver.solve(self.temperature_problem, self.temperature_problem.T.vector())
@@ -96,6 +116,34 @@ class ConcreteThermoMechanical():
 
         # history update
         self.temperature_problem.update_history()
+
+        # get sensor data
+        for sensor in self.sensors:
+            # go through all sensors and measure the
+            sensor.measure(self,t)
+
+
+    def evaluate(self, sensors, t):
+        """
+        Evaluates the problem for the given sensors
+        """
+        u = self.solve(t)
+
+        try:
+            # only one sensor
+            return sensors.measure(u)
+        except AttributeError:
+            # list of sensors
+            return {s: s.measure(u) for s in sensors}
+
+
+    def __call__(self, sensors, ts=[1.0]):
+        measurements = []
+        for t in ts:
+            measurements.append(self.evaluate(sensors, t))
+        if len(ts) == 1:
+            measurements = measurements[0]
+        return measurements
 
 
     def pv_plot(self,t = 0):
@@ -247,6 +295,17 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
 
 
         return np.asarray(time)/60/60, np.asarray(heat)/1000, np.asarray(alpha_list)
+
+
+    def get_affinity(self):
+        alpha_list = []
+        affinity_list = []
+        for val in range(1000):
+            alpha = val/1000
+            alpha_list.append(alpha)
+            affinity_list.append(self.affinity(alpha, 0))
+
+        return np.asarray(alpha_list), np.asarray(affinity_list)
 
 
     def evaluate_material(self):
