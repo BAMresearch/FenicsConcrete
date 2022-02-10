@@ -51,9 +51,10 @@ class ConcreteCubeExperiment(Experiment):
         p = Parameters()
         # boundary values...
         p['T_0'] = 20  # inital concrete temperature
-        p['T_bc1'] = 10  # temperature boundary value 1
+        p['T_bc1'] = 30  # temperature boundary value 1
         p['T_bc2'] = 50  # temperature boundary value 2
         p['T_bc3'] = 20  # temperature boundary value 3
+        p['bc_setting'] = 'full' # default boundary setting
 
         # add and override input paramters
         if parameters == None:
@@ -104,12 +105,17 @@ class ConcreteCubeExperiment(Experiment):
         T_bc3 = df.Expression('t_boundary', t_boundary=self.parameters.T_bc3+self.zero_C, degree=0)
 
         temp_bcs = []
-        #if self.
 
-        # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
-        temp_bcs.append(df.DirichletBC(V, T_bc2, L_boundary))
-        temp_bcs.append(df.DirichletBC(V, T_bc2, U_boundary))
-        temp_bcs.append(df.DirichletBC(V, T_bc3, R_boundary))
+        if self.parameters.bc_setting == 'full':
+            # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc1, full_boundary))
+        elif self.parameters.bc_setting == 'left-right':
+            # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc2, L_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc2, U_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc3, R_boundary))
+        else:
+            raise Exception(f'parameter[\'bc_setting\'] = {self.bc_setting} is not implemented as temperature boundary.')
 
         return temp_bcs
 
@@ -177,6 +183,15 @@ class TemperatureSensor(Sensor):
         T = problem.temperature_problem.T(self.where) - problem.temperature_problem.zero_C
         self.data.append([t,T])
 
+class MaxTemperatureSensor(Sensor):
+    def __init__(self):
+        self.data = []
+        self.time = []
+
+    def measure(self, problem, t=1.0):
+        max_T = np.amax(problem.temperature_problem.T.vector().get_local()) - problem.temperature_problem.zero_C
+
+        self.data.append([t,max_T])
 
 class DOHSensor(Sensor):
     def __init__(self, where):
@@ -190,6 +205,15 @@ class DOHSensor(Sensor):
         alpha = alpha_projected(self.where)
         self.data.append([t,alpha])
 
+class MinDOHSensor(Sensor):
+    def __init__(self):
+        self.data = []
+        self.time = []
+
+    def measure(self, problem, t=1.0):
+        # get min DOH
+        min_DOH = np.amin(problem.temperature_problem.q_alpha.vector().get_local())
+        self.data.append([t,min_DOH])
 
 class DOHHomogeneitySensor(Sensor):
     # gives a measure of degree of homogeneity

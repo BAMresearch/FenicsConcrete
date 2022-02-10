@@ -43,10 +43,11 @@ class LocalProjector:
         self.solver.solve_local_rhs(u)
 
 class MaterialProblem():
-    def __init__(self, experiment, parameters):
+    def __init__(self, experiment, parameters, pv_name = 'pv_output_full'):
         self.experiment = experiment
         self.parameters = parameters
         self.sensors = [] # list to hold attached sensors
+        self.pv_name = pv_name
         self.setup()
 
     def setup(self):
@@ -78,12 +79,12 @@ class ConcreteThermoMechanical(MaterialProblem):
     #     self.parameters = parameters
     #     self.setup()
 
-    def setup(self, pv_name = 'pv_output_full'):
+    def setup(self):
         # setting up the two nonlinear problems
-        self.temperature_problem = ConcreteTempHydrationModel(self.experiment.mesh, self.parameters, pv_name = pv_name)
+        self.temperature_problem = ConcreteTempHydrationModel(self.experiment.mesh, self.parameters, pv_name = self.pv_name)
         # TODO paramtersetup not jet "perfect"
         # here I "pass on the parameters from temperature to mechanics problem.."
-        self.mechanics_problem = ConcreteMechanicsModel(self.experiment.mesh, self.temperature_problem.mat, pv_name = pv_name)
+        self.mechanics_problem = ConcreteMechanicsModel(self.experiment.mesh, self.temperature_problem.mat, pv_name = self.pv_name)
         # coupling of the output files
         self.mechanics_problem.pv_file = self.temperature_problem.pv_file
 
@@ -232,6 +233,8 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
 
         # empfy list for newton iteration to compute delta alpha using the last value as starting point
         self.delta_alpha_n_list = np.full(np.shape(self.q_alpha_n.vector().get_local() ), 0.2)
+        # empfy list for newton iteration to compute delta alpha using the last value as starting point
+        self.delta_alpha_guess = np.full(np.shape(self.q_alpha_n.vector().get_local() ), 0.5)
 
         # scalars for the analysis of the heat of hydration
         self.alpha = 0
@@ -320,13 +323,21 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         # here the newton raphson method of the scipy package is used
         # the zero value of the delta_alpha_fkt is found for each entry in alpha_n_list is found. the corresponding temparature
         # is given in temperature_list and as starting point the value of last step used from delta_alpha_n
-        delta_alpha_list = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha_n_list, temperature_list),fprime=self.delta_alpha_prime, x0=self.delta_alpha_n_list)
-
-        # I dont trust the algorithim!!! check if only applicable results are obtained
-        if np.any(delta_alpha_list<0.0):
-            # TODO: better error message ;)
+        try:
+            delta_alpha_list = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha_n_list, temperature_list),fprime=self.delta_alpha_prime, x0=self.delta_alpha_n_list)
+            # I dont trust the algorithim!!! check if only applicable results are obtained
+            if np.any(delta_alpha_list<0.0):
+                # TODO: better error message ;)
+                raise Exception('There is a problem with the alpha computation, computed delta alpha is negative.')
+        except:
             print('AAAAAAHHHH, negative delta alpha!!!!')
-            exit()
+            print('NO PROBLEM!!!, different starting value!')
+            delta_alpha_list = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha_n_list, temperature_list),fprime=self.delta_alpha_prime, x0=self.delta_alpha_guess)
+            if np.any(delta_alpha_list<0.0):
+                # TODO: better error message ;)
+                raise Exception('There is a problem with the alpha computation, computed delta alpha is negative.')
+                print('AAAAAAHHHH, negative delta alpha!!!!')
+                exit()
 
         # save the delta alpha for next iteration as starting guess
         self.delta_alpha_n_list = delta_alpha_list
