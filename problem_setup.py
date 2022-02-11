@@ -40,7 +40,7 @@ while t <= time:
     #print(problem(u_sensor))
     # prepare next timestep
     t += dt
-
-print(problem.sensors[0].data)
-print(problem.sensors[1].data)
-print(problem.sensors[2].data)
+#
+# print(problem.sensors[0].data)
+# print(problem.sensors[1].data)
+# print(problem.sensors[2].data)
