@@ -299,6 +299,70 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
 
         return np.asarray(time)/60/60, np.asarray(heat)/1000, np.asarray(alpha_list)
 
+    def delta_alpha_fkt_ext(self,delta_alpha, alpha_n, T, dt, p):
+        return delta_alpha - dt * self.affinity_ext(delta_alpha, alpha_n, p) * self.temp_adjust_ext(T, p)
+
+    def delta_alpha_prime_ext(self,delta_alpha, alpha_n, T, dt, p):
+        return 1 - dt * self.daffinity_ddalpha_ext(delta_alpha, alpha_n, p) * self.temp_adjust_ext(T, p)
+
+    def affinity_ext(self, delta_alpha, alpha_n, p):
+        affinity = p['B1'] * (p['B2']/ p['alpha_max'] + delta_alpha + alpha_n) * (
+                    p['alpha_max'] - (delta_alpha + alpha_n)) * np.exp(
+            -p['eta'] * (delta_alpha + alpha_n) / p['alpha_max'])
+        return affinity
+
+    def daffinity_ddalpha_ext(self, delta_alpha, alpha_n, p):
+        affinity_prime = p['B1'] * np.exp(-p['eta'] * (delta_alpha + alpha_n) / p['alpha_max']) * (
+                    (p['alpha_max'] - (delta_alpha + alpha_n)) * (
+                        p['B2']/ p['alpha_max'] + (delta_alpha + alpha_n)) * (
+                                -p['eta'] / p['alpha_max']) - p['B2']/ p['alpha_max'] - 2 * (
+                                delta_alpha + alpha_n) + p['alpha_max'])
+        return affinity_prime
+
+    def temp_adjust_ext(self, T,p):
+        return np.exp(-p['E_act'] / p['igc'] * (1 / T - 1 / (p['T_ref'] + p['zero_C'])))
+
+    def get_heat_of_hydration_ext(self,tmax,T,dt,p):
+        # tmax, max time computation
+        # T, temperature at which this problem is run
+
+        parameter = {}
+        parameter['B1'] = None
+        parameter['B2'] = None
+        parameter['eta'] = None
+        parameter['alpha_max'] = None
+        parameter['E_act'] = None
+        parameter['T_ref'] = None
+        parameter['igc'] = 8.3145 # ideal gas constant in [J/K/mol], CONSTANT!!!
+        parameter['zero_C'] = 273.15 # in Kelvin, CONSTANT!!!
+        parameter['Q_pot'] = None
+
+        p += parameter
+
+
+        t = 0
+        time = []
+        heat = []
+        alpha_list = []
+        alpha = 0
+        delta_alpha = 0.2
+        while t <= tmax:
+            time.append(t)
+            # compute delta_alpha
+            delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt_ext, args=(alpha, T+p['zero_C'], dt, p),
+                                  fprime=self.delta_alpha_prime_ext, x0=delta_alpha)
+            # update alpha
+            alpha = delta_alpha + alpha
+            # save heat of hydration
+            alpha_list.append(delta_alpha)
+            heat.append(alpha*p['Q_pot'])
+
+            # timeupdate
+            t = t+ dt
+
+
+        return np.asarray(time)/60/60, np.asarray(heat)/1000, np.asarray(alpha_list)
+
 
     def get_affinity(self):
         alpha_list = []

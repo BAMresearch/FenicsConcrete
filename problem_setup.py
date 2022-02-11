@@ -17,6 +17,9 @@ dohhom_sensor = concrete_experiment.DOHHomogeneitySensor()
 problem.add_sensor(dohhom_sensor)
 
 
+
+
+
 # data for time stepping
 #time steps
 dt = 60*20 # time step
