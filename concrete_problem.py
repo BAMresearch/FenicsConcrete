@@ -323,12 +323,14 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         heat = [0.0]
         alpha_list = [0.0]
         alpha = 0
-        delta_alpha = 0.2
+        delta_alpha = 1.0
 
         while t <= tmax:
             # compute delta_alpha
             delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
                                   fprime=self.delta_alpha_prime, x0=delta_alpha)
+
+            # TODO test for bad alpha values!!!
             # update alpha
             alpha = delta_alpha + alpha
             # save heat of hydration
