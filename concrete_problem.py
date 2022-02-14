@@ -43,14 +43,24 @@ class LocalProjector:
         self.solver.solve_local_rhs(u)
 
 class MaterialProblem():
-    def __init__(self, experiment, parameters, pv_name = 'pv_output_full'):
+    def __init__(self, experiment = None, parameters = None, pv_name = 'pv_output_full'):
         self.experiment = experiment
         self.parameters = parameters
         self.sensors = [] # list to hold attached sensors
         self.pv_name = pv_name
-        self.setup()
+
+        # setup the material object to access the function
+        if self.experiment != None:
+            self.setup()
+        else:
+            self.setup_wo_experiment()
+
 
     def setup(self):
+        # initialization of this specific problem
+        raise NotImplementedError()
+
+    def setup_wo_experiment(self):
         # initialization of this specific problem
         raise NotImplementedError()
 
@@ -103,6 +113,19 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.mechanics_solver = df.NewtonSolver()
         self.mechanics_solver.parameters['absolute_tolerance'] = 1e-9
         self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
+
+    def setup_wo_experiment(self):
+        # setting up the two nonlinear problems
+        # only to get functions for calibration
+
+        self.temperature_problem = ConcreteTempHydrationModel(None, None)
+        # TODO paramtersetup not jet "perfect"
+        # here I "pass on the parameters from temperature to mechanics problem.."
+        self.mechanics_problem = ConcreteMechanicsModel(None, None)
+
+
+
+
 
     def solve(self, t=1.0):
 
@@ -161,6 +184,10 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.temperature_problem.set_timestep(dt)
 
 
+    def get_heat_of_hydration_ftk(self):
+        return self.temperature_problem.heat_of_hydration_ftk
+
+
 class ConcreteTempHydrationModel(df.NonlinearProblem):
     def __init__(self, mesh, mat, pv_name = 'temp_output', **kwargs):
         df.NonlinearProblem.__init__(self) # apparently required to initialize things
@@ -197,74 +224,74 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         else:
             self.mat = mat + p # object with material data, parameters, material functions etc...
 
+        if mesh != None:
+            #initialize possible paraview output
+            self.pv_file = df.XDMFFile( pv_name + '.xdmf')
+            self.pv_file.parameters["flush_output"] = True
+            self.pv_file.parameters["functions_share_mesh"] = True
+            # function space for single value per element, required for plot of quadrature space values
+            self.visu_space = df.FunctionSpace(mesh, "DG", 0)
 
-        #initialize possible paraview output
-        self.pv_file = df.XDMFFile( pv_name + '.xdmf')
-        self.pv_file.parameters["flush_output"] = True
-        self.pv_file.parameters["functions_share_mesh"] = True
-        # function space for single value per element, required for plot of quadrature space values
-        self.visu_space = df.FunctionSpace(mesh, "DG", 0)
+            #initialize timestep, musst be reset using .set_timestep(dt)
+            self.dt = 0
+            self.dt_form = df.Constant(self.dt)
 
-        #initialize timestep, musst be reset using .set_timestep(dt)
-        self.dt = 0
-        self.dt_form = df.Constant(self.dt)
+            # TODO why does q_deg = 2 throw errors???
+            q_deg = 1
 
-        # TODO why does q_deg = 2 throw errors???
-        q_deg = 1
+            metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
+            dxm = df.dx(metadata=metadata)
 
-        metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
-        dxm = df.dx(metadata=metadata)
+            # solution field
+            self.V = df.FunctionSpace(mesh, 'P', q_deg)
 
-        # solution field
-        self.V = df.FunctionSpace(mesh, 'P', q_deg)
+            # generic quadrature function space
+            cell = mesh.ufl_cell()
+            q = "Quadrature"
+            quadrature_element = df.FiniteElement(q, cell, degree=q_deg, quad_scheme="default")
+            q_V = df.FunctionSpace(mesh, quadrature_element)
 
-        # generic quadrature function space
-        cell = mesh.ufl_cell()
-        q = "Quadrature"
-        quadrature_element = df.FiniteElement(q, cell, degree=q_deg, quad_scheme="default")
-        q_V = df.FunctionSpace(mesh, quadrature_element)
+            # quadrature functions
+            self.q_T = df.Function(q_V, name="temperature")
+            self.q_alpha = df.Function(q_V, name="degree of hydration")
+            self.q_alpha_n = df.Function(q_V, name="degree of hydration last time step")
+            self.q_delta_alpha = df.Function(q_V, name="inrease in degree of hydration")
+            self.q_ddalpha_dT = df.Function(q_V, name="derivative of delta alpha wrt temperature")
 
-        # quadrature functions
-        self.q_T = df.Function(q_V, name="temperature")
-        self.q_alpha = df.Function(q_V, name="degree of hydration")
-        self.q_alpha_n = df.Function(q_V, name="degree of hydration last time step")
-        self.q_delta_alpha = df.Function(q_V, name="inrease in degree of hydration")
-        self.q_ddalpha_dT = df.Function(q_V, name="derivative of delta alpha wrt temperature")
+            # empfy list for newton iteration to compute delta alpha using the last value as starting point
+            self.delta_alpha_n_list = np.full(np.shape(self.q_alpha_n.vector().get_local() ), 0.2)
+            # empfy list for newton iteration to compute delta alpha using the last value as starting point
+            self.delta_alpha_guess = np.full(np.shape(self.q_alpha_n.vector().get_local() ), 0.5)
 
-        # empfy list for newton iteration to compute delta alpha using the last value as starting point
-        self.delta_alpha_n_list = np.full(np.shape(self.q_alpha_n.vector().get_local() ), 0.2)
-        # empfy list for newton iteration to compute delta alpha using the last value as starting point
-        self.delta_alpha_guess = np.full(np.shape(self.q_alpha_n.vector().get_local() ), 0.5)
+            # scalars for the analysis of the heat of hydration
+            self.alpha = 0
+            self.delta_alpha = 0
 
-        # scalars for the analysis of the heat of hydration
-        self.alpha = 0
-        self.delta_alpha = 0
+            # Define variational problem
+            self.T = df.Function(self.V)  # temperature
+            self.T_n = df.Function(self.V)  # overwritten later...
+            T_ = df.TrialFunction(self.V) # temperature
+            vT = df.TestFunction(self.V)
 
-        # Define variational problem
-        self.T = df.Function(self.V)  # temperature
-        self.T_n = df.Function(self.V)  # overwritten later...
-        T_ = df.TrialFunction(self.V) # temperature
-        vT = df.TestFunction(self.V)
-
-        # normal form
-        R_ufl =  df.Constant(self.mat.vol_heat_cap) * (self.T) * vT * dxm
-        R_ufl += self.dt_form * df.dot( df.Constant(self.mat.themal_cond) * df.grad(self.T),df.grad(vT)) * dxm
-        R_ufl += -  df.Constant(self.mat.vol_heat_cap) * self.T_n * vT * dxm
-        # quadrature point part
+            # normal form
+            R_ufl =  df.Constant(self.mat.vol_heat_cap) * (self.T) * vT * dxm
+            R_ufl += self.dt_form * df.dot( df.Constant(self.mat.themal_cond) * df.grad(self.T),df.grad(vT)) * dxm
+            R_ufl += -  df.Constant(self.mat.vol_heat_cap) * self.T_n * vT * dxm
+            # quadrature point part
 
 
-        self.R = R_ufl - df.Constant(self.mat.Q_pot * self.mat.density_binder * self.mat.b_ratio) * self.q_delta_alpha * vT * dxm
+            self.R = R_ufl - df.Constant(self.mat.Q_pot * self.mat.density_binder * self.mat.b_ratio) * self.q_delta_alpha * vT * dxm
 
-        # derivative
-        # normal form
-        dR_ufl = df.derivative(R_ufl, self.T)
-        # quadrature part
-        self.dR = dR_ufl - df.Constant(self.mat.Q_pot * self.mat.density_binder * self.mat.b_ratio) * self.q_ddalpha_dT * T_ * vT * dxm
+            # derivative
+            # normal form
+            dR_ufl = df.derivative(R_ufl, self.T)
+            # quadrature part
+            self.dR = dR_ufl - df.Constant(self.mat.Q_pot * self.mat.density_binder * self.mat.b_ratio) * self.q_ddalpha_dT * T_ * vT * dxm
 
-        # setup projector to project continuous funtionspace to quadrature
-        self.project_T = LocalProjector(self.T, q_V, dxm)
+            # setup projector to project continuous funtionspace to quadrature
+            self.project_T = LocalProjector(self.T, q_V, dxm)
 
-        self.assembler = None  #set as default, to check if bc have been added???
+            self.assembler = None  #set as default, to check if bc have been added???
 
 
     def delta_alpha_fkt(self,delta_alpha, alpha_n, T):
@@ -275,15 +302,30 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         return 1 - self.dt * self.daffinity_ddalpha(delta_alpha, alpha_n) * self.temp_adjust(T)
 
 
-    def get_heat_of_hydration(self,tmax,T):
+    def heat_of_hydration_ftk(self,T,tmax,dt,parameter):
+        # tmax, max time computation
+        # T, temperature at which this problem is run
+
+        # set paramters
+        self.mat.B1 = parameter['B1']
+        self.mat.B2 = parameter['B2']
+        self.mat.eta = parameter['eta']
+        self.mat.alpha_max = parameter['alpha_max']
+        self.mat.E_act = parameter['E_act']
+        self.mat.T_ref = parameter['T_ref']
+        self.mat.Q_pot = parameter['Q_pot']
+
+        # set time step
+        self.dt = dt
+
         t = 0
-        time = []
-        heat = []
-        alpha_list = []
+        time = [0.0]
+        heat = [0.0]
+        alpha_list = [0.0]
         alpha = 0
         delta_alpha = 0.2
+
         while t <= tmax:
-            time.append(t)
             # compute delta_alpha
             delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
                                   fprime=self.delta_alpha_prime, x0=delta_alpha)
@@ -291,77 +333,14 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
             alpha = delta_alpha + alpha
             # save heat of hydration
             alpha_list.append(delta_alpha)
-            heat.append(alpha*self.mat.Q_pot * self.mat.density_binder * self.mat.b_ratio)
-
-            # timeupdate
-            t = t+self.dt
-
-
-        return np.asarray(time)/60/60, np.asarray(heat)/1000, np.asarray(alpha_list)
-
-    def delta_alpha_fkt_ext(self,delta_alpha, alpha_n, T, dt, p):
-        return delta_alpha - dt * self.affinity_ext(delta_alpha, alpha_n, p) * self.temp_adjust_ext(T, p)
-
-    def delta_alpha_prime_ext(self,delta_alpha, alpha_n, T, dt, p):
-        return 1 - dt * self.daffinity_ddalpha_ext(delta_alpha, alpha_n, p) * self.temp_adjust_ext(T, p)
-
-    def affinity_ext(self, delta_alpha, alpha_n, p):
-        affinity = p['B1'] * (p['B2']/ p['alpha_max'] + delta_alpha + alpha_n) * (
-                    p['alpha_max'] - (delta_alpha + alpha_n)) * np.exp(
-            -p['eta'] * (delta_alpha + alpha_n) / p['alpha_max'])
-        return affinity
-
-    def daffinity_ddalpha_ext(self, delta_alpha, alpha_n, p):
-        affinity_prime = p['B1'] * np.exp(-p['eta'] * (delta_alpha + alpha_n) / p['alpha_max']) * (
-                    (p['alpha_max'] - (delta_alpha + alpha_n)) * (
-                        p['B2']/ p['alpha_max'] + (delta_alpha + alpha_n)) * (
-                                -p['eta'] / p['alpha_max']) - p['B2']/ p['alpha_max'] - 2 * (
-                                delta_alpha + alpha_n) + p['alpha_max'])
-        return affinity_prime
-
-    def temp_adjust_ext(self, T,p):
-        return np.exp(-p['E_act'] / p['igc'] * (1 / T - 1 / (p['T_ref'] + p['zero_C'])))
-
-    def get_heat_of_hydration_ext(self,tmax,T,dt,p):
-        # tmax, max time computation
-        # T, temperature at which this problem is run
-
-        parameter = {}
-        parameter['B1'] = None
-        parameter['B2'] = None
-        parameter['eta'] = None
-        parameter['alpha_max'] = None
-        parameter['E_act'] = None
-        parameter['T_ref'] = None
-        parameter['igc'] = 8.3145 # ideal gas constant in [J/K/mol], CONSTANT!!!
-        parameter['zero_C'] = 273.15 # in Kelvin, CONSTANT!!!
-        parameter['Q_pot'] = None
-
-        p += parameter
-
-
-        t = 0
-        time = []
-        heat = []
-        alpha_list = []
-        alpha = 0
-        delta_alpha = 0.2
-        while t <= tmax:
-            time.append(t)
-            # compute delta_alpha
-            delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt_ext, args=(alpha, T+p['zero_C'], dt, p),
-                                  fprime=self.delta_alpha_prime_ext, x0=delta_alpha)
-            # update alpha
-            alpha = delta_alpha + alpha
-            # save heat of hydration
-            alpha_list.append(delta_alpha)
-            heat.append(alpha*p['Q_pot'])
+            heat.append(alpha*self.mat.Q_pot)
 
             # timeupdate
             t = t+ dt
+            time.append(t)
 
 
-        return np.asarray(time)/60/60, np.asarray(heat)/1000, np.asarray(alpha_list)
+        return np.asarray(time), np.asarray(heat)/1000, np.asarray(alpha_list)
 
 
     def get_affinity(self):
@@ -527,81 +506,83 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         else:
             self.mat = mat + p # object with material data, parameters, material functions etc...
 
-        #initialize possible paraview output
-        self.pv_file = df.XDMFFile( pv_name + '.xdmf')
-        self.pv_file.parameters["flush_output"] = True
-        self.pv_file.parameters["functions_share_mesh"] = True
-        # function space for single value per element, required for plot of quadrature space values
-        self.visu_space = df.FunctionSpace(mesh, "DG", 0)
-        self.visu_space_T = df.TensorFunctionSpace(mesh, "DG", 0)
 
-        #initialize timestep, musst be reset using .set_timestep(dt)
-        #self.dt = 0
-        #self.dt_form = Constant(self.dt)
+        if mesh != None:
+            #initialize possible paraview output
+            self.pv_file = df.XDMFFile( pv_name + '.xdmf')
+            self.pv_file.parameters["flush_output"] = True
+            self.pv_file.parameters["functions_share_mesh"] = True
+            # function space for single value per element, required for plot of quadrature space values
+            self.visu_space = df.FunctionSpace(mesh, "DG", 0)
+            self.visu_space_T = df.TensorFunctionSpace(mesh, "DG", 0)
 
-        # TODO why does q_deg = 2 throw errors???
-        q_deg = 1
+            #initialize timestep, musst be reset using .set_timestep(dt)
+            #self.dt = 0
+            #self.dt_form = Constant(self.dt)
 
-        metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
-        dxm = df.dx(metadata=metadata)
+            # TODO why does q_deg = 2 throw errors???
+            q_deg = 1
 
-        # solution field
-        #self.V = VectorFunctionSpace(mesh, 'P', q_deg)
-        self.V = df.VectorFunctionSpace(mesh, 'Lagrange', q_deg)
+            metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
+            dxm = df.dx(metadata=metadata)
 
-        # generic quadrature function space
-        cell = mesh.ufl_cell()
-        q = "Quadrature"
-        quadrature_element = df.FiniteElement(q, cell, degree=q_deg, quad_scheme="default")
-        q_V = df.FunctionSpace(mesh, quadrature_element)
+            # solution field
+            #self.V = VectorFunctionSpace(mesh, 'P', q_deg)
+            self.V = df.VectorFunctionSpace(mesh, 'Lagrange', q_deg)
 
-        # quadrature functions
-        self.q_E = df.Function(q_V, name="youngs modulus")
-        self.q_alpha = df.Function(q_V, name="degree of hydration")
-        # initialize degree of hydration to 1, in case machanics module is run without hydration coupling
-        self.q_alpha.vector()[:] = 1
+            # generic quadrature function space
+            cell = mesh.ufl_cell()
+            q = "Quadrature"
+            quadrature_element = df.FiniteElement(q, cell, degree=q_deg, quad_scheme="default")
+            q_V = df.FunctionSpace(mesh, quadrature_element)
 
-
-        # Define variational problem
-        self.u = df.Function(self.V)  # displacement
-        v = df.TestFunction(self.V)
+            # quadrature functions
+            self.q_E = df.Function(q_V, name="youngs modulus")
+            self.q_alpha = df.Function(q_V, name="degree of hydration")
+            # initialize degree of hydration to 1, in case machanics module is run without hydration coupling
+            self.q_alpha.vector()[:] = 1
 
 
-        # Elasticity parameters without multiplication with E
-        x_mu = 1.0 / (2.0 * (1.0 + self.mat.nu))
-        x_lambda = 1.0 * self.mat.nu / ((1.0 + self.mat.nu) * (1.0 - 2.0 * self.mat.nu))
+            # Define variational problem
+            self.u = df.Function(self.V)  # displacement
+            v = df.TestFunction(self.V)
 
-        # Stress computation for linear elastic problem without multiplication with E
-        def x_sigma(v):
-            return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
-        # Volume force
-        f = df.Constant((0, -self.g * self.mat.density))
-        #f = Constant((10, 0))
+            # Elasticity parameters without multiplication with E
+            x_mu = 1.0 / (2.0 * (1.0 + self.mat.nu))
+            x_lambda = 1.0 * self.mat.nu / ((1.0 + self.mat.nu) * (1.0 - 2.0 * self.mat.nu))
 
-        #E.assign(Constant(alpha * E_max))
-        # solve the mechanics problem
-        #self.E = Constant(self.mat.E_28)
-        #E.assign(Constant(self.alpha*self.mat.E_28))
-        # normal form
+            # Stress computation for linear elastic problem without multiplication with E
+            def x_sigma(v):
+                return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
-        # TODO: why is this working???, is q_E treated as a "constant"?
-        self.sigma_ufl = self.q_E*x_sigma(self.u)
-        R_ufl =  self.q_E*df.inner(x_sigma(self.u), df.sym(df.grad(v)))  * dxm
-        R_ufl += - df.inner(f, v) * dxm # add volumetric force, aka gravity (in this case)
-        # quadrature point part
-        self.R = R_ufl #- Constant(mat.Q_inf) * self.q_delta_alpha * vT * dxm
+            # Volume force
+            f = df.Constant((0, -self.g * self.mat.density))
+            #f = Constant((10, 0))
 
-        # derivative
-        # normal form
-        dR_ufl = df.derivative(R_ufl, self.u)
-        # quadrature part
-        self.dR = dR_ufl #- Constant(mat.Q_inf) * self.q_ddalpha_dT * T_ * vT * dxm
+            #E.assign(Constant(alpha * E_max))
+            # solve the mechanics problem
+            #self.E = Constant(self.mat.E_28)
+            #E.assign(Constant(self.alpha*self.mat.E_28))
+            # normal form
 
-        # setup projector to project continuous funtionspace to quadrature
-        #self.project_T = LocalProjector(self.T, q_V, dxm)
+            # TODO: why is this working???, is q_E treated as a "constant"?
+            self.sigma_ufl = self.q_E*x_sigma(self.u)
+            R_ufl =  self.q_E*df.inner(x_sigma(self.u), df.sym(df.grad(v)))  * dxm
+            R_ufl += - df.inner(f, v) * dxm # add volumetric force, aka gravity (in this case)
+            # quadrature point part
+            self.R = R_ufl #- Constant(mat.Q_inf) * self.q_delta_alpha * vT * dxm
 
-        self.assembler = None  #set as default, to check if bc have been added???
+            # derivative
+            # normal form
+            dR_ufl = df.derivative(R_ufl, self.u)
+            # quadrature part
+            self.dR = dR_ufl #- Constant(mat.Q_inf) * self.q_ddalpha_dT * T_ * vT * dxm
+
+            # setup projector to project continuous funtionspace to quadrature
+            #self.project_T = LocalProjector(self.T, q_V, dxm)
+
+            self.assembler = None  #set as default, to check if bc have been added???
 
 
 
