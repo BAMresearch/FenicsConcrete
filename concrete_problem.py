@@ -323,14 +323,46 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         heat = [0.0]
         alpha_list = [0.0]
         alpha = 0
-        delta_alpha = 1.0
+        delta_alpha = 0.0
 
-        while t <= tmax:
+        #
+        print(f'eta: {self.mat.eta}, B1: {self.mat.B1}, B2: {self.mat.B2}, E_act: {self.mat.E_act}, , T_ref: {self.mat.T_ref}')
+        error_flag = False
+        while t < tmax:
             # compute delta_alpha
-            delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
-                                  fprime=self.delta_alpha_prime, x0=delta_alpha)
 
-            # TODO test for bad alpha values!!!
+            try:
+                delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
+                                                      fprime=self.delta_alpha_prime, x0=delta_alpha)
+                if delta_alpha < 0:
+                            raise Exception(f'Problem with solving for delta alpha. Result is negative for starting delta alpha = {delta_alpha}')
+            except:
+                delta_alpha = 0.2
+                try:
+                    delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
+                                          fprime=self.delta_alpha_prime, x0=delta_alpha)
+                    if delta_alpha < 0:
+                            raise Exception('Problem with solving for delta alpha. Result is negative for starting delta alpha = 0.2')
+                except:
+                    delta_alpha = 0.5
+                    try:
+                        delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
+                                              fprime=self.delta_alpha_prime, x0=delta_alpha)
+                        if delta_alpha < 0:
+                            raise Exception('Problem with solving for delta alpha. Result is negative for starting delta alpha = 0.5')
+                    except:
+                        delta_alpha = 1.0
+
+                        try:
+                            delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
+                                                   fprime=self.delta_alpha_prime, x0=delta_alpha)
+                            if delta_alpha < 0:
+                                 raise Exception('Problem with solving for delta alpha. Result is negative.')
+                        except:
+                            error_flag = True
+                            break
+
+
             # update alpha
             alpha = delta_alpha + alpha
             # save heat of hydration
@@ -338,9 +370,13 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
             heat.append(alpha*self.mat.Q_pot)
 
             # timeupdate
-            t = t+ dt
+            t = t+ self.dt
             time.append(t)
 
+        # if there was a probem with the computation (bad input values), return zero
+        if error_flag:
+            time = np.arange(0.0, tmax+self.dt, self.dt).tolist()
+            heat = np.zeros_like(time)
 
         return np.asarray(time), np.asarray(heat)/1000, np.asarray(alpha_list)
 
