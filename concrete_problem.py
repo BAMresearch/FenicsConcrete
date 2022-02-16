@@ -302,9 +302,41 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         return 1 - self.dt * self.daffinity_ddalpha(delta_alpha, alpha_n) * self.temp_adjust(T)
 
 
-    def heat_of_hydration_ftk(self,T,tmax,dt,parameter):
-        # tmax, max time computation
+    def heat_of_hydration_ftk(self,T,time_list,dt,parameter):
+
+        def interpolate(x, x_list, y_list):
+            # assuming ordered x list
+
+            i = 0
+            # check if x is in the dataset
+            if x > x_list[-1]:
+                print(' * Warning!!!: Extrapolation!!!')
+                point1 = (x_list[-2], y_list[-2])
+                point2 = (x_list[-1], y_list[-1])
+            elif x < x_list[0]:
+                print(' * Warning!!!: Extrapolation!!!')
+                point1 = (x_list[0], y_list[0])
+                point2 = (x_list[1], y_list[1])
+            else:
+                while x_list[i] < x:
+                    i += 1
+                point1 = (x_list[i - 1], y_list[i - 1])
+                point2 = (x_list[i], y_list[i])
+
+            slope = (point2[1] - point1[1]) / (point2[0] - point1[0])
+            x_increment = x - point1[0]
+            y_increment = slope * x_increment
+            y = point1[1] + y_increment
+
+            return y
+
+
+        # print(time_list)
+        # print(time_list[-1])
         # T, temperature at which this problem is run
+        # get tmax, identify number of time steps, then interpolate data
+        # assuming time list is ordered!!!
+        tmax = time_list[-1]
 
         # set paramters
         self.mat.B1 = parameter['B1']
@@ -326,7 +358,7 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         delta_alpha = 0.0
 
         #
-        print(f'eta: {self.mat.eta}, B1: {self.mat.B1}, B2: {self.mat.B2}, E_act: {self.mat.E_act}, , T_ref: {self.mat.T_ref}')
+        #print(f'eta: {self.mat.eta}, B1: {self.mat.B1}, B2: {self.mat.B2}, E_act: {self.mat.E_act}, , T_ref: {self.mat.T_ref}')
         error_flag = False
         while t < tmax:
             # compute delta_alpha
@@ -375,10 +407,19 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
 
         # if there was a probem with the computation (bad input values), return zero
         if error_flag:
-            time = np.arange(0.0, tmax+self.dt, self.dt).tolist()
-            heat = np.zeros_like(time)
+            heat_interpolated = np.zeros_like(time_list)
+        else:
+            # interpolate heat to match time_list
+            heat_interpolated = []
+            for value in time_list:
+                heat_interpolated.append(interpolate(value, time, heat))
 
-        return np.asarray(time), np.asarray(heat)/1000, np.asarray(alpha_list)
+
+
+
+
+
+        return np.asarray(heat_interpolated)/1000
 
 
     def get_affinity(self):
