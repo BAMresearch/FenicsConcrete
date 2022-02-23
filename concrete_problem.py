@@ -136,7 +136,10 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.mechanics_problem.q_alpha = self.temperature_problem.q_alpha
 
         print('Solving: u')
-        self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
+        try:
+            self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
+        except:
+            print(f'Mechanics crashed at time: {t}')
 
         # history update
         self.temperature_problem.update_history()
@@ -572,7 +575,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         # object with material data, parameters, material functions etc...
         p = concrete_experiment.Parameters()
         ### paramters for mechanics problem
-        p['E_28'] = 2000000  # Youngs Modulus N/m2 or something... TODO: check units!
+        p['E_28'] = 15000000  # Youngs Modulus N/m2 or something... TODO: check units!
         p['nu'] = 0.2  # Poissons Ratio
 
         # required paramters for alpha to E mapping

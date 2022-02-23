@@ -53,7 +53,7 @@ class HydrationHeatModel(ForwardModelBase):
 
 class HydrationHeatModelSingle(ForwardModelBase):
     def definition(self):
-        self.parameters = ['eta','B1','B2']
+        self.parameters = ['eta','B1','B2','alpha_max']
         # irgendeine liste....
         self.input_sensors = [Sensor("T"),
                               Sensor("dt"),
@@ -61,7 +61,7 @@ class HydrationHeatModelSingle(ForwardModelBase):
                               Sensor("E_act"),
                               Sensor("Q_pot"),
                               Sensor("T_ref"),
-                              Sensor("alpha_max"),
+                              #Sensor("alpha_max"),
                               Sensor("time")]
         self.output_sensors = [Sensor('heat')]
 
@@ -98,7 +98,7 @@ heat_data = []
 T_datasets = []
 
 # extract data from csv file
-with open('cost_action_hydration_data_wo_40.csv') as f:
+with open('cost_action_hydration_data.csv') as f:
     for i,line in enumerate(f):
         if i == 0:
             split_line = line.split(',')
@@ -174,6 +174,14 @@ for i,T in enumerate(T_datasets):
     )
 
     problem.add_parameter(
+        "alpha_max",
+        "model",
+        tex=r"$\alpha_{max}$",
+        info="Some other parameter, but important",
+        prior=("normal", {"loc": 0.8, "scale": 0.2}),
+    )
+
+    problem.add_parameter(
         "sigma",
         "likelihood",
         tex=r"$\sigma",
@@ -194,7 +202,7 @@ for i,T in enumerate(T_datasets):
         sensor_values={
             'time': time_data[i],
             'heat': heat_data[i],
-            'alpha_max': 0.875,
+            #'alpha_max': 0.875,
             #'E_act': 47002,   # activation energy in Jmol^-1
             'E_act': 42,   # dummy value for T = T_ref
             'T_ref': T,  # reference temperature in degree celsius
@@ -233,7 +241,7 @@ for i,T in enumerate(T_datasets):
     parameter['B1'] = inference_data.x[1]  # in 1/s (le 0, smaller 0.1)
     parameter['B2'] = inference_data.x[2]  # - (le 0, smaller 1)
     parameter['eta'] = inference_data.x[0] # something about diffusion  (should be larger 0)
-    parameter['alpha_max'] = vars['alpha_max']  #vars['alpha_max']   # also possible to approximate based on equation with w/c (larger 0 and max 1)
+    parameter['alpha_max'] = inference_data.x[3] #vars['alpha_max']  #vars['alpha_max']   # also possible to approximate based on equation with w/c (larger 0 and max 1)
     parameter['E_act'] = vars['E_act']  #vars['E_act']   # activation energy in Jmol^-1 (no relevant limits)
     parameter['T_ref'] = vars['T_ref']  # reference temperature in degree celsius
     parameter['Q_pot'] = vars['Q_pot']# potential heat per weight of binder in J/kg
@@ -252,10 +260,10 @@ for i,T in enumerate(T_datasets):
     hydration_fkt = material_problem.get_heat_of_hydration_ftk()
     heat_data_synth[i] = hydration_fkt(T, plot_time_list, dt, parameter)
 
-    # plt.plot(time_data_synth[i],heat_data_synth[i], color='black')
-    # plt.plot(time_data[i],heat_data[i], color='red', linestyle='dashed')
+    plt.plot(time_data_synth[i],heat_data_synth[i], color='black')
+    plt.plot(time_data[i],heat_data[i], color='red', linestyle='dashed')
     #
-    # plt.show()
+    plt.show()
 
 # ---------------------------------------------------------------------------
 #
@@ -304,7 +312,14 @@ problem.add_parameter(
     #prior=("uniform", {"low": 0.0, "high": 1.0}),
     #prior=("uniform", {"low": 0.0, "high": 1.0}),
 )
-
+#
+# problem.add_parameter(
+#     "Q_pot",
+#     "model",
+#     tex=r"$Q_pot$",
+#     info="Some other parameter, but important",
+#     prior=("normal", {"loc": 500e3, "scale": 100e3}),
+# )
 
 problem.add_parameter(
     "sigma",
@@ -327,7 +342,7 @@ for i,T in enumerate(T_datasets):
         sensor_values={
             'time': time_data_synth[i],
             'heat': heat_data_synth[i],
-            'alpha_max': 0.875,
+            'alpha_max': float(infered_paramters[i][3]), #0.875,
             #'E_act': 47002,   # activation energy in Jmol^-1
             #'E_act': 42,   # dummy value for T = T_ref
             'T_ref': 20,  # reference temperature in degree celsius
