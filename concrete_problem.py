@@ -239,13 +239,15 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         # setting for temperature adjustment
         # option: 'exponential' and 'off'
         p['temp_adjust_law'] = 'exponential'
+        # polinomial degree
+        p['pol_degree'] = 1 # default boundary setting
 
         # add parameters to other input values
 
         if mat == None:
             self.mat = p
         else:
-            self.mat = mat + p # object with material data, parameters, material functions etc...
+            self.mat = p + mat# object with material data, parameters, material functions etc...
 
         if mesh != None:
             #initialize possible paraview output
@@ -260,7 +262,7 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
             self.dt_form = df.Constant(self.dt)
 
             # TODO why does q_deg = 2 throw errors???
-            q_deg = 1
+            q_deg = self.mat.pol_degree
 
             metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
             dxm = df.dx(metadata=metadata)

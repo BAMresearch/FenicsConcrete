@@ -56,6 +56,8 @@ class ConcreteCubeExperiment(Experiment):
         p['T_bc3'] = 20  # temperature boundary value 3
         p['bc_setting'] = 'full' # default boundary setting
         p['dim'] = 3 # default boundary setting
+        p['mesh_density'] = 10 # default boundary setting
+        p['mesh_setting'] = 'crossed' # default boundary setting
 
         # add and override input paramters
         if parameters == None:
@@ -68,9 +70,9 @@ class ConcreteCubeExperiment(Experiment):
     def setup(self,bc = 'full'):
         self.bc = bc # different boundary settings
         # elements per spacial direction
-        n = 5
+        n = self.parameters.mesh_density
         if self.parameters.dim == 2:
-            self.mesh = df.UnitSquareMesh(n, n)
+            self.mesh = df.UnitSquareMesh(n, n,  self.parameters.mesh_setting)
         elif self.parameters.dim == 3:
             self.mesh = df.UnitCubeMesh(n, n, n)
         else:
