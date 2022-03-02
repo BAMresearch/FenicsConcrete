@@ -145,13 +145,13 @@ class ConcreteThermoMechanical(MaterialProblem):
 
         # set current DOH for computation of Young's modulus
         self.mechanics_problem.q_alpha = self.temperature_problem.q_alpha
-
-        print('Solving: u')
-        try:
-            self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
-        except Exception as e:
-            print(f'Mechanics crashed at time: {t}')
-            print(e)
+        # TODO: testing only temperature field!!
+        # print('Solving: u')
+        # try:
+        #     self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
+        # except Exception as e:
+        #     print(f'Mechanics crashed at time: {t}')
+        #     print(e)
 
         # history update
         self.temperature_problem.update_history()
@@ -634,7 +634,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
             #self.dt_form = Constant(self.dt)
 
             # TODO why does q_deg = 2 throw errors???
-            q_deg = 1
+            q_deg = self.mat.pol_degree
 
             metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
             dxm = df.dx(metadata=metadata)
