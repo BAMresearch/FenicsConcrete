@@ -55,6 +55,7 @@ class ConcreteCubeExperiment(Experiment):
         p['T_bc2'] = 50  # temperature boundary value 2
         p['T_bc3'] = 20  # temperature boundary value 3
         p['bc_setting'] = 'full' # default boundary setting
+        p['dim'] = 3 # default boundary setting
 
         # add and override input paramters
         if parameters == None:
@@ -64,16 +65,16 @@ class ConcreteCubeExperiment(Experiment):
 
         super().__init__()
 
-    def setup(self,bc = 'full', dim = 2):
+    def setup(self,bc = 'full'):
         self.bc = bc # different boundary settings
         # elements per spacial direction
-        n = 20
-        if dim == 2:
+        n = 5
+        if self.parameters.dim == 2:
             self.mesh = df.UnitSquareMesh(n, n)
-        elif dim == 3:
+        elif self.parameters.dim == 3:
             self.mesh = df.UnitCubeMesh(n, n, n)
         else:
-            print(f'wrong dimension {dim} for problem setup')
+            print(f'wrong dimension {self.parameters.dim} for problem setup')
             exit()
 
         # define paramters???
@@ -137,7 +138,11 @@ class ConcreteCubeExperiment(Experiment):
 
         # define displacement boundary
         displ_bcs = []
-        displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), U_boundary))
+
+        if self.parameters.dim == 2:
+            displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), U_boundary))
+        elif self.parameters.dim == 3:
+            displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0, 0)), U_boundary))
 
         return displ_bcs
 

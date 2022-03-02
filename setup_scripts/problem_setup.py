@@ -10,7 +10,7 @@ import concrete_problem as concrete_problem
 #-------------------------------------------
 
 parameters = None # using the current default values
-experiment = concrete_experiment.get_experiment('ConcreteBeam',parameters)
+experiment = concrete_experiment.get_experiment('ConcreteCube',parameters)
 problem = concrete_problem.ConcreteThermoMechanical(experiment,parameters)
 
 dohhom_sensor = concrete_experiment.DOHHomogeneitySensor()
@@ -22,8 +22,8 @@ problem.add_sensor(dohhom_sensor)
 
 # data for time stepping
 #time steps
-dt = 60*30 # time step
-hours = 24
+dt = 60*20 # time step
+hours = 10
 time = hours*60*60         # total simulation time in s
 # set time step
 problem.set_timestep(dt) # for time integration scheme
