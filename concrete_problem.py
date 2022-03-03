@@ -101,19 +101,19 @@ class ConcreteThermoMechanical(MaterialProblem):
     def setup(self):
         # setting up the two nonlinear problems
         self.temperature_problem = ConcreteTempHydrationModel(self.experiment.mesh, self.parameters, pv_name = self.pv_name)
-        # TODO paramtersetup not jet "perfect"
+        # TODO paramter setup not jet "perfect"
 
 
         # here I "pass on the parameters from temperature to mechanics problem.."
-        self.mechanics_problem = ConcreteMechanicsModel(self.experiment.mesh, self.temperature_problem.mat, pv_name = self.pv_name)
+        # MOIN self.mechanics_problem = ConcreteMechanicsModel(self.experiment.mesh, self.temperature_problem.mat, pv_name = self.pv_name)
         # coupling of the output files
-        self.mechanics_problem.pv_file = self.temperature_problem.pv_file
+        # MOIN self.mechanics_problem.pv_file = self.temperature_problem.pv_file
 
         #initialize concrete temperature as given in experimental setup
         self.set_inital_T(self.experiment.parameters.T_0)
 
         #setting bcs
-        self.mechanics_problem.set_bcs(self.experiment.create_displ_bcs(self.mechanics_problem.V))
+        # MOIN self.mechanics_problem.set_bcs(self.experiment.create_displ_bcs(self.mechanics_problem.V))
         self.temperature_problem.set_bcs(self.experiment.create_temp_bcs(self.temperature_problem.V))
 
         # setting up the solvers
@@ -121,9 +121,10 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.temperature_solver.parameters['absolute_tolerance'] = 1e-9
         self.temperature_solver.parameters['relative_tolerance'] = 1e-8
 
-        self.mechanics_solver = df.NewtonSolver()
-        self.mechanics_solver.parameters['absolute_tolerance'] = 1e-9
-        self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
+        # MOIN
+        # self.mechanics_solver = df.NewtonSolver()
+        # self.mechanics_solver.parameters['absolute_tolerance'] = 1e-9
+        # self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
 
     def setup_wo_experiment(self):
         # setting up the two nonlinear problems
@@ -132,7 +133,7 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.temperature_problem = ConcreteTempHydrationModel(None, None)
         # TODO paramtersetup not jet "perfect"
         # here I "pass on the parameters from temperature to mechanics problem.."
-        self.mechanics_problem = ConcreteMechanicsModel(None, None)
+        # MOIN self.mechanics_problem = ConcreteMechanicsModel(None, None)
 
 
 
@@ -143,9 +144,9 @@ class ConcreteThermoMechanical(MaterialProblem):
         print('Solving: T')
         self.temperature_solver.solve(self.temperature_problem, self.temperature_problem.T.vector())
 
+        # TODO: testing only temperature field!! (MOIN)
         # set current DOH for computation of Young's modulus
-        self.mechanics_problem.q_alpha = self.temperature_problem.q_alpha
-        # TODO: testing only temperature field!!
+        #self.mechanics_problem.q_alpha = self.temperature_problem.q_alpha
         # print('Solving: u')
         # try:
         #     self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
