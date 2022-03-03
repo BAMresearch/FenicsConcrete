@@ -5,6 +5,12 @@ import scipy.optimize
 import time
 import concrete_experiment as concrete_experiment
 
+import warnings
+from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
+
+df.parameters["form_compiler"]["representation"] = "quadrature"
+warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
+
 # helper functions...
 def set_q(q, values):
     """
@@ -105,15 +111,15 @@ class ConcreteThermoMechanical(MaterialProblem):
 
 
         # here I "pass on the parameters from temperature to mechanics problem.."
-        # MOIN self.mechanics_problem = ConcreteMechanicsModel(self.experiment.mesh, self.temperature_problem.mat, pv_name = self.pv_name)
+        self.mechanics_problem = ConcreteMechanicsModel(self.experiment.mesh, self.temperature_problem.mat, pv_name = self.pv_name)
         # coupling of the output files
-        # MOIN self.mechanics_problem.pv_file = self.temperature_problem.pv_file
+        self.mechanics_problem.pv_file = self.temperature_problem.pv_file
 
         #initialize concrete temperature as given in experimental setup
         self.set_inital_T(self.experiment.parameters.T_0)
 
         #setting bcs
-        # MOIN self.mechanics_problem.set_bcs(self.experiment.create_displ_bcs(self.mechanics_problem.V))
+        self.mechanics_problem.set_bcs(self.experiment.create_displ_bcs(self.mechanics_problem.V))
         self.temperature_problem.set_bcs(self.experiment.create_temp_bcs(self.temperature_problem.V))
 
         # setting up the solvers
@@ -121,10 +127,9 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.temperature_solver.parameters['absolute_tolerance'] = 1e-9
         self.temperature_solver.parameters['relative_tolerance'] = 1e-8
 
-        # MOIN
-        # self.mechanics_solver = df.NewtonSolver()
-        # self.mechanics_solver.parameters['absolute_tolerance'] = 1e-9
-        # self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
+        self.mechanics_solver = df.NewtonSolver()
+        self.mechanics_solver.parameters['absolute_tolerance'] = 1e-9
+        self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
 
     def setup_wo_experiment(self):
         # setting up the two nonlinear problems
@@ -133,7 +138,7 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.temperature_problem = ConcreteTempHydrationModel(None, None)
         # TODO paramtersetup not jet "perfect"
         # here I "pass on the parameters from temperature to mechanics problem.."
-        # MOIN self.mechanics_problem = ConcreteMechanicsModel(None, None)
+        self.mechanics_problem = ConcreteMechanicsModel(None, None)
 
 
 
@@ -144,15 +149,14 @@ class ConcreteThermoMechanical(MaterialProblem):
         print('Solving: T')
         self.temperature_solver.solve(self.temperature_problem, self.temperature_problem.T.vector())
 
-        # TODO: testing only temperature field!! (MOIN)
         # set current DOH for computation of Young's modulus
-        #self.mechanics_problem.q_alpha = self.temperature_problem.q_alpha
-        # print('Solving: u')
-        # try:
-        #     self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
-        # except Exception as e:
-        #     print(f'Mechanics crashed at time: {t}')
-        #     print(e)
+        self.mechanics_problem.q_alpha = self.temperature_problem.q_alpha
+        print('Solving: u')
+        try:
+            self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
+        except Exception as e:
+            print(f'Mechanics crashed at time: {t}')
+            print(e)
 
         # history update
         self.temperature_problem.update_history()
@@ -968,28 +972,26 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         x_lambda = 1.0 * self.mat.nu / ((1.0 + self.mat.nu) * (1.0 - 2.0 * self.mat.nu))
         def x_sigma(v):
              return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
-        # stress = assemble(x_sigma(self.u))
-
-        #Some_plot = project(x_sigma(self.u), self.visu_space_T)
-        sigma_plot = df.project(self.sigma_ufl, self.visu_space_T)
 
 
+        # MOIN problem with tensor plot
+        #sigma_plot = df.project(self.sigma_ufl, self.visu_space_T)
+        #
+        #
         E_plot = df.project(self.q_E, self.visu_space)
         fc_plot = df.project(self.q_fc, self.visu_space)
         ft_plot = df.project(self.q_ft, self.visu_space)
         yield_plot = df.project(self.q_yield, self.visu_space)
-
-        # youngsmodulus??
-        #alpha_plot = project(self.q_alpha, self.visu_space)
+        #
         E_plot.rename("Young's Modulus","test string, what does this do??")  # TODO: what does the second string do?
         fc_plot.rename("Compressive strength","test string, what does this do??")  # TODO: what does the second string do?
         ft_plot.rename("Tensile strength","test string, what does this do??")  # TODO: what does the second string do?
         yield_plot.rename("Yield surface","test string, what does this do??")  # TODO: what does the second string do?
-        sigma_plot.rename("Stress","test string, what does this do??")  # TODO: what does the second string do?
+        # sigma_plot.rename("Stress","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(E_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(fc_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(ft_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(yield_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
-        self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+        # self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
         pass

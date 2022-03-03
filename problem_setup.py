@@ -39,14 +39,14 @@ problem.set_timestep(dt) # for time integration scheme
 t = dt # first time step time
 
 # only one timestep for testing, moin
-while t <= dt: # time
+while t <= time: # time
 
     print('time =', t)
     # solve temp-hydration-mechanics
     problem.solve(t=t) # solving this
 
     # plot fields
-    #problem.pv_plot(t=t) # Moin, test
+    problem.pv_plot(t=t)
 
     #print(problem(u_sensor))
     # prepare next timestep
