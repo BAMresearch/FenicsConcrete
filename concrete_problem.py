@@ -260,7 +260,7 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
             self.pv_file.parameters["flush_output"] = True
             self.pv_file.parameters["functions_share_mesh"] = True
             # function space for single value per element, required for plot of quadrature space values
-            self.visu_space = df.FunctionSpace(mesh, "DG", 0)
+            #self.visu_space = df.FunctionSpace(mesh, "DG",)
 
             #initialize timestep, musst be reset using .set_timestep(dt)
             self.dt = 0
@@ -268,6 +268,10 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
 
             # TODO why does q_deg = 2 throw errors???
             q_deg = self.mat.pol_degree
+
+
+
+            self.visu_space = df.FunctionSpace(mesh, "P", q_deg)
 
             metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
             dxm = df.dx(metadata=metadata)
