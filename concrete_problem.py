@@ -260,18 +260,19 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
             self.pv_file.parameters["flush_output"] = True
             self.pv_file.parameters["functions_share_mesh"] = True
             # function space for single value per element, required for plot of quadrature space values
-            #self.visu_space = df.FunctionSpace(mesh, "DG",)
 
             #initialize timestep, musst be reset using .set_timestep(dt)
             self.dt = 0
             self.dt_form = df.Constant(self.dt)
 
-            # TODO why does q_deg = 2 throw errors???
             q_deg = self.mat.pol_degree
 
+            if q_deg == 1:
+                visu_deg = 0
+            else:
+                visu_deg = 1
 
-
-            self.visu_space = df.FunctionSpace(mesh, "P", q_deg)
+            self.visu_space = df.FunctionSpace(mesh, "DG", visu_deg)
 
             metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
             dxm = df.dx(metadata=metadata)
@@ -556,7 +557,7 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         self.pv_file.write(T_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
         # degree of hydration plot
-        alpha_plot = df.project(self.q_alpha, self.visu_space)
+        alpha_plot = df.project(self.q_alpha, self.visu_space, form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
         alpha_plot.rename("DOH","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(alpha_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
@@ -635,15 +636,20 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
             self.pv_file.parameters["flush_output"] = True
             self.pv_file.parameters["functions_share_mesh"] = True
             # function space for single value per element, required for plot of quadrature space values
-            self.visu_space = df.FunctionSpace(mesh, "DG", 0)
-            self.visu_space_T = df.TensorFunctionSpace(mesh, "DG", 0)
+
+            q_deg = self.mat.pol_degree
+            #self.visu_space = df.FunctionSpace(mesh, "P", q_deg)
+            if q_deg == 1:
+                visu_deg = 0
+            else:
+                visu_deg = 1
+
+            self.visu_space = df.FunctionSpace(mesh, "DG", visu_deg)
+            self.visu_space_T = df.TensorFunctionSpace(mesh, "DG", visu_deg)
 
             #initialize timestep, musst be reset using .set_timestep(dt)
             #self.dt = 0
             #self.dt_form = Constant(self.dt)
-
-            # TODO why does q_deg = 2 throw errors???
-            q_deg = self.mat.pol_degree
 
             metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
             dxm = df.dx(metadata=metadata)
@@ -694,9 +700,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
             def x_sigma(v):
                 return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
-            # Volume force
-            # TODO check for dimension!!!!!!!!!!!!
-
+            # Volume force            
             if self.mat.dim == 1:
                 f = df.Constant(-self.g * self.mat.density)
 
@@ -960,7 +964,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
     def pv_plot(self,t = 0):
         # paraview export
 
-        # temperature plot
+        # displacement plot
         u_plot = df.project(self.u, self.V)
         u_plot.rename("Displacement","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(u_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
@@ -979,23 +983,23 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
 
 
         # MOIN problem with tensor plot
-        #sigma_plot = df.project(self.sigma_ufl, self.visu_space_T)
+        sigma_plot = df.project(self.sigma_ufl, self.visu_space_T, form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
         #
         #
-        E_plot = df.project(self.q_E, self.visu_space)
-        fc_plot = df.project(self.q_fc, self.visu_space)
-        ft_plot = df.project(self.q_ft, self.visu_space)
-        yield_plot = df.project(self.q_yield, self.visu_space)
+        E_plot = df.project(self.q_E, self.visu_space,form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
+        fc_plot = df.project(self.q_fc, self.visu_space,form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
+        ft_plot = df.project(self.q_ft, self.visu_space,form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
+        yield_plot = df.project(self.q_yield, self.visu_space,form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
         #
         E_plot.rename("Young's Modulus","test string, what does this do??")  # TODO: what does the second string do?
         fc_plot.rename("Compressive strength","test string, what does this do??")  # TODO: what does the second string do?
         ft_plot.rename("Tensile strength","test string, what does this do??")  # TODO: what does the second string do?
         yield_plot.rename("Yield surface","test string, what does this do??")  # TODO: what does the second string do?
-        # sigma_plot.rename("Stress","test string, what does this do??")  # TODO: what does the second string do?
+        sigma_plot.rename("Stress","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(E_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(fc_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(ft_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(yield_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
-        # self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+        self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
         pass
