@@ -1,0 +1,15 @@
+check 
+- paraview output
+
+
+
+resturcture
+- if experiment = None: find better solution...
+- function setup wo experiment is weak...
+
+
+implement
+- a good own logger??
+- define fields for sensors ouput at "problem" level?
+
+

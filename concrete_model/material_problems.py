@@ -6,31 +6,72 @@ from concrete_model.helpers import Parameters
 from concrete_model.helpers import set_q
 from concrete_model.helpers import LocalProjector
 
-
+from loguru import logger
+import logging
+import sys
 
 import warnings
 from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
-
 
 df.parameters["form_compiler"]["representation"] = "quadrature"
 warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
 
-
-
-
 class MaterialProblem():
     def __init__(self, experiment = None, parameters = None, pv_name = 'pv_output_full'):
         self.experiment = experiment
-        self.parameters = parameters
+        # setting up paramters
+        self.p = Parameters()
+        # constants
+        self.p['zero_C'] = 273.15
+        self.p['igc'] = 8.3145  # ideal gas constant [JK −1 mol −1 ]
+        self.p['g'] = 9.81  # graviational acceleration in m/s²
 
-        # add and override input paramters
-        if parameters == None:
-            self.parameters = self.experiment.parameters
+        # other "globel" paramters...
+        self.p['log_level'] = 'WARNING'
+
+        self.p = self.p + parameters
+
+        # set log level...
+        if self.p.log_level == 'NOTSET':
+            df.set_log_level(0)
+            logging.getLogger("FFC").setLevel(logging.NOTSET)
+            logging.getLogger("UFL").setLevel(logging.NOTSET)
+            logger.add(sys.stderr, level="NOTSET")
+        elif self.p.log_level == 'DEBUG':
+            df.set_log_level(10)
+            logging.getLogger("FFC").setLevel(logging.DEBUG)
+            logging.getLogger("UFL").setLevel(logging.DEBUG)
+            logger.add(sys.stderr, level="DEBUG")
+        elif self.p.log_level == 'INFO':
+            df.set_log_level(20)
+            logging.getLogger("FFC").setLevel(logging.INFO)
+            logging.getLogger("UFL").setLevel(logging.INFO)
+            logger.add(sys.stderr, level="INFO")
+        elif self.p.log_level == 'WARNING':
+            df.set_log_level(30)
+            logging.getLogger("FFC").setLevel(logging.WARNING)
+            logging.getLogger("UFL").setLevel(logging.WARNING)
+            logger.add(sys.stderr, level="WARNING")
+        elif self.p.log_level == 'ERROR':
+            df.set_log_level(40)
+            logging.getLogger("FFC").setLevel(logging.ERROR)
+            logging.getLogger("UFL").setLevel(logging.ERROR)
+            logger.add(sys.stderr, level="ERROR")
+        elif self.p.log_level == 'CRITICAL':
+            df.set_log_level(50)
+            logging.getLogger("FFC").setLevel(logging.CRITICAL)
+            logging.getLogger("UFL").setLevel(logging.CRITICAL)
+            logger.add(sys.stderr, level="CRITICAL")
         else:
-            self.parameters = self.experiment.parameters + parameters
+            level = self.p['log_level']
+            raise Exception(f'unknown log level {level}')
 
 
+
+
+        if experiment != None:
+            self.p = self.p + self.experiment.p
 
         self.sensors = [] # list to hold attached sensors
         self.pv_name = pv_name
@@ -61,33 +102,63 @@ class MaterialProblem():
 
 # full concrete model, including hydration-temperate and mechanics, including calls to solve etc.
 class ConcreteThermoMechanical(MaterialProblem):
-    # def __init__(self, experiment, parameters):
-    #     # ideas is, (to be compatible with our current fenics module plans) have "experiment" as input
-    #     # currently this is the mesh, and later the calls to bc functions. TODO:
+    #def __init__(self, experiment, parameters):
     #     # TODO: define global fields here
     #     #       - alpha, V
     #     #       - etc...
-    #     #       fix error related to quad degree (add as "global")
-    #     #       add mechanics paramter for fc and fct!!!
-    #     #       check logic about defined functions, classes etc...
-    #     #       add some sensor output options???
-    #     self.experiment = experiment
-    #     self.parameters = parameters
-    #     self.setup()
 
     def setup(self):
-        # setting up the two nonlinear problems
-        self.temperature_problem = ConcreteTempHydrationModel(self.experiment.mesh, self.parameters, pv_name = self.pv_name)
-        # TODO paramter setup not jet "perfect"
+        #setup initial temperatre material paramters
+        default_p = Parameters()
+        # Material parameter for concrete model with temperature and hydration
+        default_p['density'] = 2350  # in kg/m^3 density of concrete
+        default_p['density_binder'] = 1440  # in kg/m^3 density of the binder
+        default_p['themal_cond'] = 2.0  # effective thermal conductivity, approx in Wm^-3K^-1, concrete!
+        # self.specific_heat_capacity = 9000  # effective specific heat capacity in J kg⁻1 K⁻1
+        default_p['vol_heat_cap'] = 2.4e6  # volumetric heat cap J/(m3 K)
+        default_p['b_ratio'] = 0.2  # volume percentage of binder
+        default_p['Q_pot'] = 500e3  # potential heat per weight of binder in J/kg
+        # p['Q_inf'] = self.Q_pot * self.density_binder * self.b_ratio  # potential heat per concrete volume in J/m3
+        default_p['B1'] = 2.916E-4  # in 1/s
+        default_p['B2'] = 0.0024229  # -
+        default_p['eta'] = 5.554  # something about diffusion
+        default_p['alpha_max'] = 0.875  # also possible to approximate based on equation with w/c
+        default_p['E_act'] = 5653 * self.p.igc  # activation energy in Jmol^-1
+        default_p['T_ref'] = 25  # reference temperature in degree celsius
+        # setting for temperature adjustment
+        # option: 'exponential' and 'off'
+        default_p['temp_adjust_law'] = 'exponential'
+        # polinomial degree
+        default_p['degree'] = 2 # default boundary setting
 
+        ### paramters for mechanics problem
+        default_p['E_28'] = 15000000  # Youngs Modulus N/m2 or something... TODO: check units!
+        default_p['nu'] = 0.2  # Poissons Ratio
+
+        # required paramters for alpha to E mapping
+        default_p['alpha_t'] = 0.2
+        default_p['alpha_0'] = 0.05
+        default_p['a_E'] = 0.6
+
+        # required paramters for alpha to tensile and compressive stiffness mapping
+        default_p['fc_inf'] = 6210000
+        default_p['a_fc'] = 1.2
+        default_p['ft_inf'] = 467000
+        default_p['a_ft'] = 1.0
+
+        self.p = default_p + self.p
+
+
+        # setting up the two nonlinear problems
+        self.temperature_problem = ConcreteTempHydrationModel(self.experiment.mesh, self.p, pv_name = self.pv_name)
 
         # here I "pass on the parameters from temperature to mechanics problem.."
-        self.mechanics_problem = ConcreteMechanicsModel(self.experiment.mesh, self.temperature_problem.mat, pv_name = self.pv_name)
+        self.mechanics_problem = ConcreteMechanicsModel(self.experiment.mesh, self.p, pv_name = self.pv_name)
         # coupling of the output files
         self.mechanics_problem.pv_file = self.temperature_problem.pv_file
 
         #initialize concrete temperature as given in experimental setup
-        self.set_inital_T(self.experiment.parameters.T_0)
+        self.set_inital_T(self.p.T_0)
 
         #setting bcs
         self.mechanics_problem.set_bcs(self.experiment.create_displ_bcs(self.mechanics_problem.V))
@@ -105,9 +176,8 @@ class ConcreteThermoMechanical(MaterialProblem):
     def setup_wo_experiment(self):
         # setting up the two nonlinear problems
         # only to get functions for calibration
-
+        # TODO improve this...
         self.temperature_problem = ConcreteTempHydrationModel(None, None)
-        # TODO paramtersetup not jet "perfect"
         # here I "pass on the parameters from temperature to mechanics problem.."
         self.mechanics_problem = ConcreteMechanicsModel(None, None)
 
@@ -117,12 +187,14 @@ class ConcreteThermoMechanical(MaterialProblem):
 
     def solve(self, t=1.0):
 
-        print('Solving: T')
+        #print('Solving: T') # TODO ouput only a certain log level INFO
         self.temperature_solver.solve(self.temperature_problem, self.temperature_problem.T.vector())
 
         # set current DOH for computation of Young's modulus
         self.mechanics_problem.q_alpha = self.temperature_problem.q_alpha
-        print('Solving: u')
+        #print('Solving: u') # TODO ouput only a certain log level INFO
+
+        # mechanics paroblem is not required for temperature, could crash in frist time steps but then be useful
         try:
             self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
         except Exception as e:
@@ -134,42 +206,19 @@ class ConcreteThermoMechanical(MaterialProblem):
 
         # get sensor data
         for sensor in self.sensors:
-            # go through all sensors and measure the
+            # go through all sensors and measure
             sensor.measure(self,t)
 
 
-    def evaluate(self, sensors, t):
-        """
-        Evaluates the problem for the given sensors
-        """
-        u = self.solve(t)
-
-        try:
-            # only one sensor
-            return sensors.measure(u)
-        except AttributeError:
-            # list of sensors
-            return {s: s.measure(u) for s in sensors}
-
-
-    def __call__(self, sensors, ts=[1.0]):
-        measurements = []
-        for t in ts:
-            measurements.append(self.evaluate(sensors, t))
-        if len(ts) == 1:
-            measurements = measurements[0]
-        return measurements
-
-
     def pv_plot(self,t = 0):
+        # calls paraview output for both problems
         self.temperature_problem.pv_plot(t=t)
         self.mechanics_problem.pv_plot(t=t)
 
 
     def set_inital_T(self,T):
-        # TODO, somehow check that this is initialized
         self.temperature_problem.set_initial_T(T)
-        self.flag_T0 = True
+
 
     def set_timestep(self,dt):
         self.temperature_problem.set_timestep(dt)
@@ -188,42 +237,9 @@ class ConcreteThermoMechanical(MaterialProblem):
 
 
 class ConcreteTempHydrationModel(df.NonlinearProblem):
-    def __init__(self, mesh, mat, pv_name = 'temp_output', **kwargs):
+    def __init__(self, mesh, p, pv_name = 'temp_output', **kwargs):
         df.NonlinearProblem.__init__(self) # apparently required to initialize things
-        # todo how/where to deal with constants...
-        # maybe a constants class/object to collect them all???
-        self.zero_C = 273.15
-        self.igc = 8.3145  # ideal gas constant [JK −1 mol −1 ]
-
-        #setup initial material paramters
-        p = Parameters()
-        # Material parameter for concrete model with temperature and hydration
-        p['density'] = 2350  # in kg/m^3 density of concrete
-        p['density_binder'] = 1440  # in kg/m^3 density of the binder
-        p['themal_cond'] = 2.0  # effective thermal conductivity, approx in Wm^-3K^-1, concrete!
-        # self.specific_heat_capacity = 9000  # effective specific heat capacity in J kg⁻1 K⁻1
-        p['vol_heat_cap'] = 2.4e6  # volumetric heat cap J/(m3 K)
-        p['b_ratio'] = 0.2  # volume percentage of binder
-        p['Q_pot'] = 500e3  # potential heat per weight of binder in J/kg
-        # p['Q_inf'] = self.Q_pot * self.density_binder * self.b_ratio  # potential heat per concrete volume in J/m3
-        p['B1'] = 2.916E-4  # in 1/s
-        p['B2'] = 0.0024229  # -
-        p['eta'] = 5.554  # something about diffusion
-        p['alpha_max'] = 0.875  # also possible to approximate based on equation with w/c
-        p['E_act'] = 5653 * self.igc  # activation energy in Jmol^-1
-        p['T_ref'] = 25  # reference temperature in degree celsius
-        # setting for temperature adjustment
-        # option: 'exponential' and 'off'
-        p['temp_adjust_law'] = 'exponential'
-        # polinomial degree
-        p['pol_degree'] = 1 # default boundary setting
-
-        # add parameters to other input values
-
-        if mat == None:
-            self.mat = p
-        else:
-            self.mat = p + mat# object with material data, parameters, material functions etc...
+        self.p = p
 
         if mesh != None:
             #initialize possible paraview output
@@ -236,25 +252,23 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
             self.dt = 0
             self.dt_form = df.Constant(self.dt)
 
-            q_deg = self.mat.pol_degree
 
-            if q_deg == 1:
-                visu_deg = 0
+            if self.p.degree == 1:
+                self.visu_space = df.FunctionSpace(mesh, "DG", 0)
             else:
-                visu_deg = 1
+                self.visu_space = df.FunctionSpace(mesh, "P", 1)
 
-            self.visu_space = df.FunctionSpace(mesh, "DG", visu_deg)
 
-            metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
+            metadata = {"quadrature_degree": self.p.degree, "quadrature_scheme": "default"}
             dxm = df.dx(metadata=metadata)
 
             # solution field
-            self.V = df.FunctionSpace(mesh, 'P', q_deg)
+            self.V = df.FunctionSpace(mesh, 'P', self.p.degree)
 
             # generic quadrature function space
             cell = mesh.ufl_cell()
             q = "Quadrature"
-            quadrature_element = df.FiniteElement(q, cell, degree=q_deg, quad_scheme="default")
+            quadrature_element = df.FiniteElement(q, cell, degree=self.p.degree, quad_scheme="default")
             q_V = df.FunctionSpace(mesh, quadrature_element)
 
             # quadrature functions
@@ -280,19 +294,19 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
             vT = df.TestFunction(self.V)
 
             # normal form
-            R_ufl =  df.Constant(self.mat.vol_heat_cap) * (self.T) * vT * dxm
-            R_ufl += self.dt_form * df.dot( df.Constant(self.mat.themal_cond) * df.grad(self.T),df.grad(vT)) * dxm
-            R_ufl += -  df.Constant(self.mat.vol_heat_cap) * self.T_n * vT * dxm
+            R_ufl =  df.Constant(self.p.vol_heat_cap) * (self.T) * vT * dxm
+            R_ufl += self.dt_form * df.dot( df.Constant(self.p.themal_cond) * df.grad(self.T),df.grad(vT)) * dxm
+            R_ufl += -  df.Constant(self.p.vol_heat_cap) * self.T_n * vT * dxm
             # quadrature point part
 
 
-            self.R = R_ufl - df.Constant(self.mat.Q_pot * self.mat.density_binder * self.mat.b_ratio) * self.q_delta_alpha * vT * dxm
+            self.R = R_ufl - df.Constant(self.p.Q_pot * self.p.density_binder * self.p.b_ratio) * self.q_delta_alpha * vT * dxm
 
             # derivative
             # normal form
             dR_ufl = df.derivative(R_ufl, self.T)
             # quadrature part
-            self.dR = dR_ufl - df.Constant(self.mat.Q_pot * self.mat.density_binder * self.mat.b_ratio) * self.q_ddalpha_dT * T_ * vT * dxm
+            self.dR = dR_ufl - df.Constant(self.p.Q_pot * self.p.density_binder * self.p.b_ratio) * self.q_ddalpha_dT * T_ * vT * dxm
 
             # setup projector to project continuous funtionspace to quadrature
             self.project_T = LocalProjector(self.T, q_V, dxm)
@@ -337,21 +351,18 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
             return y
 
 
-        # print(time_list)
-        # print(time_list[-1])
-        # T, temperature at which this problem is run
         # get tmax, identify number of time steps, then interpolate data
         # assuming time list is ordered!!!
         tmax = time_list[-1]
 
         # set paramters
-        self.mat.B1 = parameter['B1']
-        self.mat.B2 = parameter['B2']
-        self.mat.eta = parameter['eta']
-        self.mat.alpha_max = parameter['alpha_max']
-        self.mat.E_act = parameter['E_act']
-        self.mat.T_ref = parameter['T_ref']
-        self.mat.Q_pot = parameter['Q_pot']
+        self.p.B1 = parameter['B1']
+        self.p.B2 = parameter['B2']
+        self.p.eta = parameter['eta']
+        self.p.alpha_max = parameter['alpha_max']
+        self.p.E_act = parameter['E_act']
+        self.p.T_ref = parameter['T_ref']
+        self.p.Q_pot = parameter['Q_pot']
 
         # set time step
         self.dt = dt
@@ -363,28 +374,26 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         alpha = 0
         delta_alpha = 0.0
 
-        #
-        #print(f'eta: {self.mat.eta}, B1: {self.mat.B1}, B2: {self.mat.B2}, E_act: {self.mat.E_act}, , T_ref: {self.mat.T_ref}')
+
         error_flag = False
         while t < tmax:
             # compute delta_alpha
-
             try:
-                delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
+                delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.p.zero_C),
                                                       fprime=self.delta_alpha_prime, x0=delta_alpha)
                 if delta_alpha < 0:
                             raise Exception(f'Problem with solving for delta alpha. Result is negative for starting delta alpha = {delta_alpha}')
             except:
                 delta_alpha = 0.2
                 try:
-                    delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
+                    delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.p.zero_C),
                                           fprime=self.delta_alpha_prime, x0=delta_alpha)
                     if delta_alpha < 0:
                             raise Exception('Problem with solving for delta alpha. Result is negative for starting delta alpha = 0.2')
                 except:
                     delta_alpha = 0.5
                     try:
-                        delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
+                        delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.p.zero_C),
                                               fprime=self.delta_alpha_prime, x0=delta_alpha)
                         if delta_alpha < 0:
                             raise Exception('Problem with solving for delta alpha. Result is negative for starting delta alpha = 0.5')
@@ -392,7 +401,7 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
                         delta_alpha = 1.0
 
                         try:
-                            delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.zero_C),
+                            delta_alpha = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha, T+self.p.zero_C),
                                                    fprime=self.delta_alpha_prime, x0=delta_alpha)
                             if delta_alpha < 0:
                                  raise Exception('Problem with solving for delta alpha. Result is negative.')
@@ -405,7 +414,7 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
             alpha = delta_alpha + alpha
             # save heat of hydration
             alpha_list.append(alpha)
-            heat.append(alpha*self.mat.Q_pot)
+            heat.append(alpha*self.p.Q_pot)
 
             # timeupdate
             t = t+ self.dt
@@ -457,18 +466,13 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         try:
             delta_alpha_list = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha_n_list, temperature_list),fprime=self.delta_alpha_prime, x0=self.delta_alpha_n_list)
             # I dont trust the algorithim!!! check if only applicable results are obtained
-            if np.any(delta_alpha_list<0.0):
-                # TODO: better error message ;)
-                raise Exception('There is a problem with the alpha computation, computed delta alpha is negative.')
         except:
-            print('AAAAAAHHHH, negative delta alpha!!!!')
-            print('NO PROBLEM!!!, different starting value!')
+            # AAAAAAHHHH, negative delta alpha!!!!
+            # NO PROBLEM!!!, different starting value!
             delta_alpha_list = scipy.optimize.newton(self.delta_alpha_fkt, args=(alpha_n_list, temperature_list),fprime=self.delta_alpha_prime, x0=self.delta_alpha_guess)
             if np.any(delta_alpha_list<0.0):
-                # TODO: better error message ;)
-                raise Exception('There is a problem with the alpha computation, computed delta alpha is negative.')
                 print('AAAAAAHHHH, negative delta alpha!!!!')
-                exit()
+                raise Exception('There is a problem with the alpha computation/initial guess, computed delta alpha is negative.')
 
         # save the delta alpha for next iteration as starting guess
         self.delta_alpha_n_list = delta_alpha_list
@@ -495,9 +499,8 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
 
 
     def set_initial_T(self,T):
-        #
         # set initial temperature, in kelvin
-        T0 = df.Expression('t_zero', t_zero=T+self.zero_C, degree=0)
+        T0 = df.Expression('t_zero', t_zero=T+self.p.zero_C, degree=0)
         self.T_n.interpolate(T0)
         self.T.interpolate(T0)
 
@@ -528,79 +531,58 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         self.pv_file.write(T_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
         # degree of hydration plot
-        alpha_plot = df.project(self.q_alpha, self.visu_space, form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
+        alpha_plot = df.project(self.q_alpha, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
         alpha_plot.rename("DOH","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(alpha_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
     def temp_adjust(self, T):
         val = 1
-        if self.mat.temp_adjust_law == 'exponential':
-            val = np.exp(-self.mat.E_act / self.igc * (1 / T - 1 / (self.mat.T_ref + self.zero_C)))
-        elif self.mat.temp_adjust_law == 'off':
+        if self.p.temp_adjust_law == 'exponential':
+            val = np.exp(-self.p.E_act / self.p.igc * (1 / T - 1 / (self.p.T_ref + self.p.zero_C)))
+        elif self.p.temp_adjust_law == 'off':
             pass
         else:
             # TODO throw correct error
-            print(f'Warning: Incorrect temp_adjust_law {self.mat.temp_adjust_law} given')
-            print('*******  Only "exponential" and "off" implemented')
+            raise Exception(f'Warning: Incorrect temp_adjust_law {self.p.temp_adjust_law} given, only "exponential" and "off" implemented')
         return val
 
         # derivative of the temperature adjustment factor with respect to the temperature
     def temp_adjust_tangent(self, T):
         val = 0
-        if self.mat.temp_adjust_law == 'exponential':
-            val = self.mat.E_act / self.igc / T ** 2
+        if self.p.temp_adjust_law == 'exponential':
+            val = self.p.E_act / self.p.igc / T ** 2
         return val
 
     # affinity function
     def affinity(self, delta_alpha, alpha_n):
-        affinity = self.mat.B1 * (self.mat.B2 / self.mat.alpha_max + delta_alpha + alpha_n) * (
-                    self.mat.alpha_max - (delta_alpha + alpha_n)) * np.exp(
-            -self.mat.eta * (delta_alpha + alpha_n) / self.mat.alpha_max)
+        affinity = self.p.B1 * (self.p.B2 / self.p.alpha_max + delta_alpha + alpha_n) * (
+                    self.p.alpha_max - (delta_alpha + alpha_n)) * np.exp(
+            -self.p.eta * (delta_alpha + alpha_n) / self.p.alpha_max)
         return affinity
 
     # derivative of affinity with respect to delta alpha
     def daffinity_ddalpha(self, delta_alpha, alpha_n):
-        affinity_prime = self.mat.B1 * np.exp(-self.mat.eta * (delta_alpha + alpha_n) / self.mat.alpha_max) * (
-                    (self.mat.alpha_max - (delta_alpha + alpha_n)) * (
-                        self.mat.B2 / self.mat.alpha_max + (delta_alpha + alpha_n)) * (
-                                -self.mat.eta / self.mat.alpha_max) - self.mat.B2 / self.mat.alpha_max - 2 * (
-                                delta_alpha + alpha_n) + self.mat.alpha_max)
+        affinity_prime = self.p.B1 * np.exp(-self.p.eta * (delta_alpha + alpha_n) / self.p.alpha_max) * (
+                    (self.p.alpha_max - (delta_alpha + alpha_n)) * (
+                        self.p.B2 / self.p.alpha_max + (delta_alpha + alpha_n)) * (
+                                -self.p.eta / self.p.alpha_max) - self.p.B2 / self.p.alpha_max - 2 * (
+                                delta_alpha + alpha_n) + self.p.alpha_max)
         return affinity_prime
 
 
-
-
-
-
 class ConcreteMechanicsModel(df.NonlinearProblem):
-    def __init__(self, mesh, mat, pv_name = 'mechanics_output', **kwargs):
+    def __init__(self, mesh, p, pv_name = 'mechanics_output', **kwargs):
         df.NonlinearProblem.__init__(self) # apparently required to initialize things
-        # constants
-        self.g = 9.81  # graviational acceleration in m/s²
+        self.p = p
 
-        # object with material data, parameters, material functions etc...
-        p = Parameters()
-        ### paramters for mechanics problem
-        p['E_28'] = 15000000  # Youngs Modulus N/m2 or something... TODO: check units!
-        p['nu'] = 0.2  # Poissons Ratio
+        if self.p.dim == 1:
+            self.stress_vector_dim = 1
+        elif self.p.dim == 2:
+            self.stress_vector_dim = 3
+        elif self.p.dim == 3:
+            self.stress_vector_dim = 6
 
-        # required paramters for alpha to E mapping
-        p['alpha_t'] = 0.2
-        p['alpha_0'] = 0.05
-        p['a_E'] = 0.6
-
-        # required paramters for alpha to tensile and compressive stiffness mapping
-        p['fc_inf'] = 6210000
-        p['a_fc'] = 1.2
-        p['ft_inf'] = 467000
-        p['a_ft'] = 1.0
-
-        if mat == None:
-            self.mat = p
-        else:
-            self.mat = mat + p # object with material data, parameters, material functions etc...
-
-
+        #todo: I do not like the "meshless" setup right now
         if mesh != None:
             #initialize possible paraview output
             self.pv_file = df.XDMFFile( pv_name + '.xdmf')
@@ -608,41 +590,28 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
             self.pv_file.parameters["functions_share_mesh"] = True
             # function space for single value per element, required for plot of quadrature space values
 
-            q_deg = self.mat.pol_degree
-            #self.visu_space = df.FunctionSpace(mesh, "P", q_deg)
-            if q_deg == 1:
-                visu_deg = 0
+
+            #
+            if self.p.degree == 1:
+                 self.visu_space = df.FunctionSpace(mesh, "DG", 0)
+                 self.visu_space_T = df.TensorFunctionSpace(mesh, "DG", 0)
             else:
-                visu_deg = 1
+                 self.visu_space = df.FunctionSpace(mesh, "P", 1)
+                 self.visu_space_T = df.TensorFunctionSpace(mesh, "P", 1)
 
-            self.visu_space = df.FunctionSpace(mesh, "DG", visu_deg)
-            self.visu_space_T = df.TensorFunctionSpace(mesh, "DG", visu_deg)
 
-            #initialize timestep, musst be reset using .set_timestep(dt)
-            #self.dt = 0
-            #self.dt_form = Constant(self.dt)
-
-            metadata = {"quadrature_degree": q_deg, "quadrature_scheme": "default"}
+            metadata = {"quadrature_degree": self.p.degree, "quadrature_scheme": "default"}
             dxm = df.dx(metadata=metadata)
 
             # solution field
-            #self.V = VectorFunctionSpace(mesh, 'P', q_deg)
-            self.V = df.VectorFunctionSpace(mesh, 'Lagrange', q_deg)
+            self.V = df.VectorFunctionSpace(mesh, 'P', self.p.degree)
 
             # generic quadrature function space
             cell = mesh.ufl_cell()
             q = "Quadrature"
 
-            if self.mat.dim == 1:
-                stress_vector_dim = 1
-            elif self.mat.dim == 2:
-                stress_vector_dim = 3
-            elif self.mat.dim == 3:
-                stress_vector_dim = 6
-
-
-            quadrature_element = df.FiniteElement(q, cell, degree=q_deg, quad_scheme="default")
-            quadrature_vector_element = df.VectorElement(q, cell, degree=q_deg, dim=stress_vector_dim, quad_scheme="default")
+            quadrature_element = df.FiniteElement(q, cell, degree=self.p.degree, quad_scheme="default")
+            quadrature_vector_element = df.VectorElement(q, cell, degree=self.p.degree, dim=self.stress_vector_dim, quad_scheme="default")
             q_V = df.FunctionSpace(mesh, quadrature_element)
             q_VT = df.FunctionSpace(mesh, quadrature_vector_element)
 
@@ -664,48 +633,34 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
 
 
             # Elasticity parameters without multiplication with E
-            x_mu = 1.0 / (2.0 * (1.0 + self.mat.nu))
-            x_lambda = 1.0 * self.mat.nu / ((1.0 + self.mat.nu) * (1.0 - 2.0 * self.mat.nu))
+            x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
+            x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
 
             # Stress computation for linear elastic problem without multiplication with E
             def x_sigma(v):
                 return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
             # Volume force            
-            if self.mat.dim == 1:
-                f = df.Constant(-self.g * self.mat.density)
+            if self.p.dim == 1:
+                f = df.Constant(-self.p.g * self.p.density)
+            elif self.p.dim == 2:
+                f = df.Constant((0, -self.p.g * self.p.density))
+            elif self.p.dim == 3:
+                f = df.Constant((0, 0, -self.p.g * self.p.density))
 
-            elif self.mat.dim == 2:
-                f = df.Constant((0, -self.g * self.mat.density))
 
-            elif self.mat.dim == 3:
-                f = df.Constant((0, 0, -self.g * self.mat.density))
-            #f = Constant((10, 0))
-
-            #E.assign(Constant(alpha * E_max))
-            # solve the mechanics problem
-            #self.E = Constant(self.mat.E_28)
-            #E.assign(Constant(self.alpha*self.mat.E_28))
-            # normal form
-
-            # TODO: why is this working???, is q_E treated as a "constant"?
             self.sigma_ufl = self.q_E*x_sigma(self.u)
-
-
-
-
 
             R_ufl =  self.q_E*df.inner(x_sigma(self.u), df.sym(df.grad(v)))  * dxm
             R_ufl += - df.inner(f, v) * dxm # add volumetric force, aka gravity (in this case)
             # quadrature point part
-            self.R = R_ufl #- Constant(mat.Q_inf) * self.q_delta_alpha * vT * dxm
+            self.R = R_ufl #- Constant(p.Q_inf) * self.q_delta_alpha * vT * dxm
 
             # derivative
             # normal form
             dR_ufl = df.derivative(R_ufl, self.u)
             # quadrature part
-            self.dR = dR_ufl #- Constant(mat.Q_inf) * self.q_ddalpha_dT * T_ * vT * dxm
-
+            self.dR = dR_ufl #- Constant(p.Q_inf) * self.q_ddalpha_dT * T_ * vT * dxm
 
             self.project_sigma = LocalProjector(self.sigma_voigt(self.sigma_ufl), q_VT, dxm)
 
@@ -854,25 +809,23 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
 
 
         parameters = {}
-        parameters['alpha_t'] = self.mat.alpha_t
-        parameters['E_inf'] = self.mat.E_28
-        parameters['alpha_0'] = self.mat.alpha_0
-        parameters['a_E'] = self.mat.a_E
+        parameters['alpha_t'] = self.p.alpha_t
+        parameters['E_inf'] = self.p.E_28
+        parameters['alpha_0'] = self.p.alpha_0
+        parameters['a_E'] = self.p.a_E
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(alpha_list, parameters)
 
-
         parameters = {}
-        parameters['X_inf'] = self.mat.fc_inf
-        parameters['a_X'] = self.mat.a_fc
+        parameters['X_inf'] = self.p.fc_inf
+        parameters['a_X'] = self.p.a_fc
 
         fc_list = self.general_hydration_fkt(alpha_list, parameters)
 
-
         parameters = {}
-        parameters['X_inf'] = self.mat.ft_inf
-        parameters['a_X'] = self.mat.a_ft
+        parameters['X_inf'] = self.p.ft_inf
+        parameters['a_X'] = self.p.a_ft
 
         ft_list = self.general_hydration_fkt(alpha_list, parameters)
 
@@ -881,20 +834,10 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         # get stress values
         self.project_sigma(self.q_sigma)
 
-        # TODO: get this value from mesh or something!!!, set this vector length somewhere central!!!
-        if self.mat.dim == 1:
-            n_q_point_values = 1 # 1D: 1, 2D: 3, 3D: 6
-        elif self.mat.dim == 2:
-            n_q_point_values = 3 # 1D: 1, 2D: 3, 3D: 6
-        elif self.mat.dim == 3:
-            n_q_point_values = 6 # 1D: 1, 2D: 3, 3D: 6
-        sigma_list = self.q_sigma.vector().get_local().reshape((-1, n_q_point_values))
+        sigma_list = self.q_sigma.vector().get_local().reshape((-1, self.stress_vector_dim))
 
         # compute the yield values (values > 0 : failure)
-
         yield_list = self.yield_surface(sigma_list,ft_list,fc_list)
-
-
 
         # # project lists onto quadrature spaces
         set_q(self.q_E, E_list)
@@ -904,15 +847,13 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
 
 
     def update_history(self):
-        #self.T_n.assign(self.T) # save temparature field
-        #self.q_alpha_n.assign(self.q_alpha) # save alpha field
+        # no history field currently
         pass
 
 
     def set_timestep(self, dt):
         self.dt = dt
         self.dt_form.assign(df.Constant(self.dt))
-
 
 
     def set_bcs(self, bcs):
@@ -940,37 +881,28 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         u_plot.rename("Displacement","test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(u_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
-        # stress plot???
-
-        #stress_plot = project(self.q_alpha, self.visu_space)
-        # some ufl thing....
-        # Stress computation for linear elastic problem without multiplication with E
 
         # Elasticity parameters without multiplication with E
-        x_mu = 1.0 / (2.0 * (1.0 + self.mat.nu))
-        x_lambda = 1.0 * self.mat.nu / ((1.0 + self.mat.nu) * (1.0 - 2.0 * self.mat.nu))
+        x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
+        x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
         def x_sigma(v):
              return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
 
-        # MOIN problem with tensor plot
-        sigma_plot = df.project(self.sigma_ufl, self.visu_space_T, form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
-        #
-        #
-        E_plot = df.project(self.q_E, self.visu_space,form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
-        fc_plot = df.project(self.q_fc, self.visu_space,form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
-        ft_plot = df.project(self.q_ft, self.visu_space,form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
-        yield_plot = df.project(self.q_yield, self.visu_space,form_compiler_parameters={'quadrature_degree': self.mat.pol_degree})
+        sigma_plot = df.project(self.sigma_ufl, self.visu_space_T, form_compiler_parameters={'quadrature_degree': self.p.degree})
+        E_plot = df.project(self.q_E, self.visu_space,form_compiler_parameters={'quadrature_degree': self.p.degree})
+        fc_plot = df.project(self.q_fc, self.visu_space,form_compiler_parameters={'quadrature_degree': self.p.degree})
+        ft_plot = df.project(self.q_ft, self.visu_space,form_compiler_parameters={'quadrature_degree': self.p.degree})
+        yield_plot = df.project(self.q_yield, self.visu_space,form_compiler_parameters={'quadrature_degree': self.p.degree})
         #
         E_plot.rename("Young's Modulus","test string, what does this do??")  # TODO: what does the second string do?
         fc_plot.rename("Compressive strength","test string, what does this do??")  # TODO: what does the second string do?
         ft_plot.rename("Tensile strength","test string, what does this do??")  # TODO: what does the second string do?
         yield_plot.rename("Yield surface","test string, what does this do??")  # TODO: what does the second string do?
         sigma_plot.rename("Stress","test string, what does this do??")  # TODO: what does the second string do?
+
         self.pv_file.write(E_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(fc_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(ft_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(yield_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
-
-        pass

@@ -7,12 +7,14 @@ from concrete_model.helpers import Parameters
 
 class Experiment:
     def __init__(self, parameters = None):
+        # setup of paramter field
         self.p = Parameters()
-        print('MOIN')
-        print(self.p,parameters)
+        # constants
+        self.p['zero_C'] = 273.15  # to convert celcius to kelvin input to
 
+        self.p = self.p + parameters
 
-        #self.setup()
+        self.setup()
 
     def setup(self):
         raise NotImplementedError()
@@ -27,8 +29,6 @@ def get_experiment(name, parameters = None):
 
 class ConcreteCubeExperiment(Experiment):
     def __init__(self, parameters=None):
-
-        # print(self.p,parameters)
         # initialize a set of "basic paramters" (for now...)
         p = Parameters()
         # boundary values...
@@ -40,41 +40,26 @@ class ConcreteCubeExperiment(Experiment):
         p['dim'] = 3  # default boundary setting
         p['mesh_density'] = 10  # default boundary setting
         p['mesh_setting'] = 'crossed'  # default boundary setting
-        p = p + None
-        print(parameters)
-        print(p)
-        print(p)
+        p = p + parameters
+        super().__init__(p)
 
-        super().__init__()
-
-
-        print('MOIN 2')
-        exit()
-
-        # add and override input paramters
-        if parameters == None:
-            self.parameters = p
-        else:
-            self.parameters = p + parameters
 
     def setup(self, bc='full'):
         self.bc = bc  # different boundary settings
         # elements per spacial direction
-        n = self.parameters.mesh_density
-        if self.parameters.dim == 2:
-            self.mesh = df.UnitSquareMesh(n, n, self.parameters.mesh_setting)
-        elif self.parameters.dim == 3:
+        n = self.p.mesh_density
+        if self.p.dim == 2:
+            self.mesh = df.UnitSquareMesh(n, n, self.p.mesh_setting)
+        elif self.p.dim == 3:
             self.mesh = df.UnitCubeMesh(n, n, n)
         else:
-            print(f'wrong dimension {self.parameters.dim} for problem setup')
+            print(f'wrong dimension {self.p.dim} for problem setup')
             exit()
 
-        # define paramters???
-        self.zero_C = 273.15  # to convert celcius to kelvin input to
-        # self.parameters['T_0'] = 20 # inital concrete temperature
-        # self.parameters['T_bc1'] = 10 # temperature boundary value 1
-        # self.parameters['T_bc2'] = 50 # temperature boundary value 2
-        # self.parameters['T_bc3'] = 10 # temperature boundary value 3
+        # self.p['T_0'] = 20 # inital concrete temperature
+        # self.p['T_bc1'] = 10 # temperature boundary value 1
+        # self.p['T_bc2'] = 50 # temperature boundary value 2
+        # self.p['T_bc3'] = 10 # temperature boundary value 3
 
     def create_temp_bcs(self, V):
         # define surfaces, full, left, right, bottom, top, none
@@ -97,16 +82,16 @@ class ConcreteCubeExperiment(Experiment):
             return None
 
         # Temperature boundary conditions
-        T_bc1 = df.Expression('t_boundary', t_boundary=self.parameters.T_bc1 + self.zero_C, degree=0)
-        T_bc2 = df.Expression('t_boundary', t_boundary=self.parameters.T_bc2 + self.zero_C, degree=0)
-        T_bc3 = df.Expression('t_boundary', t_boundary=self.parameters.T_bc3 + self.zero_C, degree=0)
+        T_bc1 = df.Expression('t_boundary', t_boundary=self.p.T_bc1 + self.p.zero_C, degree=0)
+        T_bc2 = df.Expression('t_boundary', t_boundary=self.p.T_bc2 + self.p.zero_C, degree=0)
+        T_bc3 = df.Expression('t_boundary', t_boundary=self.p.T_bc3 + self.p.zero_C, degree=0)
 
         temp_bcs = []
 
-        if self.parameters.bc_setting == 'full':
+        if self.p.bc_setting == 'full':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
             temp_bcs.append(df.DirichletBC(V, T_bc1, full_boundary))
-        elif self.parameters.bc_setting == 'left-right':
+        elif self.p.bc_setting == 'left-right':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
             temp_bcs.append(df.DirichletBC(V, T_bc2, L_boundary))
             temp_bcs.append(df.DirichletBC(V, T_bc2, U_boundary))
@@ -140,9 +125,9 @@ class ConcreteCubeExperiment(Experiment):
         # define displacement boundary
         displ_bcs = []
 
-        if self.parameters.dim == 2:
+        if self.p.dim == 2:
             displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), U_boundary))
-        elif self.parameters.dim == 3:
+        elif self.p.dim == 3:
             displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0, 0)), U_boundary))
 
         return displ_bcs
@@ -150,8 +135,6 @@ class ConcreteCubeExperiment(Experiment):
 
 class ConcreteBeamExperiment(Experiment):
     def __init__(self, parameters = None):
-        #super().__init__(parameters)
-        # initialize a set of "basic paramters" (for now...)
         p = Parameters()
         # boundary values...
         p['T_0'] = 20  # inital concrete temperature
@@ -161,33 +144,24 @@ class ConcreteBeamExperiment(Experiment):
         p['l'] = 5 # m length
         p['h'] = 1 # height
         p['bc_setting'] = 'full' # default boundary setting
-
-
-        # add and override input paramters
-        if parameters == None:
-            self.parameters = p
-        else:
-            self.parameters = p + parameters
-
-        super().__init__()
+        p = p + parameters
+        super().__init__(p)
 
     def setup(self,bc = 'full', dim = 2):
         self.bc = bc # different boundary settings
         # elements per spacial direction
         n = 20
         if dim == 2:
-            self.mesh = df.RectangleMesh(df.Point(0., 0.), df.Point(self.parameters.l, self.parameters.h) \
-                                     , int(n * self.parameters.l), int(n * self.parameters.h), diagonal='right')
+            self.mesh = df.RectangleMesh(df.Point(0., 0.), df.Point(self.p.l, self.p.h) \
+                                     , int(n * self.p.l), int(n * self.p.h), diagonal='right')
         else:
             print(f'wrong dimension {dim} for problem setup')
             exit()
 
-        # define paramters???
-        self.zero_C = 273.15 # to convert celcius to kelvin input to
-        # self.parameters['T_0'] = 20 # inital concrete temperature
-        # self.parameters['T_bc1'] = 10 # temperature boundary value 1
-        # self.parameters['T_bc2'] = 50 # temperature boundary value 2
-        # self.parameters['T_bc3'] = 10 # temperature boundary value 3
+        # self.p['T_0'] = 20 # inital concrete temperature
+        # self.p['T_bc1'] = 10 # temperature boundary value 1
+        # self.p['T_bc2'] = 50 # temperature boundary value 2
+        # self.p['T_bc3'] = 10 # temperature boundary value 3
 
 
     def create_temp_bcs(self,V):
@@ -197,25 +171,25 @@ class ConcreteBeamExperiment(Experiment):
         def L_boundary(x, on_boundary):
             return on_boundary and df.near(x[0], 0)
         def R_boundary(x, on_boundary):
-            return on_boundary and df.near(x[0],  self.parameters.l)
+            return on_boundary and df.near(x[0],  self.p.l)
         def U_boundary(x, on_boundary):
             return on_boundary and df.near(x[1], 0)
         def O_boundary(x, on_boundary):
-            return on_boundary and df.near(x[1],  self.parameters.h)
+            return on_boundary and df.near(x[1],  self.p.h)
         def empty_boundary(x, on_boundary):
             return None
 
         # Temperature boundary conditions
-        T_bc1 = df.Expression('t_boundary', t_boundary=self.parameters.T_bc1+self.zero_C, degree=0)
-        T_bc2 = df.Expression('t_boundary', t_boundary=self.parameters.T_bc2+self.zero_C, degree=0)
-        T_bc3 = df.Expression('t_boundary', t_boundary=self.parameters.T_bc3+self.zero_C, degree=0)
+        T_bc1 = df.Expression('t_boundary', t_boundary=self.p.T_bc1+self.p.zero_C, degree=0)
+        T_bc2 = df.Expression('t_boundary', t_boundary=self.p.T_bc2+self.p.zero_C, degree=0)
+        T_bc3 = df.Expression('t_boundary', t_boundary=self.p.T_bc3+self.p.zero_C, degree=0)
 
         temp_bcs = []
 
-        if self.parameters.bc_setting == 'full':
+        if self.p.bc_setting == 'full':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
             temp_bcs.append(df.DirichletBC(V, T_bc1, full_boundary))
-        elif self.parameters.bc_setting == 'left-right':
+        elif self.p.bc_setting == 'left-right':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
             temp_bcs.append(df.DirichletBC(V, T_bc2, L_boundary))
             temp_bcs.append(df.DirichletBC(V, T_bc3, R_boundary))
@@ -230,12 +204,12 @@ class ConcreteBeamExperiment(Experiment):
         def left_support(x, on_boundary):
             return df.near(x[0], 0) and df.near(x[1], 0)
         def right_support(x, on_boundary):
-            return df.near(x[0], self.parameters.l) and df.near(x[1], 0)
+            return df.near(x[0], self.p.l) and df.near(x[1], 0)
 
         def L_boundary(x, on_boundary):
             return on_boundary and df.near(x[0], 0)
         def R_boundary(x, on_boundary):
-            return on_boundary and df.near(x[0], self.parameters.l)
+            return on_boundary and df.near(x[0], self.p.l)
 
 
         # define displacement boundary

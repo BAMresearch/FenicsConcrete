@@ -10,11 +10,10 @@ start = timer.time()
 
 parameters = concrete_model.Parameters() # using the current default values
 # boundary values...
-parameters['dim'] = 2  # inital concrete temperature
+parameters['dim'] = 2 # inital concrete temperature
 parameters['mesh_density'] = 10  # inital concrete temperature
-#parameters['mesh_setting'] = 'left'  # inital concrete temperature
 parameters['mesh_setting'] = 'left/right'  # inital concrete temperature
-parameters['pol_degree'] = 2 # inital concrete temperature
+parameters['degree'] = 2 # inital concrete temperature
 
 experiment = concrete_model.get_experiment('ConcreteCube',parameters)
 
