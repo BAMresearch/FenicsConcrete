@@ -16,7 +16,7 @@ parameters['dim'] = 2  # inital concrete temperature
 parameters['mesh_density'] = 10  # inital concrete temperature
 #parameters['mesh_setting'] = 'left'  # inital concrete temperature
 parameters['mesh_setting'] = 'left/right'  # inital concrete temperature
-parameters['pol_degree'] = 2 # inital concrete temperature
+parameters['pol_degree'] = 3 # inital concrete temperature
 
 experiment = concrete_experiment.get_experiment('ConcreteCube',parameters)
 problem = concrete_problem.ConcreteThermoMechanical(experiment,parameters)
