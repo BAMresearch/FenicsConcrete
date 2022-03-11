@@ -1,52 +1,23 @@
-from __future__ import print_function
 import dolfin as df
 import numpy as np
 import scipy.optimize
-import time
-import concrete_experiment as concrete_experiment
+
+from concrete_model.helpers import Parameters
+from concrete_model.helpers import set_q
+from concrete_model.helpers import LocalProjector
+
+
 
 import warnings
 from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
 
+
 df.parameters["form_compiler"]["representation"] = "quadrature"
 warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
-# helper functions...
-def set_q(q, values):
-    """
-    q:
-        quadrature function space
-    values:
-        entries for `q`
-    """
-    v = q.vector()
-    v.zero()
-    v.add_local(values.flat)
-    v.apply("insert")
 
-class LocalProjector:
-    def __init__(self, expr, V, dxm):
-        """
-        expr:
-            expression to project
-        V:
-            quadrature function space
-        dxm:
-            dolfin.Measure("dx") that matches V
-        """
-        dv = df.TrialFunction(V)
-        v_ = df.TestFunction(V)
-        a_proj = df.inner(dv, v_) * dxm
-        b_proj = df.inner(expr, v_) * dxm
-        self.solver = df.LocalSolver(a_proj, b_proj)
-        self.solver.factorize()
 
-    def __call__(self, u):
-        """
-        u:
-            function that is filled with the solution of the projection
-        """
-        self.solver.solve_local_rhs(u)
+
 
 class MaterialProblem():
     def __init__(self, experiment = None, parameters = None, pv_name = 'pv_output_full'):
@@ -225,7 +196,7 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
         self.igc = 8.3145  # ideal gas constant [JK −1 mol −1 ]
 
         #setup initial material paramters
-        p = concrete_experiment.Parameters()
+        p = Parameters()
         # Material parameter for concrete model with temperature and hydration
         p['density'] = 2350  # in kg/m^3 density of concrete
         p['density_binder'] = 1440  # in kg/m^3 density of the binder
@@ -608,7 +579,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         self.g = 9.81  # graviational acceleration in m/s²
 
         # object with material data, parameters, material functions etc...
-        p = concrete_experiment.Parameters()
+        p = Parameters()
         ### paramters for mechanics problem
         p['E_28'] = 15000000  # Youngs Modulus N/m2 or something... TODO: check units!
         p['nu'] = 0.2  # Poissons Ratio
