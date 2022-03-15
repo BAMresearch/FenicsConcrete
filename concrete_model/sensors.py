@@ -18,7 +18,7 @@ class DisplacementSensor(Sensor):
 
     def measure(self, problem, t=1.0):
         # get displacements
-        self.data.append(np.concatenate(([t],problem.mechanics_problem.u(self.where))))
+        self.data.append(np.concatenate(([t],problem.displacement(self.where))))
 
 
 class TemperatureSensor(Sensor):
@@ -28,7 +28,7 @@ class TemperatureSensor(Sensor):
         self.data = []
 
     def measure(self, problem, t=1.0):
-        T = problem.temperature_problem.T(self.where) - problem.temperature_problem.zero_C
+        T = problem.temperature(self.where) - problem.p.zero_C
         self.data.append([t,T])
 
 
@@ -37,7 +37,7 @@ class MaxTemperatureSensor(Sensor):
         self.data = []
 
     def measure(self, problem, t=1.0):
-        max_T = np.amax(problem.temperature_problem.T.vector().get_local()) - problem.temperature_problem.zero_C
+        max_T = np.amax(problem.temperature.vector().get_local()) - problem.p.zero_C
         self.data.append([t,max_T])
 
 
@@ -48,8 +48,8 @@ class DOHSensor(Sensor):
 
     def measure(self, problem, t=1.0):
         # get DOH
-        alpha_projected = df.project(problem.temperature_problem.q_alpha, problem.temperature_problem.visu_space)
-        alpha = alpha_projected(self.where)
+        # TODO: problem with projected field onto linear mesh!?!
+        alpha = problem.degree_of_hydration(self.where)
         self.data.append([t,alpha])
 
 
