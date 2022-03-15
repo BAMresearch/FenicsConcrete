@@ -4,6 +4,7 @@ how to handle paramters?
 - paramters in experiement and model (dim)
 
 I want to seperate the  classes in files
+- folder with experiments
 - what is the best way?
 - problem: strange defnition of experiements
 

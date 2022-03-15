@@ -60,6 +60,6 @@ class MinDOHSensor(Sensor):
 
     def measure(self, problem, t=1.0):
         # get min DOH
-        min_DOH = np.amin(problem.temperature_problem.q_alpha.vector().get_local())
+        min_DOH = np.amin(problem.q_degree_of_hydration.vector().get_local())
         self.data.append([t,min_DOH])
 
