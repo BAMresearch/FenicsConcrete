@@ -3,13 +3,12 @@ import numpy as np
 import concrete_model
 
 import unittest
+import filecmp
 
-# import warnings
-# from ffc.quadrature.deprecation \
-#     import QuadratureRepresentationDeprecationWarning
-# warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
+import xml.etree.ElementTree as ET
 
-def simple_simulation(paramters, sensor):
+
+def simple_simulation(new_parameters, name):
 
     parameters = concrete_model.Parameters()  # using the current default values
     # general
@@ -17,12 +16,11 @@ def simple_simulation(paramters, sensor):
     # mesh
     parameters['mesh_setting'] = 'left/right'  # default boundary setting
     parameters['bc_setting'] = 'test-setup'  # default boundary setting
-    parameters['dim'] = 2
     parameters['mesh_density'] = 4
     # temperature boundary
     parameters['T_0'] = 10  # inital concrete temperature
     parameters['T_bc1'] = 20  # temperature boundary value 1
-    parameters['T_bc2'] = 40  # temperature boundary value 2
+    parameters['T_bc2'] = 30  # temperature boundary value 2
 
     parameters['density'] = 2350  # in kg/m^3 density of concrete
     parameters['density_binder'] = 1440  # in kg/m^3 density of the binder
@@ -55,10 +53,11 @@ def simple_simulation(paramters, sensor):
     parameters['ft_inf'] = 467000
     parameters['a_ft'] = 1.0
 
-    experiment = concrete_model.get_experiment('ConcreteCube', parameters)
-    problem = concrete_model.ConcreteThermoMechanical(experiment, parameters)
+    parameters = parameters + new_parameters
 
-    problem.add_sensor(sensor)
+    experiment = concrete_model.get_experiment('ConcreteCube', parameters)
+    problem = concrete_model.ConcreteThermoMechanical(experiment, parameters, pv_name='test_'+name)
+
 
     # data for time stepping
     dt = 3600  # 60 min step
@@ -74,78 +73,75 @@ def simple_simulation(paramters, sensor):
     while t <= time:  # time
         # solve temp-hydration-mechanics
         problem.solve(t=t)  # solving this
+        problem.pv_plot(t=t)
 
         # prepare next timestep
         t += dt
 
-    # get last measure value
-    data = problem.sensors[0].data[-1][1]
 
-    return data
+class TestParaview(unittest.TestCase):
 
-class TestExperimentalSetups(unittest.TestCase):
+    def compare_pv_files(self, ref_file, test_file):
+        #   better compare the files...
+        root_ref = ET.parse(ref_file).getroot()
+        test_ref = ET.parse(test_file).getroot()
 
-    def test_concrete_cube_2D(self):
+        # loop over all timesteps
+        for ref_step, test_step in zip(root_ref[0][0], test_ref[0][0]):
+            # checking general information
+            for ref_element, test_element in zip(ref_step, test_step):
+                self.assertEqual(ref_element.tag, test_element.tag)
+                self.assertEqual(ref_element.attrib, test_element.attrib)
 
-        parameters = concrete_model.Parameters() # using the current default values
-
-        parameters['dim'] = 2
-        ..... TODO
-
-        experiment = concrete_model.get_experiment('ConcreteCube',parameters)
-
-        simple_simulation(parameters, experiment)
-
-
-    def test_concrete_cube_3D(self):
-
-        parameters = concrete_model.Parameters() # using the current default values
-
-        parameters['dim'] = 3
-        parameters['mesh_density'] = 2
-        parameters['log_level'] = 'WARNING'
-
-        experiment = concrete_model.get_experiment('ConcreteCube',parameters)
-
-        simple_simulation(parameters, experiment)
+            ref_data = ref_step[3:]
+            test_data = test_step[3:]
+            # checking the saved data itself
+            for ref_dataset, test_dataset in zip(ref_data, test_data):
+                ref_list = np.array(list(map(float, ref_dataset[0].text.split())))
+                test_list = np.array(list(map(float, ref_dataset[0].text.split())))
+                self.assertAlmostEqual(ref_list.all(), test_list.all())
 
 
-    def test_minimal_cube_2D(self):
-
-        parameters = concrete_model.Parameters() # using the current default values
-
-        parameters['dim'] = 2
-        parameters['mesh_density'] = 2
-        parameters['log_level'] = 'WARNING'
-
-        experiment = concrete_model.get_experiment('MinimalCube',parameters)
-
-        simple_simulation(parameters, experiment)
-
-
-    def test_minimal_cube_3D(self):
-
-        parameters = concrete_model.Parameters() # using the current default values
-
-        parameters['dim'] = 3
-        parameters['mesh_density'] = 2
-        parameters['log_level'] = 'WARNING'
-
-        experiment = concrete_model.get_experiment('MinimalCube',parameters)
-
-        simple_simulation(parameters, experiment)
-
-
-    def test_concrete_beam_2D(self):
+    def test_2D_degr1(self):
+        file_name = '2D_degr1'
         parameters = concrete_model.Parameters()  # using the current default values
-
         parameters['dim'] = 2
-        parameters['mesh_density'] = 2
-        parameters['log_level'] = 'WARNING'
+        parameters['degree'] = 1  # default boundary setting
 
-        experiment = concrete_model.get_experiment('ConcreteBeam', parameters)
+        simple_simulation(parameters, file_name)
 
-        simple_simulation(parameters, experiment)
+        self.compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
+
+
+    def test_2D_degr2(self):
+        file_name = '2D_degr2'
+        parameters = concrete_model.Parameters()  # using the current default values
+        parameters['dim'] = 2
+        parameters['degree'] = 2  # default boundary setting
+        simple_simulation(parameters, file_name)
+
+        self.compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
+
+
+    def test_3D_degr1(self):
+        file_name = '3D_degr1'
+        parameters = concrete_model.Parameters()  # using the current default values
+        parameters['dim'] = 3
+        parameters['degree'] = 1  # default boundary setting
+        simple_simulation(parameters, file_name)
+
+        self.compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
+
+
+    def test_3D_degr2(self):
+        file_name = '3D_degr2'
+        parameters = concrete_model.Parameters()  # using the current default values
+        parameters['dim'] = 3
+        parameters['degree'] = 2  # default boundary setting
+        simple_simulation(parameters, file_name)
+
+        self.compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
+
 
 if __name__ == '__main__':
-     unittest.main()
+    unittest.main()

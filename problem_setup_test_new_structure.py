@@ -1,5 +1,4 @@
-import numpy as np
-import matplotlib.pyplot as plt
+
 import time as timer
 
 import concrete_model
@@ -10,15 +9,17 @@ start = timer.time()
 
 parameters = concrete_model.Parameters() # using the current default values
 # boundary values...
-#parameters['dim'] = 2 # inital concrete temperature
+parameters['dim'] = 2 # inital concrete temperature
 parameters['mesh_density'] = 10  # inital concrete temperature
 #parameters['mesh_setting'] = 'left/right'  # inital concrete temperature
 parameters['degree'] = 2 # inital concrete temperature
+parameters['bc_setting'] = 'test-setup'  # default boundary setting
+parameters['T_0'] = 10  # inital concrete temperature
+parameters['T_bc1'] = 20  # temperature boundary value 1
+parameters['T_bc2'] = 30  # temperature boundary value 2
 
 experiment = concrete_model.get_experiment('ConcreteCube',parameters)
-experiment = concrete_model.get_experiment('MinimalCube',parameters)
-
-problem = concrete_model.ConcreteThermoMechanical(None,parameters)
+problem = concrete_model.ConcreteThermoMechanical(experiment,parameters)
 
 # testing
 dohhom_sensor = concrete_model.sensors.MinDOHSensor()
@@ -32,7 +33,7 @@ problem.add_sensor(doh_sensor)
 
 # data for time stepping
 #time steps
-dt = 60*20 # time step
+dt = 3600 # time step
 hours = 10
 time = hours*60*60         # total simulation time in s
 # set time step

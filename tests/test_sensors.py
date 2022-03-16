@@ -16,10 +16,10 @@ def simple_simulation(sensor):
     parameters['log_level'] = 'WARNING'
     # mesh
     parameters['mesh_setting'] = 'left/right'  # default boundary setting
-    parameters['bc_setting'] = 'test-setup'  # default boundary setting
     parameters['dim'] = 2
     parameters['mesh_density'] = 4
     # temperature boundary
+    parameters['bc_setting'] = 'test-setup'  # default boundary setting
     parameters['T_0'] = 10  # inital concrete temperature
     parameters['T_bc1'] = 20  # temperature boundary value 1
     parameters['T_bc2'] = 40  # temperature boundary value 2
