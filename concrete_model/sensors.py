@@ -34,11 +34,12 @@ class TemperatureSensor(Sensor):
 
 class MaxTemperatureSensor(Sensor):
     def __init__(self):
-        self.data = []
+        self.data = [[0,0]]
 
     def measure(self, problem, t=1.0):
         max_T = np.amax(problem.temperature.vector().get_local()) - problem.p.zero_C
-        self.data.append([t,max_T])
+        if max_T > self.data[0][1]:
+    	    self.data[0] = [t,max_T]
 
 
 class DOHSensor(Sensor):
@@ -62,4 +63,7 @@ class MinDOHSensor(Sensor):
         # get min DOH
         min_DOH = np.amin(problem.q_degree_of_hydration.vector().get_local())
         self.data.append([t,min_DOH])
+        
+        
+# TODO: add more sensor for other fields
 

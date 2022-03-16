@@ -39,7 +39,7 @@ class ConcreteCubeExperiment(Experiment):
         p['bc_setting'] = 'full'  # default boundary setting
         p['dim'] = 3  # default boundary setting
         p['mesh_density'] = 10  # default boundary setting
-        p['mesh_setting'] = 'crossed'  # default boundary setting
+        p['mesh_setting'] = 'left/right'  # default boundary setting
         p = p + parameters
         super().__init__(p)
 
@@ -91,11 +91,11 @@ class ConcreteCubeExperiment(Experiment):
         if self.p.bc_setting == 'full':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
             temp_bcs.append(df.DirichletBC(V, T_bc1, full_boundary))
-        elif self.p.bc_setting == 'left-right':
+        elif self.p.bc_setting == 'test-setup':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc2, L_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc2, U_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc3, R_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc1, L_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc1, U_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc2, R_boundary))
         else:
             raise Exception(
                 f'parameter[\'bc_setting\'] = {self.bc_setting} is not implemented as temperature boundary.')
@@ -198,6 +198,7 @@ class ConcreteBeamExperiment(Experiment):
         self.bc = bc # different boundary settings
         # elements per spacial direction
         n = 20
+        # TODO 3D beam!?!
         if dim == 2:
             self.mesh = df.RectangleMesh(df.Point(0., 0.), df.Point(self.p.l, self.p.h) \
                                      , int(n * self.p.l), int(n * self.p.h), diagonal='right')

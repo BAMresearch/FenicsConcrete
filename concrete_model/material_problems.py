@@ -30,7 +30,7 @@ class MaterialProblem():
         self.p['g'] = 9.81  # graviational acceleration in m/s²
 
         # other "globel" paramters...
-        self.p['log_level'] = 'WARNING'
+        self.p['log_level'] = 'INFO'
 
         self.p = self.p + self.experiment.p + parameters
 
