@@ -1,4 +1,4 @@
-import ../concrete_model
+import concrete_model
 
 import unittest
 
