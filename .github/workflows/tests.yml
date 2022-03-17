@@ -1,0 +1,27 @@
+# This workflow will install Python dependencies, run tests with concrete model
+
+name: Tests for concrete model
+
+on: [push]
+
+jobs:
+  test_model:
+    runs-on: ${{ matrix.operating-system }}
+    strategy:
+      matrix:
+        operating-system: [ubuntu-latest]
+
+    steps:
+    - uses: actions/checkout@v2
+    - uses: conda-incubator/setup-miniconda@v2
+      with:
+        python-version: "3.9"
+        mamba-version: "*"
+        channels: conda-forge
+        channel-priority: strict
+        auto-update-conda: true  
+        environment-file: environment.yml
+    - name: Run test case
+      shell: bash -l {0}
+      run: |
+        python tests/test_sensors.py
