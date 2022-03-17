@@ -21,7 +21,9 @@ jobs:
         channel-priority: strict
         auto-update-conda: true  
         environment-file: environment.yml
+    
     - name: Run test case
       shell: bash -l {0}
       run: |
+        export PYTHONPATH=$PYTHONPATH:../
         python tests/test_sensors.py
