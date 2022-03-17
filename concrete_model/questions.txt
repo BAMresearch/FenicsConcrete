@@ -1,0 +1,21 @@
+how to handle paramters?
+- default values?
+- how to catch missing values?
+- paramters in experiement and model (dim)
+
+I want to seperate the  classes in files
+- folder with experiments
+- what is the best way?
+- problem: strange defnition of experiements
+
+how to do correct logging...
+- can i have better controll???
+- why the double output using loguru
+
+how do I write good tests?
+- what should I test? every function/combination?
+- how? what is a "good outcome"? no errors?, some vale at a random point/full field, all fields??? one timestep, all timesteps?
+
+sensors...
+- how should the output be strucutred...
+- one list, also time? ...

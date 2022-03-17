@@ -1,0 +1,14 @@
+check 
+- line 800: yield values, do they make sense??? 
+
+
+
+resturcture
+
+
+implement
+- a good own logger??
+- sensor output, new structure, global time list?
+- general experimental boundary conditions (full, none, left, right, etc)
+
+

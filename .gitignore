@@ -2,3 +2,4 @@
 *.xdmf
 .idea
 __pycache__
+!ref_*.xdmf
