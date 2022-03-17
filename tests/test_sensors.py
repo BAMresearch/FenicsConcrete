@@ -1,5 +1,3 @@
-import numpy as np
-
 import concrete_model
 
 import unittest
@@ -22,7 +20,7 @@ def simple_simulation(sensor):
     parameters['bc_setting'] = 'test-setup'  # default boundary setting
     parameters['T_0'] = 10  # inital concrete temperature
     parameters['T_bc1'] = 20  # temperature boundary value 1
-    parameters['T_bc2'] = 40  # temperature boundary value 2
+    parameters['T_bc2'] = 30  # temperature boundary value 2
 
     parameters['density'] = 2350  # in kg/m^3 density of concrete
     parameters['density_binder'] = 1440  # in kg/m^3 density of the binder
@@ -43,7 +41,7 @@ def simple_simulation(sensor):
     # polinomial degree
     parameters['degree'] = 2  # default boundary setting
     ### paramters for mechanics problem
-    parameters['E_28'] = 15000000  # Youngs Modulus N/m2 or something... TODO: check units!
+    parameters['E_28'] = 15000000  # Youngs Modulus N/m2 or something...
     parameters['nu'] = 0.2  # Poissons Ratio
     # required paramters for alpha to E mapping
     parameters['alpha_t'] = 0.2
@@ -68,7 +66,7 @@ def simple_simulation(sensor):
     problem.set_timestep(dt)  # for time integration scheme
 
     # initialize time
-    t = 0  # first time step time
+    t = dt  # first time step time
 
 
     while t <= time:  # time
@@ -92,7 +90,7 @@ class TestSensors(unittest.TestCase):
 
         data = simple_simulation(sensor)
 
-        self.assertAlmostEqual(float(data),26.278560947211815)
+        self.assertAlmostEqual(float(data),23.847730968641713)
 
 
     def test_max_temperature(self):
@@ -101,7 +99,7 @@ class TestSensors(unittest.TestCase):
 
         data = simple_simulation(sensor)
 
-        self.assertAlmostEqual(float(data),40.323585039676686)
+        self.assertAlmostEqual(float(data),31.90459255375174)
 
 
     def test_degree_of_hydration(self):
@@ -110,7 +108,7 @@ class TestSensors(unittest.TestCase):
 
         data = simple_simulation(sensor)
 
-        self.assertAlmostEqual(float(data),0.210543755947087)
+        self.assertAlmostEqual(float(data),0.16581303886083476)
 
 
     def test_displacement(self):
@@ -119,7 +117,7 @@ class TestSensors(unittest.TestCase):
 
         data = simple_simulation(sensor)
 
-        self.assertAlmostEqual(float(data),-0.0001731843670339016)
+        self.assertAlmostEqual(float(data),-0.0002136038620005609)
 
 if __name__ == '__main__':
     unittest.main()

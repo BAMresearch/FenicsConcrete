@@ -21,7 +21,7 @@ def simple_simulation(parameters,experiment):
     problem.set_timestep(dt)  # for time integration scheme
 
     # initialize time
-    t = 0  # first time step time
+    t = dt  # first time step time
 
     while t <= time:  # time
         # solve temp-hydration-mechanics

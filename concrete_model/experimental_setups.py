@@ -74,6 +74,9 @@ class ConcreteCubeExperiment(Experiment):
 
         def U_boundary(x, on_boundary):
             return on_boundary and df.near(x[1], 0)
+            
+        def UL_boundary(x, on_boundary):
+            return on_boundary and df.near(x[1], 0) and x[0] <= 0.5 
 
         def O_boundary(x, on_boundary):
             return on_boundary and df.near(x[1], 1)
@@ -94,7 +97,7 @@ class ConcreteCubeExperiment(Experiment):
         elif self.p.bc_setting == 'test-setup':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
             temp_bcs.append(df.DirichletBC(V, T_bc1, L_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc1, U_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc1, UL_boundary))
             temp_bcs.append(df.DirichletBC(V, T_bc2, R_boundary))
         else:
             raise Exception(

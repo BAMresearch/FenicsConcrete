@@ -3,7 +3,6 @@ import numpy as np
 import concrete_model
 
 import unittest
-import filecmp
 
 import xml.etree.ElementTree as ET
 
@@ -67,7 +66,7 @@ def simple_simulation(new_parameters, name):
     problem.set_timestep(dt)  # for time integration scheme
 
     # initialize time
-    t = 0  # first time step time
+    t = dt  # first time step time
 
 
     while t <= time:  # time
