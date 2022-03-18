@@ -34,70 +34,67 @@ def simple_simulation(parameters,experiment):
 # testing the different experimental setup with options
 # just checking that they run!
 
-class TestExperimentalSetups(unittest.TestCase):
 
-    def test_concrete_cube_2D(self):
+def test_concrete_cube_2D():
 
-        parameters = concrete_model.Parameters() # using the current default values
+    parameters = concrete_model.Parameters() # using the current default values
 
-        parameters['dim'] = 2
-        parameters['mesh_density'] = 2
-        parameters['log_level'] = 'WARNING'
+    parameters['dim'] = 2
+    parameters['mesh_density'] = 2
+    parameters['log_level'] = 'WARNING'
 
-        experiment = concrete_model.get_experiment('ConcreteCube',parameters)
+    experiment = concrete_model.get_experiment('ConcreteCube',parameters)
 
-        simple_simulation(parameters, experiment)
-
-
-    def test_concrete_cube_3D(self):
-
-        parameters = concrete_model.Parameters() # using the current default values
-
-        parameters['dim'] = 3
-        parameters['mesh_density'] = 2
-        parameters['log_level'] = 'WARNING'
-
-        experiment = concrete_model.get_experiment('ConcreteCube',parameters)
-
-        simple_simulation(parameters, experiment)
+    simple_simulation(parameters, experiment)
 
 
-    def test_minimal_cube_2D(self):
+def test_concrete_cube_3D():
 
-        parameters = concrete_model.Parameters() # using the current default values
+    parameters = concrete_model.Parameters() # using the current default values
+        
+    parameters['dim'] = 3
+    parameters['mesh_density'] = 2
+    parameters['log_level'] = 'WARNING'
 
-        parameters['dim'] = 2
-        parameters['mesh_density'] = 2
-        parameters['log_level'] = 'WARNING'
+    experiment = concrete_model.get_experiment('ConcreteCube',parameters)
 
-        experiment = concrete_model.get_experiment('MinimalCube',parameters)
-
-        simple_simulation(parameters, experiment)
-
-
-    def test_minimal_cube_3D(self):
-
-        parameters = concrete_model.Parameters() # using the current default values
-
-        parameters['dim'] = 3
-        parameters['mesh_density'] = 2
-        parameters['log_level'] = 'WARNING'
-
-        experiment = concrete_model.get_experiment('MinimalCube',parameters)
-
-        simple_simulation(parameters, experiment)
+    simple_simulation(parameters, experiment)
 
 
-    def test_concrete_beam_2D(self):
-        parameters = concrete_model.Parameters()  # using the current default values
+def test_minimal_cube_2D():
 
-        parameters['dim'] = 2
-        parameters['mesh_density'] = 2
-        parameters['log_level'] = 'WARNING'
+    parameters = concrete_model.Parameters() # using the current default values
 
-        experiment = concrete_model.get_experiment('ConcreteBeam', parameters)
+    parameters['dim'] = 2
+    parameters['mesh_density'] = 2
+    parameters['log_level'] = 'WARNING'
 
-        simple_simulation(parameters, experiment)
+    experiment = concrete_model.get_experiment('MinimalCube',parameters)
 
-if __name__ == '__main__':
-     unittest.main()
+    simple_simulation(parameters, experiment)
+
+
+def test_minimal_cube_3D():
+
+    parameters = concrete_model.Parameters() # using the current default values
+
+    parameters['dim'] = 3
+    parameters['mesh_density'] = 2
+    parameters['log_level'] = 'WARNING'
+
+    experiment = concrete_model.get_experiment('MinimalCube',parameters)
+
+    simple_simulation(parameters, experiment)
+
+
+def test_concrete_beam_2D():
+     parameters = concrete_model.Parameters()  # using the current default values
+
+     parameters['dim'] = 2
+     parameters['mesh_density'] = 2
+     parameters['log_level'] = 'WARNING'
+
+     experiment = concrete_model.get_experiment('ConcreteBeam', parameters)
+
+     simple_simulation(parameters, experiment)
+

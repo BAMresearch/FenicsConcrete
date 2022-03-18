@@ -2,7 +2,7 @@ import numpy as np
 
 import concrete_model
 
-import unittest
+import pytest
 
 import xml.etree.ElementTree as ET
 
@@ -80,74 +80,69 @@ def simple_simulation(new_parameters, name):
         t += dt
 
 
-class TestParaview(unittest.TestCase):
 
-    
-
-    def compare_pv_files(self, ref_file, test_file):
-        file_path = 'tests/'
+def compare_pv_files(ref_file, test_file):
+    file_path = 'tests/'
     
     
-        #   better compare the files...
-        root_ref = ET.parse(file_path+ref_file).getroot()
-        test_ref = ET.parse(file_path+test_file).getroot()
+    #   better compare the files...
+    root_ref = ET.parse(file_path+ref_file).getroot()
+    test_ref = ET.parse(file_path+test_file).getroot()
 
-        # loop over all timesteps
-        for ref_step, test_step in zip(root_ref[0][0], test_ref[0][0]):
-            # checking general information
-            for ref_element, test_element in zip(ref_step, test_step):
-                self.assertEqual(ref_element.tag, test_element.tag)
-                self.assertEqual(ref_element.attrib, test_element.attrib)
+    # loop over all timesteps
+    for ref_step, test_step in zip(root_ref[0][0], test_ref[0][0]):
+        # checking general information
+        for ref_element, test_element in zip(ref_step, test_step):
+            assert ref_element.tag == test_element.tag
+            assert ref_element.attrib == test_element.attrib
 
-            ref_data = ref_step[3:]
-            test_data = test_step[3:]
-            # checking the saved data itself
-            for ref_dataset, test_dataset in zip(ref_data, test_data):
-                ref_list = np.array(list(map(float, ref_dataset[0].text.split())))
-                test_list = np.array(list(map(float, ref_dataset[0].text.split())))
-                self.assertAlmostEqual(ref_list.all(), test_list.all())
-
-
-    def test_2D_degr1(self):
-        file_name = '2D_degr1'
-        parameters = concrete_model.Parameters()  # using the current default values
-        parameters['dim'] = 2
-        parameters['degree'] = 1  # default boundary setting
-
-        simple_simulation(parameters, file_name)
-
-        self.compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
+        ref_data = ref_step[3:]
+        test_data = test_step[3:]
+        # checking the saved data itself
+        for ref_dataset, test_dataset in zip(ref_data, test_data):
+            ref_list = np.array(list(map(float, ref_dataset[0].text.split())))
+            test_list = np.array(list(map(float, ref_dataset[0].text.split())))
+            assert ref_list ==  pytest.approx(test_list)
 
 
-    def test_2D_degr2(self):
-        file_name = '2D_degr2'
-        parameters = concrete_model.Parameters()  # using the current default values
-        parameters['dim'] = 2
-        parameters['degree'] = 2  # default boundary setting
-        simple_simulation(parameters, file_name)
+def test_pv_2D_degr1():
+    file_name = '2D_degr1'
+    parameters = concrete_model.Parameters()  # using the current default values
+    parameters['dim'] = 2
+    parameters['degree'] = 1  # default boundary setting
 
-        self.compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
+    simple_simulation(parameters, file_name)
 
-
-    def test_3D_degr1(self):
-        file_name = '3D_degr1'
-        parameters = concrete_model.Parameters()  # using the current default values
-        parameters['dim'] = 3
-        parameters['degree'] = 1  # default boundary setting
-        simple_simulation(parameters, file_name)
-
-        self.compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
+    compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
 
 
-    def test_3D_degr2(self):
-        file_name = '3D_degr2'
-        parameters = concrete_model.Parameters()  # using the current default values
-        parameters['dim'] = 3
-        parameters['degree'] = 2  # default boundary setting
-        simple_simulation(parameters, file_name)
+def test_pv_2D_degr2():
+    file_name = '2D_degr2'
+    parameters = concrete_model.Parameters()  # using the current default values
+    parameters['dim'] = 2
+    parameters['degree'] = 2  # default boundary setting
+    simple_simulation(parameters, file_name)
 
-        self.compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
+    compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
 
 
-if __name__ == '__main__':
-    unittest.main()
+def test_pv_3D_degr1():
+    file_name = '3D_degr1'
+    parameters = concrete_model.Parameters()  # using the current default values
+    parameters['dim'] = 3
+    parameters['degree'] = 1  # default boundary setting
+    simple_simulation(parameters, file_name)
+
+    compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
+
+
+def test_pv_3D_degr2():
+    file_name = '3D_degr2'
+    parameters = concrete_model.Parameters()  # using the current default values
+    parameters['dim'] = 3
+    parameters['degree'] = 2  # default boundary setting
+    simple_simulation(parameters, file_name)
+        
+    compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
+
+
