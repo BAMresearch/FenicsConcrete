@@ -55,7 +55,9 @@ def simple_simulation(new_parameters, name):
     parameters = parameters + new_parameters
 
     experiment = concrete_model.get_experiment('ConcreteCube', parameters)
-    problem = concrete_model.ConcreteThermoMechanical(experiment, parameters, pv_name='test_'+name)
+    
+    file_path = 'tests/'
+    problem = concrete_model.ConcreteThermoMechanical(experiment, parameters, pv_name=file_path+'test_'+name)
 
 
     # data for time stepping
