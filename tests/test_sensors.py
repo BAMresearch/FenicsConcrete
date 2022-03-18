@@ -1,6 +1,6 @@
 import concrete_model
 
-import unittest
+import pytest
 
 # import warnings
 # from ffc.quadrature.deprecation \
@@ -82,42 +82,38 @@ def simple_simulation(sensor):
     return data
 
 
-class TestSensors(unittest.TestCase):
 
-    def test_temperature(self):
+def test_temperature():
 
-        sensor = concrete_model.sensors.TemperatureSensor((0.25, 0.25))
+    sensor = concrete_model.sensors.TemperatureSensor((0.25, 0.25))
 
-        data = simple_simulation(sensor)
-
-        self.assertAlmostEqual(float(data),23.847730968641713)
-
-
-    def test_max_temperature(self):
-
-        sensor = concrete_model.sensors.MaxTemperatureSensor()
-
-        data = simple_simulation(sensor)
-
-        self.assertAlmostEqual(float(data),31.90459255375174)
+    data = simple_simulation(sensor)
+    
+    assert float(data) == pytest.approx(23.847730968641713)
 
 
-    def test_degree_of_hydration(self):
+def test_max_temperature():
 
-        sensor = concrete_model.sensors.DOHSensor((0.25, 0.25))
+    sensor = concrete_model.sensors.MaxTemperatureSensor()
 
-        data = simple_simulation(sensor)
+    data = simple_simulation(sensor)
+    
+    assert float(data) == pytest.approx(31.90459255375174)
 
-        self.assertAlmostEqual(float(data),0.16581303886083476)
+
+def test_degree_of_hydration():
+
+    sensor = concrete_model.sensors.DOHSensor((0.25, 0.25))
+
+    data = simple_simulation(sensor)
+    
+    assert float(data) == pytest.approx(0.16581303886083476)
 
 
-    def test_displacement(self):
+def test_displacement():
 
-        sensor = concrete_model.sensors.DisplacementSensor((0.25, 0.25))
+    sensor = concrete_model.sensors.DisplacementSensor((0.25, 0.25))
 
-        data = simple_simulation(sensor)
-
-        self.assertAlmostEqual(float(data),-0.0002136038620005609)
-
-if __name__ == '__main__':
-    unittest.main()
+    data = simple_simulation(sensor)
+    
+    assert float(data) == pytest.approx(-0.0002136038620005609)
