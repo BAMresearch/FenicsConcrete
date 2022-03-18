@@ -4,12 +4,26 @@ check
 
 
 resturcture
+- remove "get experiment"
+- each experiment in seperate file
 
 
 implement
-- a good own logger??
 - sensor output, new structure, global time list?
 - general experimental boundary conditions (full, none, left, right, etc), 3D!!!, for beam...
-- 
+- sensors + tests for E modul, fmax, fmin
+- forwardmodel für strukturmodel
+- test forwardmodels (at least the output???), the hydration function...., maybe e mod etc functions as well?
+- pip package
+- testing pview fields seperately?
+
+- check static method @static method, decorator
+- methode define parameters
+- data speichen in einem "measurement system"?
+
+
+- a good own logger??
+
+
 
 

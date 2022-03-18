@@ -53,7 +53,7 @@ def simple_simulation(sensor):
     parameters['ft_inf'] = 467000
     parameters['a_ft'] = 1.0
 
-    experiment = concrete_model.get_experiment('ConcreteCube', parameters)
+    experiment = concrete_model.ConcreteCubeExperiment(parameters)
     problem = concrete_model.ConcreteThermoMechanical(experiment, parameters)
 
     problem.add_sensor(sensor)

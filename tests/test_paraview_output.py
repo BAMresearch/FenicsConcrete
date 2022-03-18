@@ -55,7 +55,7 @@ def simple_simulation(new_parameters, name):
 
     parameters = parameters + new_parameters
 
-    experiment = concrete_model.get_experiment('ConcreteCube', parameters)
+    experiment = concrete_model.ConcreteCubeExperiment(parameters)
 
     file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
     problem = concrete_model.ConcreteThermoMechanical(experiment, parameters, pv_name=file_path+'test_'+name)
