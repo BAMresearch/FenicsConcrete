@@ -85,6 +85,7 @@ class TestParaview(unittest.TestCase):
     def compare_pv_files(self, ref_file, test_file):
         file_path = 'tests/'
     
+    
         #   better compare the files...
         root_ref = ET.parse(file_path+ref_file).getroot()
         test_ref = ET.parse(file_path+test_file).getroot()
