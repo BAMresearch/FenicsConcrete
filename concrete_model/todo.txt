@@ -9,6 +9,7 @@ resturcture
 implement
 - a good own logger??
 - sensor output, new structure, global time list?
-- general experimental boundary conditions (full, none, left, right, etc)
+- general experimental boundary conditions (full, none, left, right, etc), 3D!!!, for beam...
+- 
 
 

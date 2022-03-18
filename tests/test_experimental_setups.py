@@ -2,6 +2,7 @@ import numpy as np
 
 import concrete_model
 
+import pytest
 
 # import warnings
 # from ffc.quadrature.deprecation \
@@ -34,56 +35,20 @@ def simple_simulation(parameters,experiment):
 # just checking that they run!
 
 
-def test_concrete_cube_2D():
+@pytest.mark.parametrize("dim", [2, 3])
+@pytest.mark.parametrize("setup", ['ConcreteCube', 'MinimalCube'])
+def test_experiemental_setup(dim, setup):
 
     parameters = concrete_model.Parameters() # using the current default values
 
-    parameters['dim'] = 2
+    parameters['dim'] = dim
     parameters['mesh_density'] = 2
     parameters['log_level'] = 'WARNING'
 
-    experiment = concrete_model.get_experiment('ConcreteCube',parameters)
+    experiment = concrete_model.get_experiment(setup,parameters)
 
     simple_simulation(parameters, experiment)
 
-
-def test_concrete_cube_3D():
-
-    parameters = concrete_model.Parameters() # using the current default values
-        
-    parameters['dim'] = 3
-    parameters['mesh_density'] = 2
-    parameters['log_level'] = 'WARNING'
-
-    experiment = concrete_model.get_experiment('ConcreteCube',parameters)
-
-    simple_simulation(parameters, experiment)
-
-
-def test_minimal_cube_2D():
-
-    parameters = concrete_model.Parameters() # using the current default values
-
-    parameters['dim'] = 2
-    parameters['mesh_density'] = 2
-    parameters['log_level'] = 'WARNING'
-
-    experiment = concrete_model.get_experiment('MinimalCube',parameters)
-
-    simple_simulation(parameters, experiment)
-
-
-def test_minimal_cube_3D():
-
-    parameters = concrete_model.Parameters() # using the current default values
-
-    parameters['dim'] = 3
-    parameters['mesh_density'] = 2
-    parameters['log_level'] = 'WARNING'
-
-    experiment = concrete_model.get_experiment('MinimalCube',parameters)
-
-    simple_simulation(parameters, experiment)
 
 
 def test_concrete_beam_2D():

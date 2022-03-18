@@ -83,37 +83,16 @@ def simple_simulation(sensor):
 
 
 
-def test_temperature():
-
-    sensor = concrete_model.sensors.TemperatureSensor((0.25, 0.25))
-
-    data = simple_simulation(sensor)
-    
-    assert float(data) == pytest.approx(23.847730968641713)
-
-
-def test_max_temperature():
-
-    sensor = concrete_model.sensors.MaxTemperatureSensor()
+@pytest.mark.parametrize("sensor_input", [(concrete_model.sensors.TemperatureSensor((0.25, 0.25)),23.847730968641713),
+                                    (concrete_model.sensors.MaxTemperatureSensor(),31.90459255375174),
+                                    (concrete_model.sensors.DOHSensor((0.25, 0.25)),0.16581303886083476),
+                                    (concrete_model.sensors.DisplacementSensor((0.25, 0.25)),-0.0002136038620005609),
+                                    ])
+def test_sensor(sensor_input):
+        
+    sensor = sensor_input[0]
+    result = sensor_input[1]
 
     data = simple_simulation(sensor)
     
-    assert float(data) == pytest.approx(31.90459255375174)
-
-
-def test_degree_of_hydration():
-
-    sensor = concrete_model.sensors.DOHSensor((0.25, 0.25))
-
-    data = simple_simulation(sensor)
-    
-    assert float(data) == pytest.approx(0.16581303886083476)
-
-
-def test_displacement():
-
-    sensor = concrete_model.sensors.DisplacementSensor((0.25, 0.25))
-
-    data = simple_simulation(sensor)
-    
-    assert float(data) == pytest.approx(-0.0002136038620005609)
+    assert float(data) == pytest.approx(result)

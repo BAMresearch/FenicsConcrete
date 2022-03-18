@@ -105,44 +105,16 @@ def compare_pv_files(ref_file, test_file):
             assert ref_list ==  pytest.approx(test_list)
 
 
-def test_pv_2D_degr1():
-    file_name = '2D_degr1'
+
+@pytest.mark.parametrize("dim", [2, 3])
+@pytest.mark.parametrize("degree", [1,2])
+def test_pv_output(dim,degree):
+    file_name = str(dim) + 'D_degr' + str(degree)
     parameters = concrete_model.Parameters()  # using the current default values
-    parameters['dim'] = 2
-    parameters['degree'] = 1  # default boundary setting
+    parameters['dim'] = dim
+    parameters['degree'] = degree  # default boundary setting
 
     simple_simulation(parameters, file_name)
 
     compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
-
-
-def test_pv_2D_degr2():
-    file_name = '2D_degr2'
-    parameters = concrete_model.Parameters()  # using the current default values
-    parameters['dim'] = 2
-    parameters['degree'] = 2  # default boundary setting
-    simple_simulation(parameters, file_name)
-
-    compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
-
-
-def test_pv_3D_degr1():
-    file_name = '3D_degr1'
-    parameters = concrete_model.Parameters()  # using the current default values
-    parameters['dim'] = 3
-    parameters['degree'] = 1  # default boundary setting
-    simple_simulation(parameters, file_name)
-
-    compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
-
-
-def test_pv_3D_degr2():
-    file_name = '3D_degr2'
-    parameters = concrete_model.Parameters()  # using the current default values
-    parameters['dim'] = 3
-    parameters['degree'] = 2  # default boundary setting
-    simple_simulation(parameters, file_name)
-        
-    compare_pv_files('ref_'+file_name+'.xdmf','test_'+file_name+'.xdmf')
-
-
+    
