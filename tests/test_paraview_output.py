@@ -6,6 +6,7 @@ import pytest
 
 import xml.etree.ElementTree as ET
 
+import os
 
 def simple_simulation(new_parameters, name):
 
@@ -55,8 +56,8 @@ def simple_simulation(new_parameters, name):
     parameters = parameters + new_parameters
 
     experiment = concrete_model.get_experiment('ConcreteCube', parameters)
-    
-    file_path = 'tests/'
+
+    file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
     problem = concrete_model.ConcreteThermoMechanical(experiment, parameters, pv_name=file_path+'test_'+name)
 
 
@@ -82,8 +83,7 @@ def simple_simulation(new_parameters, name):
 
 
 def compare_pv_files(ref_file, test_file):
-    file_path = 'tests/'
-    
+    file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
     
     #   better compare the files...
     root_ref = ET.parse(file_path+ref_file).getroot()
