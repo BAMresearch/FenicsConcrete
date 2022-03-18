@@ -2,7 +2,6 @@ import numpy as np
 
 import concrete_model
 
-import unittest
 
 # import warnings
 # from ffc.quadrature.deprecation \
