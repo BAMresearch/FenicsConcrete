@@ -22,20 +22,8 @@ jobs:
         auto-update-conda: true  
         environment-file: environment.yml
     
-    - name: Run sensor test
+    - name: Run tests
       shell: bash -l {0}
       run: |
-        export PYTHONPATH=$PYTHONPATH:../
-        python tests/test_sensors.py
-        
-    - name: Run pv test
-      shell: bash -l {0}
-      run: |
-        export PYTHONPATH=$PYTHONPATH:../
-        python tests/test_paraview_output.py
-        
-    - name: Run experimental setup test
-      shell: bash -l {0}
-      run: |
-        export PYTHONPATH=$PYTHONPATH:../
-        python tests/test_experimental_setup.py
+        export PYTHONPATH=$PYTHONPATH:concrete_module
+        pytest

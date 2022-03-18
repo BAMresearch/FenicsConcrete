@@ -80,10 +80,14 @@ def simple_simulation(new_parameters, name):
 
 class TestParaview(unittest.TestCase):
 
+    
+
     def compare_pv_files(self, ref_file, test_file):
+        file_path = 'tests/'
+    
         #   better compare the files...
-        root_ref = ET.parse(ref_file).getroot()
-        test_ref = ET.parse(test_file).getroot()
+        root_ref = ET.parse(file_path+ref_file).getroot()
+        test_ref = ET.parse(file_path+test_file).getroot()
 
         # loop over all timesteps
         for ref_step, test_step in zip(root_ref[0][0], test_ref[0][0]):
