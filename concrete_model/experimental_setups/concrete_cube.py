@@ -38,28 +38,6 @@ class ConcreteCubeExperiment(Experiment):
         # self.p['T_bc3'] = 10 # temperature boundary value 3
 
     def create_temp_bcs(self, V):
-        # define surfaces, full, left, right, bottom, top, none
-        def full_boundary(x, on_boundary):
-            return on_boundary
-
-        def L_boundary(x, on_boundary):
-            return on_boundary and df.near(x[0], 0)
-
-        def R_boundary(x, on_boundary):
-            return on_boundary and df.near(x[0], 1)
-
-        def U_boundary(x, on_boundary):
-            return on_boundary and df.near(x[1], 0)
-            
-        def UL_boundary(x, on_boundary):
-            return on_boundary and df.near(x[1], 0) and x[0] <= 0.5 
-
-        def O_boundary(x, on_boundary):
-            return on_boundary and df.near(x[1], 1)
-
-        def empty_boundary(x, on_boundary):
-            return None
-
         # Temperature boundary conditions
         T_bc1 = df.Expression('t_boundary', t_boundary=self.p.T_bc1 + self.p.zero_C, degree=0)
         T_bc2 = df.Expression('t_boundary', t_boundary=self.p.T_bc2 + self.p.zero_C, degree=0)
@@ -69,12 +47,12 @@ class ConcreteCubeExperiment(Experiment):
 
         if self.p.bc_setting == 'full':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc1, full_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc1, self.boundary_full()))
         elif self.p.bc_setting == 'test-setup':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc1, L_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc1, UL_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc2, R_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc1, self.boundary_left()))
+            temp_bcs.append(df.DirichletBC(V, T_bc1, self.boundary_bottom(0.5)))
+            temp_bcs.append(df.DirichletBC(V, T_bc2, self.boundary_right()))
         else:
             raise Exception(
                 f'parameter[\'bc_setting\'] = {self.bc_setting} is not implemented as temperature boundary.')
@@ -82,31 +60,12 @@ class ConcreteCubeExperiment(Experiment):
         return temp_bcs
 
     def create_displ_bcs(self, V):
-        # define surfaces, full, left, right, bottom, top, none
-        def full_boundary(x, on_boundary):
-            return on_boundary
-
-        def L_boundary(x, on_boundary):
-            return on_boundary and df.near(x[0], 0)
-
-        def R_boundary(x, on_boundary):
-            return on_boundary and df.near(x[0], 1)
-
-        def U_boundary(x, on_boundary):
-            return on_boundary and df.near(x[1], 0)
-
-        def O_boundary(x, on_boundary):
-            return on_boundary and df.near(x[1], 1)
-
-        def empty_boundary(x, on_boundary):
-            return None
-
         # define displacement boundary
         displ_bcs = []
 
         if self.p.dim == 2:
-            displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), U_boundary))
+            displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), self.boundary_bottom()))
         elif self.p.dim == 3:
-            displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0, 0)), U_boundary))
+            displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0, 0)),  self.boundary_bottom()))
 
         return displ_bcs

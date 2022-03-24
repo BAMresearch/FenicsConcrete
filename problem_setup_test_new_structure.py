@@ -9,8 +9,8 @@ start = timer.time()
 
 parameters = concrete_model.Parameters() # using the current default values
 # boundary values...
-parameters['dim'] = 2 # inital concrete temperature
-parameters['mesh_density'] = 10  # inital concrete temperature
+parameters['dim'] = 3 # inital concrete temperature
+parameters['mesh_density'] = 5  # inital concrete temperature
 #parameters['mesh_setting'] = 'left/right'  # inital concrete temperature
 parameters['degree'] = 2 # inital concrete temperature
 parameters['bc_setting'] = 'test-setup'  # default boundary setting
@@ -18,16 +18,16 @@ parameters['T_0'] = 10  # inital concrete temperature
 parameters['T_bc1'] = 20  # temperature boundary value 1
 parameters['T_bc2'] = 30  # temperature boundary value 2
 
-experiment = concrete_model.get_experiment('ConcreteCube',parameters)
+experiment = concrete_model.ConcreteCubeExperiment(parameters)
 problem = concrete_model.ConcreteThermoMechanical(experiment,parameters)
 
 # testing
-dohhom_sensor = concrete_model.sensors.MinDOHSensor()
-u_sensor = concrete_model.sensors.DisplacementSensor((0.5,0.5))
-doh_sensor = concrete_model.sensors.DOHSensor((0.5,0.5))
-problem.add_sensor(dohhom_sensor)
-problem.add_sensor(u_sensor)
-problem.add_sensor(doh_sensor)
+# dohhom_sensor = concrete_model.sensors.MinDOHSensor()
+# u_sensor = concrete_model.sensors.DisplacementSensor((0.5,0.5))
+# doh_sensor = concrete_model.sensors.DOHSensor((0.5,0.5))
+# problem.add_sensor(dohhom_sensor)
+# problem.add_sensor(u_sensor)
+# problem.add_sensor(doh_sensor)
 
 
 
@@ -62,5 +62,5 @@ while t <= time: # time
 end = timer.time()
 print('duration:',end-start)
 
-for sensor in problem.sensors:
-    print(sensor.data)
+# for sensor in problem.sensors:
+#     print(sensor.data)

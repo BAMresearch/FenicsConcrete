@@ -34,16 +34,12 @@ class MinimalCubeExperiment(Experiment):
         return temp_bcs
 
     def create_displ_bcs(self, V):
-        # define surfaces, full, left, right, bottom, top, none
-        def full_boundary(x, on_boundary):
-            return on_boundary
-
         # define displacement boundary
         displ_bcs = []
 
         if self.p.dim == 2:
-            displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), full_boundary))
+            displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), self.boundary_full()))
         elif self.p.dim == 3:
-            displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0, 0)), full_boundary))
+            displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0, 0)), self.boundary_full()))
 
         return displ_bcs

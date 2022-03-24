@@ -38,19 +38,6 @@ class ConcreteBeamExperiment(Experiment):
 
 
     def create_temp_bcs(self,V):
-        # define surfaces, full, left, right, bottom, top, none
-        def full_boundary(x, on_boundary):
-            return on_boundary
-        def L_boundary(x, on_boundary):
-            return on_boundary and df.near(x[0], 0)
-        def R_boundary(x, on_boundary):
-            return on_boundary and df.near(x[0],  self.p.l)
-        def U_boundary(x, on_boundary):
-            return on_boundary and df.near(x[1], 0)
-        def O_boundary(x, on_boundary):
-            return on_boundary and df.near(x[1],  self.p.h)
-        def empty_boundary(x, on_boundary):
-            return None
 
         # Temperature boundary conditions
         T_bc1 = df.Expression('t_boundary', t_boundary=self.p.T_bc1+self.p.zero_C, degree=0)
@@ -61,11 +48,11 @@ class ConcreteBeamExperiment(Experiment):
 
         if self.p.bc_setting == 'full':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc1, full_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc1, self.boundary_full()))
         elif self.p.bc_setting == 'left-right':
             # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc2, L_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc3, R_boundary))
+            temp_bcs.append(df.DirichletBC(V, T_bc2, self.boundary_left()))
+            temp_bcs.append(df.DirichletBC(V, T_bc3, self.boundary_right()))
         else:
             raise Exception(f'parameter[\'bc_setting\'] = {self.bc_setting} is not implemented as temperature boundary.')
 
@@ -79,19 +66,10 @@ class ConcreteBeamExperiment(Experiment):
         def right_support(x, on_boundary):
             return df.near(x[0], self.p.l) and df.near(x[1], 0)
 
-        def L_boundary(x, on_boundary):
-            return on_boundary and df.near(x[0], 0)
-        def R_boundary(x, on_boundary):
-            return on_boundary and df.near(x[0], self.p.l)
-
-
         # define displacement boundary
         displ_bcs = []
         displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), left_support, method='pointwise'))
         displ_bcs.append(df.DirichletBC(V.sub(1), df.Constant(0), right_support, method='pointwise'))
-
-        #displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), L_boundary))
-        #displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), R_boundary))
 
         return displ_bcs
         
