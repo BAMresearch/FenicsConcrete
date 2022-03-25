@@ -1,6 +1,6 @@
 # This workflow will install Python dependencies, run tests with concrete model
 
-name: Tests for concrete model
+name: Tests for the concrete model
 
 on: [push]
 
