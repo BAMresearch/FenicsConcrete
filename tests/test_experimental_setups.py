@@ -37,7 +37,9 @@ def simple_simulation(parameters,experiment):
 
 @pytest.mark.parametrize("dim", [2, 3])
 @pytest.mark.parametrize("get_experiment", [concrete_model.ConcreteCubeExperiment,
-                                            concrete_model.MinimalCubeExperiment
+                                            concrete_model.MinimalCubeExperiment,
+                                            concrete_model.ConcreteColumnExperiment,
+                                            concrete_model.ConcreteBeamExperiment,
                                             ])
 def test_experiemental_setup(dim, get_experiment):
 
@@ -50,17 +52,4 @@ def test_experiemental_setup(dim, get_experiment):
     experiment = get_experiment(parameters)
 
     simple_simulation(parameters, experiment)
-
-
-
-def test_concrete_beam_2D():
-     parameters = concrete_model.Parameters()  # using the current default values
-
-     parameters['dim'] = 2
-     parameters['mesh_density'] = 2
-     parameters['log_level'] = 'WARNING'
-
-     experiment = concrete_model.ConcreteBeamExperiment(parameters)
-
-     simple_simulation(parameters, experiment)
 

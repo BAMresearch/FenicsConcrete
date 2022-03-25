@@ -13,28 +13,28 @@ class ConcreteBeamExperiment(Experiment):
         p['T_bc1'] = 30  # temperature boundary value 1
         p['T_bc2'] = 50  # temperature boundary value 2
         p['T_bc3'] = 20  # temperature boundary value 3
-        p['l'] = 5 # m length
-        p['h'] = 1 # height
+        p['length'] = 5 # m length
+        p['height'] = 1 # height
+        p['width'] = 0.8 # width
+        p['mesh_density'] = 4  # default boundary setting
         p['bc_setting'] = 'full' # default boundary setting
         p = p + parameters
         super().__init__(p)
 
-    def setup(self,bc = 'full', dim = 2):
-        self.bc = bc # different boundary settings
+    def setup(self):
         # elements per spacial direction
-        n = 20
-        # TODO 3D beam!?!
-        if dim == 2:
-            self.mesh = df.RectangleMesh(df.Point(0., 0.), df.Point(self.p.l, self.p.h) \
-                                     , int(n * self.p.l), int(n * self.p.h), diagonal='right')
-        else:
-            print(f'wrong dimension {dim} for problem setup')
-            exit()
 
-        # self.p['T_0'] = 20 # inital concrete temperature
-        # self.p['T_bc1'] = 10 # temperature boundary value 1
-        # self.p['T_bc2'] = 50 # temperature boundary value 2
-        # self.p['T_bc3'] = 10 # temperature boundary value 3
+        if self.p.dim == 2:
+             self.mesh = df.RectangleMesh(df.Point(0., 0.), df.Point(self.p.length, self.p.height),
+                                          int(self.p.mesh_density * self.p.length),
+                                          int(self.p.mesh_density * self.p.height), diagonal='right')
+        elif self.p.dim == 3:
+            self.mesh = df.BoxMesh(df.Point(0, 0, 0), df.Point(self.p.length, self.p.width, self.p.height),
+                                   int(self.p.length * self.p.mesh_density),
+                                   int(self.p.width * self.p.mesh_density),
+                                   int(self.p.height * self.p.mesh_density))
+        else:
+            raise Exception(f'wrong dimension {self.p.dim} for problem setup')
 
 
     def create_temp_bcs(self,V):
@@ -54,22 +54,29 @@ class ConcreteBeamExperiment(Experiment):
             temp_bcs.append(df.DirichletBC(V, T_bc2, self.boundary_left()))
             temp_bcs.append(df.DirichletBC(V, T_bc3, self.boundary_right()))
         else:
-            raise Exception(f'parameter[\'bc_setting\'] = {self.bc_setting} is not implemented as temperature boundary.')
+            raise Exception(f'parameter[\'bc_setting\'] = {self.p.bc_setting} is not implemented as temperature boundary.')
 
         return temp_bcs
 
 
     def create_displ_bcs(self,V):
+        if self.p.dim == 2:
+            dir_id = 1
+            fixed_bc = df.Constant((0, 0))
+        elif self.p.dim == 3:
+            dir_id = 2
+            fixed_bc = df.Constant((0, 0, 0))
+
         # define surfaces, full, left, right, bottom, top, none
         def left_support(x, on_boundary):
-            return df.near(x[0], 0) and df.near(x[1], 0)
+            return df.near(x[0], 0) and df.near(x[dir_id], 0)
         def right_support(x, on_boundary):
-            return df.near(x[0], self.p.l) and df.near(x[1], 0)
+            return df.near(x[0], self.p.l) and df.near(x[dir_id], 0)
 
         # define displacement boundary
         displ_bcs = []
-        displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0)), left_support, method='pointwise'))
-        displ_bcs.append(df.DirichletBC(V.sub(1), df.Constant(0), right_support, method='pointwise'))
+        displ_bcs.append(df.DirichletBC(V, fixed_bc, left_support, method='pointwise'))
+        displ_bcs.append(df.DirichletBC(V.sub(dir_id), df.Constant(0), right_support, method='pointwise'))
 
         return displ_bcs
         

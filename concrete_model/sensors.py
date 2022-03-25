@@ -1,6 +1,35 @@
 import dolfin as df
 import numpy as np
 
+
+class Sensors(dict):
+    """
+    Dict that also allows to access the parameter
+        p["parameter"]
+    via the matching attribute
+        p.parameter
+    to make access shorter
+    """
+    # TESTING a sensor dictionary
+    def __getattr__(self, key):
+        return self[key]
+
+    def __setattr__(self, key, value):
+        assert key in self
+        self[key] = value
+
+    def __setitem__(self, initial_key, value):
+        # check if key exisits, if so, add a number
+        i = 2
+        key = initial_key
+        if key in self:
+            while key in self:
+                key = initial_key + str(i)
+                i += 1
+
+        super().__setitem__(key, value)
+
+
 # sensor template
 class Sensor:
     def measure(self, u):
@@ -10,6 +39,9 @@ class Sensor:
     def name(self):
         return self.__class__.__name__
 
+    def data_max(self, value):
+        if value > self.max:
+            self.max = value
 
 class DisplacementSensor(Sensor):
     def __init__(self, where):
@@ -34,12 +66,14 @@ class TemperatureSensor(Sensor):
 
 class MaxTemperatureSensor(Sensor):
     def __init__(self):
-        self.data = [[0,0]]
+        self.data = [0]
+        self.time = [0]
+        self.max = 0
 
     def measure(self, problem, t=1.0):
         max_T = np.amax(problem.temperature.vector().get_local()) - problem.p.zero_C
-        if max_T > self.data[0][1]:
-    	    self.data[0] = [t,max_T]
+        self.data.append(max_T)
+        self.data_max(max_T)
 
 
 class DOHSensor(Sensor):
@@ -63,7 +97,20 @@ class MinDOHSensor(Sensor):
         # get min DOH
         min_DOH = np.amin(problem.q_degree_of_hydration.vector().get_local())
         self.data.append([t,min_DOH])
-        
+
+
+
+class MaxYieldSensor(Sensor):
+    def __init__(self):
+        self.data = [0]
+        self.time = [0]
+        self.max = 0
+
+    def measure(self, problem, t=1.0):
+        max_yield = np.amax(problem.q_yield.vector().get_local())
+        self.data.append(max_yield)
+        self.time.append(t)
+        self.data_max(max_yield)
         
 # TODO: add more sensor for other fields
 

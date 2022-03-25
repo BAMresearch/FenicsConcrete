@@ -3,6 +3,7 @@ import numpy as np
 import scipy.optimize
 
 from concrete_model.helpers import Parameters
+from concrete_model.sensors import Sensors
 from concrete_model.helpers import set_q
 from concrete_model.helpers import LocalProjector
 from concrete_model import experimental_setups
@@ -72,6 +73,11 @@ class MaterialProblem():
 
 
         self.sensors = []  # list to hold attached sensors
+
+
+        self.new_sensors =  Sensors()  # list to hold attached sensors
+
+
         self.pv_name = pv_name
 
         #setup fields for sensor output, can be defined in model
@@ -92,7 +98,13 @@ class MaterialProblem():
         raise NotImplementedError()
 
     def add_sensor(self, sensor):
+
+        print(sensor.name)
+        self.new_sensors[sensor.name] = sensor
         self.sensors.append(sensor)
+
+
+
 
 
 # full concrete model, including hydration-temperate and mechanics, including calls to solve etc.
@@ -201,6 +213,7 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.temperature = self.temperature_problem.T
         self.degree_of_hydration = df.project(self.temperature_problem.q_alpha, self.temperature_problem.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
         self.q_degree_of_hydration = self.temperature_problem.q_alpha
+        self.q_yield = self.mechanics_problem.q_yield
 
         # get sensor data
         for sensor in self.sensors:
@@ -599,7 +612,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
             self.q_E = df.Function(q_V, name="youngs modulus")
             self.q_fc = df.Function(q_V, name="compressive strength")
             self.q_ft = df.Function(q_V, name="tensile strength")
-            self.q_yield = df.Function(q_V, name="tensile strength")
+            self.q_yield = df.Function(q_V, name="yield criterion")
             self.q_alpha = df.Function(q_V, name="degree of hydration")
 
             self.q_sigma = df.Function(q_VT, name="stress")
