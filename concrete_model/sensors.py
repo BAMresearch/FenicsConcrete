@@ -43,14 +43,17 @@ class Sensor:
         if value > self.max:
             self.max = value
 
+
 class DisplacementSensor(Sensor):
     def __init__(self, where):
         self.where = where
         self.data = []
+        self.time = []
 
     def measure(self, problem, t=1.0):
         # get displacements
-        self.data.append(np.concatenate(([t],problem.displacement(self.where))))
+        self.data.append(problem.displacement(self.where))
+        self.time.append(t)
 
 
 class TemperatureSensor(Sensor):
@@ -58,17 +61,19 @@ class TemperatureSensor(Sensor):
     def __init__(self, where):
         self.where = where
         self.data = []
+        self.time = []
 
     def measure(self, problem, t=1.0):
         T = problem.temperature(self.where) - problem.p.zero_C
-        self.data.append([t,T])
+        self.data.append(T)
+        self.time.append(t)
 
 
 class MaxTemperatureSensor(Sensor):
     def __init__(self):
-        self.data = [0]
-        self.time = [0]
-        self.max = 0
+        self.data = [0.0]
+        self.time = [0.0]
+        self.max = 0.0
 
     def measure(self, problem, t=1.0):
         max_T = np.amax(problem.temperature.vector().get_local()) - problem.p.zero_C
@@ -80,12 +85,14 @@ class DOHSensor(Sensor):
     def __init__(self, where):
         self.where = where
         self.data = []
+        self.time = []
 
     def measure(self, problem, t=1.0):
         # get DOH
         # TODO: problem with projected field onto linear mesh!?!
         alpha = problem.degree_of_hydration(self.where)
-        self.data.append([t,alpha])
+        self.data.append(alpha)
+        self.time.append(t)
 
 
 class MinDOHSensor(Sensor):
@@ -96,15 +103,15 @@ class MinDOHSensor(Sensor):
     def measure(self, problem, t=1.0):
         # get min DOH
         min_DOH = np.amin(problem.q_degree_of_hydration.vector().get_local())
-        self.data.append([t,min_DOH])
-
+        self.data.append(min_DOH)
+        self.time.append(t)
 
 
 class MaxYieldSensor(Sensor):
     def __init__(self):
-        self.data = [0]
-        self.time = [0]
-        self.max = 0
+        self.data = [0.0]
+        self.time = [0.0]
+        self.max = 0.0
 
     def measure(self, problem, t=1.0):
         max_yield = np.amax(problem.q_yield.vector().get_local())

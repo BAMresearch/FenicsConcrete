@@ -1,3 +1,5 @@
+import numpy as np
+
 import concrete_model
 
 import pytest
@@ -77,22 +79,26 @@ def simple_simulation(sensor):
         t += dt
 
     # get last measure value
-    data = problem.sensors[0].data[-1][1]
+    data = problem.sensors[sensor.name].data[-1]
 
     return data
 
 
-
-@pytest.mark.parametrize("sensor_input", [(concrete_model.sensors.TemperatureSensor((0.25, 0.25)),23.847730968641713),
-                                    (concrete_model.sensors.MaxTemperatureSensor(),31.90459255375174),
-                                    (concrete_model.sensors.DOHSensor((0.25, 0.25)),0.16581303886083476),
-                                    (concrete_model.sensors.DisplacementSensor((0.25, 0.25)),-0.0002136038620005609),
+@pytest.mark.parametrize("sensor_input", [(concrete_model.sensors.TemperatureSensor((0.25, 0.25)),23.84773),
+                                    (concrete_model.sensors.MaxTemperatureSensor(),31.904592),
+                                    (concrete_model.sensors.DOHSensor((0.25, 0.25)),0.165813),
+                                    (concrete_model.sensors.DisplacementSensor((0.25, 0.25)),[-0.00021360386200055683 , -0.0009104520121141141]),
+                                    (concrete_model.sensors.MaxYieldSensor(),-52685.14211)
                                     ])
 def test_sensor(sensor_input):
         
     sensor = sensor_input[0]
     result = sensor_input[1]
+    if isinstance(result, float):
+        result = np.float64(result)
+    else:
+        result = np.asarray(result)
 
     data = simple_simulation(sensor)
-    
-    assert float(data) == pytest.approx(result)
+
+    assert data == pytest.approx(result, 1e-06)

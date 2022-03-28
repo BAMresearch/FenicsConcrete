@@ -71,11 +71,7 @@ class MaterialProblem():
             raise Exception(f'unknown log level {level}')
 
 
-
-        self.sensors = []  # list to hold attached sensors
-
-
-        self.new_sensors =  Sensors()  # list to hold attached sensors
+        self.sensors =  Sensors()  # list to hold attached sensors
 
 
         self.pv_name = pv_name
@@ -99,9 +95,7 @@ class MaterialProblem():
 
     def add_sensor(self, sensor):
 
-        print(sensor.name)
-        self.new_sensors[sensor.name] = sensor
-        self.sensors.append(sensor)
+        self.sensors[sensor.name] = sensor
 
 
 
@@ -216,9 +210,9 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.q_yield = self.mechanics_problem.q_yield
 
         # get sensor data
-        for sensor in self.sensors:
+        for sensor_name in self.sensors:
             # go through all sensors and measure
-            sensor.measure(self, t)
+            self.sensors[sensor_name].measure(self, t)
 
     def pv_plot(self, t=0):
         # calls paraview output for both problems
