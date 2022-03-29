@@ -71,10 +71,11 @@ class ConcreteBeamExperiment(Experiment):
         def left_support(x, on_boundary):
             return df.near(x[0], 0) and df.near(x[dir_id], 0)
         def right_support(x, on_boundary):
-            return df.near(x[0], self.p.l) and df.near(x[dir_id], 0)
+            return df.near(x[0], self.p.length) and df.near(x[dir_id], 0)
 
         # define displacement boundary
         displ_bcs = []
+
         displ_bcs.append(df.DirichletBC(V, fixed_bc, left_support, method='pointwise'))
         displ_bcs.append(df.DirichletBC(V.sub(dir_id), df.Constant(0), right_support, method='pointwise'))
 

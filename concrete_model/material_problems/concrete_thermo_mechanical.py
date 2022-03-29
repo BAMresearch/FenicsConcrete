@@ -113,8 +113,9 @@ class ConcreteThermoMechanical(MaterialProblem):
         try:
             self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
         except Exception as e:
-            print(f'Mechanics crashed at time: {t}')
-            print(e)
+            print('AAAAAAAAAAHHHHHHHHHH!!!!!')
+            warnings.warn(f'Mechanics crashed at time: {t}, Error message: {e}')
+            
 
         # history update
         self.temperature_problem.update_history()

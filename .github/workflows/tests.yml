@@ -26,4 +26,4 @@ jobs:
       shell: bash -l {0}
       run: |
         export PYTHONPATH=$PYTHONPATH:concrete_module
-        pytest
+        pytest -s -W error::UserWarning
