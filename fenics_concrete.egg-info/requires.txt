@@ -1,0 +1,5 @@
+sympy
+fenics<2020
+numpy<2
+scipy.optimize<2
+loguru<1

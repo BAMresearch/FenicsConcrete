@@ -1,0 +1,52 @@
+{% set name = "fenicsconcrete" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  git_url: https://github.com/BAMresearch/FenicsConcrete
+  git_tag: conda-recipe
+
+build:
+  number: 0
+  skip: true
+  script: {{ PYTHON }} -m pip install . -vv
+
+requirements:
+  build:
+    - {{ compiler('c') }}
+    
+  host:
+    - python
+    - pip
+    
+  run:
+    - python
+    - fenics=2019.1.0
+    - scipy
+    - numpy
+
+test:
+  imports:
+  #  - simplejson
+  #  - simplejson.tests
+  # For python packages, it is useful to run pip check. However, sometimes the
+  # metadata used by pip is out of date. Thus this section is optional if it is
+  # failing.
+  requires:
+  #  - pip
+  commands:
+  #  - pip check
+
+about:
+  home: https://github.com/BAMresearch/FenicsConcrete
+  summary: 'A Python package for a FEM concrete model'
+  license: MIT
+  license_file: LICENSE
+
+
+extra:
+  recipe-maintainers:
+    - etamsen

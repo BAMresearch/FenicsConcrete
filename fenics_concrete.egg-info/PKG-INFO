@@ -1,0 +1,25 @@
+Metadata-Version: 2.1
+Name: fenics-concrete
+Version: 2.1.10
+Summary: ('A Python package for a FEM concrete model',)
+Home-page: https://github.com/BAMresearch/FenicsConcrete
+Author: Erik Tamsen
+Author-email: erik.tamsen@bam.de
+License: MIT
+Platform: UNKNOWN
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.6
+Classifier: Programming Language :: Python :: Implementation :: CPython
+Classifier: Programming Language :: Python :: Implementation :: PyPy
+Requires-Python: >=3.0.0
+Description-Content-Type: text/markdown
+
+
+# FenicsConcrete
+FE model representing the hardening of concrete
+
+more details will be added
+
+
