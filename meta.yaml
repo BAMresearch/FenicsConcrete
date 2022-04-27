@@ -29,13 +29,8 @@ requirements:
 
 test:
   imports:
-   # - fenics_concrete
-  source_files:
-   # - tests
   requires:
-   # - pytest
   commands:
-   # - pytest tests
 
 about:
   home: https://github.com/BAMresearch/FenicsConcrete
