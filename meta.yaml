@@ -1,5 +1,5 @@
-{% set name = "fenicsconcrete" %}
-{% set version = "0.1.1" %}
+{% set name = "fenics_concrete" %}
+{% set version = "0.1.0" %}
 
 package:
   name: {{ name|lower }}
@@ -9,8 +9,8 @@ source:
   git_url: https://github.com/BAMresearch/FenicsConcrete
 
 build:
-  number: 1
-  skip: true   # [py2k]
+  number: 0
+  skip: true   # dont know why but it works...
   script: {{ PYTHON }} -m pip install . -vv
 
 requirements:
@@ -29,14 +29,19 @@ requirements:
 
 test:
   imports:
+    - fenics_concrete
+  source_files:
+    - tests
   requires:
+    - pytest
   commands:
+    - pytest tests
 
 about:
   home: https://github.com/BAMresearch/FenicsConcrete
-  summary: 'A Python package for a FEM concrete model'
+  summary: 'A Python package for a FEM concrete model based on fenics'
   license: MIT
-
+  license_file: LICENSE
 
 extra:
   recipe-maintainers:

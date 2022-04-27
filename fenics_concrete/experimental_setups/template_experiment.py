@@ -2,7 +2,7 @@ import dolfin as df
 import numpy as np
 
 
-from concrete_model.helpers import Parameters
+from fenics_concrete.helpers import Parameters
 
 class Experiment:
     def __init__(self, parameters = None):

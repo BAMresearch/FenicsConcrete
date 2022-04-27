@@ -1,6 +1,6 @@
 
-from concrete_model.experimental_setups.template_experiment import Experiment
-from concrete_model.helpers import Parameters
+from fenics_concrete.experimental_setups.template_experiment import Experiment
+from fenics_concrete.helpers import Parameters
 import dolfin as df
 
 class ConcreteCubeExperiment(Experiment):
