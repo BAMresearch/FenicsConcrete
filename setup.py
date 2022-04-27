@@ -17,7 +17,7 @@ URL = 'https://github.com/BAMresearch/FenicsConcrete'
 EMAIL = 'erik.tamsen@bam.de'
 AUTHOR = 'Erik Tamsen'
 REQUIRES_PYTHON = '>=3.0.0'
-VERSION = '2.1.10'
+VERSION = '2.2.10'
 
 # What packages are required for this module to be executed?
 REQUIRED = []
@@ -60,7 +60,7 @@ setup(
     python_requires=REQUIRES_PYTHON,
     url=URL,
     #packages=['concrete_model'],
-    packages=find_packages(exclude=["tests", "*.tests", "*.tests.*", "tests.*"]),
+    packages=find_packages(),
     # If your package is a single module, use this instead of 'packages':
     # py_modules=['mypackage'],
 

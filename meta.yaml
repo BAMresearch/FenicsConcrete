@@ -9,7 +9,7 @@ source:
   git_url: https://github.com/BAMresearch/FenicsConcrete
 
 build:
-  number: 0
+  number: 1
   skip: true   # [py2k]
   script: {{ PYTHON }} -m pip install . -vv
 
@@ -26,6 +26,16 @@ requirements:
     - scipy>=1
     - numpy>=1
     - loguru<1
+
+test:
+  imports:
+    - fenics_concrete
+  source_files:
+    - tests
+  requires:
+    - pytest
+  commands:
+    - pytest tests
 
 test:
   imports:
