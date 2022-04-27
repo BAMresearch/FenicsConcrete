@@ -1,6 +1,6 @@
 import numpy as np
 
-import concrete_model
+import fenics_concrete
 
 import pytest
 
@@ -10,7 +10,7 @@ import os
 
 def simple_simulation(new_parameters, name):
 
-    parameters = concrete_model.Parameters()  # using the current default values
+    parameters = fenics_concrete.Parameters()  # using the current default values
     # general
     parameters['log_level'] = 'WARNING'
     # mesh
@@ -55,10 +55,10 @@ def simple_simulation(new_parameters, name):
 
     parameters = parameters + new_parameters
 
-    experiment = concrete_model.ConcreteCubeExperiment(parameters)
+    experiment = fenics_concrete.ConcreteCubeExperiment(parameters)
 
     file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
-    problem = concrete_model.ConcreteThermoMechanical(experiment, parameters, pv_name=file_path+'test_'+name)
+    problem = fenics_concrete.ConcreteThermoMechanical(experiment, parameters, pv_name=file_path+'test_'+name)
 
 
     # data for time stepping

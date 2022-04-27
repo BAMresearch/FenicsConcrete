@@ -1,6 +1,6 @@
 import numpy as np
 
-import concrete_model
+import fenics_concrete
 
 import pytest
 
@@ -84,11 +84,11 @@ def simple_simulation(sensor):
     return data
 
 
-@pytest.mark.parametrize("sensor_input", [(concrete_model.sensors.TemperatureSensor((0.25, 0.25)),23.84773),
-                                    (concrete_model.sensors.MaxTemperatureSensor(),31.904592),
-                                    (concrete_model.sensors.DOHSensor((0.25, 0.25)),0.165813),
-                                    (concrete_model.sensors.DisplacementSensor((0.25, 0.25)),[-0.00021360386200055683 , -0.0009104520121141141]),
-                                    (concrete_model.sensors.MaxYieldSensor(),-52685.14211)
+@pytest.mark.parametrize("sensor_input", [(fenics_concrete.sensors.TemperatureSensor((0.25, 0.25)),23.84773),
+                                    (fenics_concrete.sensors.MaxTemperatureSensor(),31.904592),
+                                    (fenics_concrete.sensors.DOHSensor((0.25, 0.25)),0.165813),
+                                    (fenics_concrete.sensors.DisplacementSensor((0.25, 0.25)),[-0.00021360386200055683 , -0.0009104520121141141]),
+                                    (fenics_concrete.sensors.MaxYieldSensor(),-52685.14211)
                                     ])
 def test_sensor(sensor_input):
         

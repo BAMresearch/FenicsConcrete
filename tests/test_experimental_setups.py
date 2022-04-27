@@ -1,6 +1,6 @@
 import numpy as np
 
-import concrete_model
+import fenics_concrete
 
 import pytest
 
@@ -11,7 +11,7 @@ import pytest
 
 def simple_simulation(parameters,experiment):
 
-    problem = concrete_model.ConcreteThermoMechanical(experiment, parameters)
+    problem = fenics_concrete.ConcreteThermoMechanical(experiment, parameters)
 
     # data for time stepping
     dt = 1200  # 20 min step
@@ -36,14 +36,14 @@ def simple_simulation(parameters,experiment):
 
 
 @pytest.mark.parametrize("dim", [2, 3])
-@pytest.mark.parametrize("get_experiment", [concrete_model.ConcreteCubeExperiment,
-                                            concrete_model.MinimalCubeExperiment,
-                                            concrete_model.ConcreteColumnExperiment,
-                                            concrete_model.ConcreteBeamExperiment,
+@pytest.mark.parametrize("get_experiment", [fenics_concrete.ConcreteCubeExperiment,
+                                            fenics_concrete.MinimalCubeExperiment,
+                                            fenics_concrete.ConcreteColumnExperiment,
+                                            fenics_concrete.ConcreteBeamExperiment,
                                             ])
 def test_experiemental_setup(dim, get_experiment):
 
-    parameters = concrete_model.Parameters() # using the current default values
+    parameters = fenics_concrete.Parameters() # using the current default values
 
     parameters['dim'] = dim
     parameters['mesh_density'] = 2
