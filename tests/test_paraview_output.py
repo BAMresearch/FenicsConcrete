@@ -110,7 +110,7 @@ def compare_pv_files(ref_file, test_file):
 @pytest.mark.parametrize("degree", [1,2])
 def test_pv_output(dim,degree):
     file_name = str(dim) + 'D_degr' + str(degree)
-    parameters = concrete_model.Parameters()  # using the current default values
+    parameters = fenics_concrete.Parameters()  # using the current default values
     parameters['dim'] = dim
     parameters['degree'] = degree  # default boundary setting
 

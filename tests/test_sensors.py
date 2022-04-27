@@ -11,7 +11,7 @@ import pytest
 
 def simple_simulation(sensor):
 
-    parameters = concrete_model.Parameters()  # using the current default values
+    parameters = fenics_concrete.Parameters()  # using the current default values
     # general
     parameters['log_level'] = 'WARNING'
     # mesh
@@ -55,8 +55,8 @@ def simple_simulation(sensor):
     parameters['ft_inf'] = 467000
     parameters['a_ft'] = 1.0
 
-    experiment = concrete_model.ConcreteCubeExperiment(parameters)
-    problem = concrete_model.ConcreteThermoMechanical(experiment, parameters)
+    experiment = fenics_concrete.ConcreteCubeExperiment(parameters)
+    problem = fenics_concrete.ConcreteThermoMechanical(experiment, parameters)
 
     problem.add_sensor(sensor)
 

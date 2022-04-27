@@ -3,12 +3,12 @@ import numpy as np
 import scipy.optimize
 
 
-from concrete_model.material_problems.template_material import MaterialProblem
+from fenics_concrete.material_problems.template_material import MaterialProblem
 
-from concrete_model.helpers import Parameters
-from concrete_model.helpers import set_q
-from concrete_model.helpers import LocalProjector
-from concrete_model import experimental_setups
+from fenics_concrete.helpers import Parameters
+from fenics_concrete.helpers import set_q
+from fenics_concrete.helpers import LocalProjector
+from fenics_concrete import experimental_setups
 
 
 import warnings

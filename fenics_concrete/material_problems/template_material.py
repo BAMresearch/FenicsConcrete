@@ -1,7 +1,7 @@
 import dolfin as df
 
-from concrete_model.helpers import Parameters
-from concrete_model.sensors import Sensors
+from fenics_concrete.helpers import Parameters
+from fenics_concrete.sensors import Sensors
 
 from loguru import logger
 import logging
