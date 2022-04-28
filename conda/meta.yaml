@@ -27,6 +27,7 @@ requirements:
     - numpy>=1
     - loguru<1
     - pytest>=7
+    - mshr
 
 test:
   imports:

@@ -118,6 +118,27 @@ class MaxYieldSensor(Sensor):
         self.data.append(max_yield)
         self.time.append(t)
         self.data_max(max_yield)
-        
-# TODO: add more sensor for other fields
+
+
+class ReactionForceSensor(Sensor):
+    def __init__(self):
+        self.data = []
+        self.time = []
+
+    def measure(self, problem, t=1.0):
+
+        # boundary condition
+        bottom_surface = problem.experiment.boundary_bottom()
+
+        v_reac = df.Function(problem.V)
+        if problem.p.dim == 2:
+            bc_z = df.DirichletBC(problem.V.sub(1), df.Constant(1.), bottom_surface)
+        elif problem.p.dim == 3:
+            bc_z = df.DirichletBC(problem.V.sub(2), df.Constant(1.), bottom_surface)
+
+        bc_z.apply(v_reac.vector())
+        computed_force = (-df.assemble(df.action(problem.residual, v_reac)))
+
+        self.data.append(computed_force)
+        self.time.append(t)
 
