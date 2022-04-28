@@ -1,5 +1,5 @@
-{% set name = "fenics_concrete" %}
-{% set version = "0.2.0" %}
+{% set name = "fenics-concrete" %}
+{% set version = "0.1.0" %}
 
 package:
   name: {{ name|lower }}
@@ -26,16 +26,7 @@ requirements:
     - scipy>=1
     - numpy>=1
     - loguru<1
-
-test:
-  imports:
-    - fenics_concrete
-  source_files:
-    - tests
-  requires:
-    - pytest
-  commands:
-    - pytest tests
+    - pytest>=7
 
 test:
   imports:

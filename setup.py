@@ -9,7 +9,7 @@ from shutil import rmtree
 from setuptools import find_packages, setup, Command
 
 # Package meta-data.
-NAME = 'fenics_concrete'
+NAME = 'fenics-concrete'
 DESCRIPTION='A Python package for a FEM concrete model',
 #long_description=README,
 #long_description_content_type="text/markdown",
@@ -17,7 +17,7 @@ URL = 'https://github.com/BAMresearch/FenicsConcrete'
 EMAIL = 'erik.tamsen@bam.de'
 AUTHOR = 'Erik Tamsen'
 REQUIRES_PYTHON = '>=3.0.0'
-VERSION = '2.2.10'
+VERSION = '0.1.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = []
