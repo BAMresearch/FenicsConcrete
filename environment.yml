@@ -56,6 +56,7 @@ dependencies:
   - loguru=0.5.3=py39hf3d152e_3
   - lz4-c=1.9.3=h9c3ff4c_1
   - metis=5.1.0=h58526e2_1006
+  - mshr=2019.1.0=py39h9761ab4_4
   - mkl=2021.4.0=h06a4308_640
   - mkl-service=2.4.0=py39h7f8727e_0
   - mkl_fft=1.3.1=py39hd3c417c_0
