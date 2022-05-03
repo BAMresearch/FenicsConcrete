@@ -36,7 +36,7 @@ def test_force_response_2D():
     displacement = -3
     p['dim'] = 2
 
-    sensor = fenics_concrete.sensors.ReactionForceSensor()
+    sensor = fenics_concrete.sensors.ReactionForceSensorBottom()
     measured = simple_setup(p, displacement, sensor)
 
     assert measured == pytest.approx(p.E*p.radius*2*displacement/p.height)
@@ -51,7 +51,7 @@ def test_force_response_3D():
     displacement = -3
     p['dim'] = 3
 
-    sensor = fenics_concrete.sensors.ReactionForceSensor()
+    sensor = fenics_concrete.sensors.ReactionForceSensorBottom()
     measured = simple_setup(p, displacement, sensor)
 
     # due to meshing errors, only aprroximate results to be expected. within 1% is good enough

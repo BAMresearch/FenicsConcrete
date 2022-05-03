@@ -9,7 +9,7 @@ source:
   git_url: https://github.com/BAMresearch/FenicsConcrete
 
 build:
-  number: 2
+  number: 6
   skip: true   # [py2k]
   script: {{ PYTHON }} -m pip install . -vv
 
@@ -17,18 +17,18 @@ requirements:
   build:
     - git
   host:
-    - python
+    - python=3.9
     - pip
     
   run:
-    - openmpi
-    - python
-    - fenics=2019.1.0
+    - python=3.9.7=h12debd9_1
+    - fenics=2019.1.0=py39hf3d152e_21
+    - superlu_dist=6.2.0=h25dcc4a_4
     - scipy
     - numpy
     - loguru
     - pytest
-    - mshr=2019.1.0=py38h255090a_2
+    - mshr=2019.1.0=py39h9761ab4_4
 
 test:
   imports:

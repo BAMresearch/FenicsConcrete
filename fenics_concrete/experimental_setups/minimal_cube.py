@@ -1,4 +1,4 @@
-from fenics_concrete.experimental_setups.template_experiment import Experiment
+from fenics_concrete.experimental_setups.experiment import Experiment
 from fenics_concrete.helpers import Parameters
 import dolfin as df
 

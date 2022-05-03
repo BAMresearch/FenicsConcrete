@@ -3,7 +3,7 @@ import numpy as np
 import scipy.optimize
 
 
-from fenics_concrete.material_problems.template_material import MaterialProblem
+from fenics_concrete.material_problems.material_problem import MaterialProblem
 
 from fenics_concrete.helpers import Parameters
 from fenics_concrete.helpers import set_q

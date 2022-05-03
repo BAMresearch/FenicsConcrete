@@ -1,19 +1,32 @@
 import dolfin as df
 
-from fenics_concrete.material_problems.template_material import MaterialProblem
+from fenics_concrete.material_problems.material_problem import MaterialProblem
 from fenics_concrete.helpers import Parameters
 from fenics_concrete import experimental_setups
 
+# this is necessary, otherwise this warning will not stop
+# https://fenics.readthedocs.io/projects/ffc/en/latest/_modules/ffc/quadrature/deprecation.html
 import warnings
 from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
-
 df.parameters["form_compiler"]["representation"] = "quadrature"
 warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
 
-# full concrete model, including hydration-temperate and mechanics, including calls to solve etc.
 class LinearElasticity(MaterialProblem):
+    """Material definition for linear elasticity"""
+
     def __init__(self, experiment=None, parameters=None, pv_name='pv_output_linear_elasticity'):
+        """Initializes the object by calling super().__init__
+
+        Parameters
+        ----------
+            experiment : object, optional
+                When no experiment is passed, the dummy experiment "MinimalCubeExperiment" is added
+            parameters : dictionary, optional
+                Dictionary with parameters. When none is provided, default values are used
+            pv_name : string, optional
+                Name of the paraview file, if paraview output is generated
+        """
         # generate "dummy" experiment when none is passed
         if experiment is None:
             experiment = experimental_setups.MinimalCubeExperiment(parameters)
@@ -21,10 +34,9 @@ class LinearElasticity(MaterialProblem):
         super().__init__(experiment, parameters, pv_name)
 
     def setup(self):
-        # setup initial temperature material parameters
         default_p = Parameters()
-        # polynomial degree
-        default_p['degree'] = 2  # default boundary setting
+
+        default_p['degree'] = 2  # polynomial degree
 
         # parameters for mechanics problem
         default_p['E'] = None  # Young's Modulus
@@ -50,6 +62,7 @@ class LinearElasticity(MaterialProblem):
         self.V = df.VectorFunctionSpace(self.experiment.mesh, "Lagrange", self.p.degree)  # 2 for quadratic elements
 
         self.residual = None  # initialize residual
+
         # Define variational problem
         u_trial = df.TrialFunction(self.V)
         v = df.TestFunction(self.V)
@@ -69,6 +82,7 @@ class LinearElasticity(MaterialProblem):
 
         # displacement field
         self.displacement = df.Function(self.V)
+
         # TODO better names!!!!
         self.visu_space_T = df.TensorFunctionSpace(self.experiment.mesh, "Lagrange", self.p.degree)
 

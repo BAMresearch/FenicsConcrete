@@ -1,4 +1,4 @@
-from fenics_concrete.experimental_setups.template_experiment import Experiment
+from fenics_concrete.experimental_setups.experiment import Experiment
 from fenics_concrete.helpers import Parameters
 import dolfin as df
 import numpy as np
@@ -6,21 +6,32 @@ import mshr
 
 
 class ConcreteCylinderExperiment(Experiment):
-    def __init__(self, parameters=None):
-        # initialize a set of "basic parameters" (for now...)
-        p = Parameters()
-        # boundary values...
-        p['T_0'] = 20  # initial concrete temperature
-        p['T_bc1'] = 40  # temperature boundary value 1
-        p['bc_setting'] = 'full'  # default boundary setting
-        p['dim'] = 3  # default boundary setting
-        p['mesh_density'] = 4  # default boundary setting
-        p['mesh_density_min'] = 1
-        p['mesh_setting'] = 'left/right'  # default boundary setting
-        p['bc_setting'] = 'free'
+    """A cylinder mesh for a uni-axial displacement load"""
 
-        p['radius'] = 75   # length of pillar in m
-        p['height'] = 100  # width (square cross-section)
+    def __init__(self, parameters=None):
+        """ initializes the object
+
+        Standard parameters are set
+        setup function called
+
+        Parameters
+        ----------
+        parameters : dictionary, optional
+            dictionary with parameters that can override the default values
+        """
+        # initialize a set of default parameters
+        p = Parameters()
+        # boundary setting
+        p['bc_setting'] = 'free'  # boundary setting, two options available: fixed and free
+                                  # fixed: constrained at top and bottom in transversal to loading
+                                  # free: no confinement perpendicular to loading surface
+        # mesh information
+        p['dim'] = 3  # dimension of problem, 2D or 3D
+                      # 2D version of the cylinder is a rectangle with plane strain assumption
+        p['mesh_density'] = 4  # in 3D: number of faces on the side when generating a polyhedral approximation
+                               # in 2D: number of elements in each direction
+        p['radius'] = 75   # radius of cylinder to approximate in mm
+        p['height'] = 100  # height of cylinder in mm
 
         p = p + parameters
         super().__init__(p)
@@ -29,16 +40,25 @@ class ConcreteCylinderExperiment(Experiment):
         self.top_displacement = df.Constant(0.0)  # applied via fkt: apply_displ_load(...)
 
     def setup(self):
+        """Generates the mesh based on parameters
+
+        This function is called during __init__
+        """
+
         if self.p.dim == 2:
+            # build a rectangular mesh to approximate a 2D cylinder
             self.mesh = df.RectangleMesh(df.Point(0., 0.), df.Point(self.p.radius*2, self.p.height),
                                          self.p.mesh_density, self.p.mesh_density, diagonal='right')
         elif self.p.dim == 3:
-            def create_cylinder_mesh(radius,paramters):
+            # generates a 3D cylinder mesh based on radius and height
+            # to reduce approximation errors due to the linear tetrahedron mesh, the mesh radius is iteratively changed
+            # until the bottom surface area matches that of a circle with the initially defined radius
+            def create_cylinder_mesh(radius, parameters):
                 # Cylinder ( center bottom, center top, radius bottom, radius top )
-                cylinder_geometry = mshr.Cylinder(df.Point(0, 0, 0), df.Point(0, 0, paramters.height),
+                cylinder_geometry = mshr.Cylinder(df.Point(0, 0, 0), df.Point(0, 0, parameters.height),
                                                   radius, radius)
                 # mesh ( geometry , mesh density )
-                mesh = mshr.generate_mesh(cylinder_geometry, paramters.mesh_density)
+                mesh = mshr.generate_mesh(cylinder_geometry, parameters.mesh_density)
 
                 # compute bottom surface area
                 class BottomSurface(df.SubDomain):
@@ -54,7 +74,7 @@ class ConcreteCylinderExperiment(Experiment):
 
                 return bottom_area, mesh
 
-            # create a discretized cylinder mesh with the same crosssectional area as the round cylinder
+            # create a discretized cylinder mesh with the same cross-sectional area as the round cylinder
             target_area = np.pi*self.p.radius**2
             effective_radius = self.p.radius
             mesh_area = 0
@@ -63,8 +83,8 @@ class ConcreteCylinderExperiment(Experiment):
             #iteratively improve the radius of the mesh till the bottom area matches the target
             while abs(target_area - mesh_area) > target_area*area_error:
                 # generate mesh
-                self.p['mesh_radius'] = effective_radius # no required, but maybe interesting as meta data???
-                mesh_area, self.mesh = create_cylinder_mesh(effective_radius,self.p)
+                self.p['mesh_radius'] = effective_radius  # not required, but maybe interesting as metadata
+                mesh_area, self.mesh = create_cylinder_mesh(effective_radius, self.p)
                 # new guess
                 effective_radius = np.sqrt(target_area/mesh_area)*effective_radius
 
@@ -72,6 +92,19 @@ class ConcreteCylinderExperiment(Experiment):
             raise Exception(f'wrong dimension {self.p.dim} for problem setup')
 
     def create_displ_bcs(self, V):
+        """Defines the displacement boundary conditions
+
+        Parameters
+        ----------
+            V : FunctionSpace
+                Function space of the structure
+
+        Returns
+        -------
+            displ_bc : list
+                A list of DirichletBC objects, defining the boundary conditions
+        """
+
         # define displacement boundary
         displ_bcs = []
 
@@ -101,22 +134,18 @@ class ConcreteCylinderExperiment(Experiment):
             if self.p.dim == 2:
                 displ_bcs.append(df.DirichletBC(V.sub(1), self.top_displacement, self.boundary_top()))  # displacement
                 displ_bcs.append(df.DirichletBC(V.sub(1), 0.0, self.boundary_bottom()))
-                displ_bcs.append(df.DirichletBC(V.sub(0), 0.0, boundary_node_2D(df.Point(0,0)), method="pointwise"))
+                displ_bcs.append(df.DirichletBC(V.sub(0), 0.0, boundary_node_2D(df.Point(0, 0)), method="pointwise"))
 
             elif self.p.dim == 3:
                 # getting nodes at the bottom of the mesh to apply correct boundary condition to arbitrary cylinder mesh
                 mesh_points = self.mesh.coordinates()  # list of all nodal coordinates
-                mesh_points = mesh_points[mesh_points[:, 2].argsort()]  # sorting by z coordinate
-                i = 0
-                while mesh_points[i][2] == 0.0:
-                    i += 1
-                bottom_points = mesh_points[:i]
-                x_min_boundary_point = bottom_points[bottom_points[:, 0].argsort(kind='mergesort')][
-                    0]  # sorting by x coordinate
-                x_max_boundary_point = bottom_points[bottom_points[:, 0].argsort(kind='mergesort')][
-                    -1]  # sorting by x coordinate
-                y_boundary_point = bottom_points[bottom_points[:, 1].argsort(kind='mergesort')][
-                    0]  # sorting by y coordinate
+                bottom_points = mesh_points[(mesh_points[:, 2] == 0.0)]  # copying the bottom nodes, z coord = 0.0
+
+                # sorting by x coordinate
+                x_min_boundary_point = bottom_points[bottom_points[:, 0].argsort(kind='mergesort')][0]
+                x_max_boundary_point = bottom_points[bottom_points[:, 0].argsort(kind='mergesort')][-1]
+                # sorting by y coordinate
+                y_boundary_point = bottom_points[bottom_points[:, 1].argsort(kind='mergesort')][0]
 
                 displ_bcs.append(df.DirichletBC(V.sub(2), self.top_displacement, self.boundary_top()))  # displacement
                 displ_bcs.append(df.DirichletBC(V.sub(2), 0.0, self.boundary_bottom()))
@@ -132,4 +161,12 @@ class ConcreteCylinderExperiment(Experiment):
         return displ_bcs
 
     def apply_displ_load(self, top_displacement):
+        """Updates the applied displacement load
+
+        Parameters
+        ----------
+        top_displacement : float
+            Displacement of the top boundary in mm, > 0 ; tension, < 0 ; compression
+        """
+
         self.top_displacement.assign(df.Constant(top_displacement))

@@ -4,13 +4,12 @@ import numpy as np
 
 class Sensors(dict):
     """
-    Dict that also allows to access the parameter
-        p["parameter"]
-    via the matching attribute
-        p.parameter
+    Dict that also allows to access the parameter p["parameter"] via the matching attribute p.parameter
     to make access shorter
+
+    When to sensors with the same name are defined, the next one gets a number added to the name
     """
-    # TESTING a sensor dictionary
+
     def __getattr__(self, key):
         return self[key]
 
@@ -19,7 +18,7 @@ class Sensors(dict):
         self[key] = value
 
     def __setitem__(self, initial_key, value):
-        # check if key exisits, if so, add a number
+        # check if key exists, if so, add a number to the name
         i = 2
         key = initial_key
         if key in self:
@@ -32,7 +31,10 @@ class Sensors(dict):
 
 # sensor template
 class Sensor:
-    def measure(self, u):
+    """Template for a sensor object"""
+
+    def measure(self, problem, t):
+        """Needs to be implemented in child, depending on the sensor"""
         raise NotImplementedError()
 
     @property
@@ -45,49 +47,94 @@ class Sensor:
 
 
 class DisplacementSensor(Sensor):
+    """A sensor that measure displacement at a specific point"""
+
     def __init__(self, where):
+        """
+        Arguments:
+            where : Point
+                location where the value is measured
+        """
         self.where = where
         self.data = []
         self.time = []
 
     def measure(self, problem, t=1.0):
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
         # get displacements
         self.data.append(problem.displacement(self.where))
         self.time.append(t)
 
 
 class TemperatureSensor(Sensor):
-    # temperature sensor in celsius
+    """A sensor that measure temperature at a specific point in celsius"""
+
     def __init__(self, where):
+        """
+        Arguments:
+            where : Point
+                location where the value is measured
+        """
         self.where = where
         self.data = []
         self.time = []
 
     def measure(self, problem, t=1.0):
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
         T = problem.temperature(self.where) - problem.p.zero_C
         self.data.append(T)
         self.time.append(t)
 
 
 class MaxTemperatureSensor(Sensor):
+    """A sensor that measure the maximum temperature at each timestep"""
+
     def __init__(self):
         self.data = [0.0]
         self.time = [0.0]
         self.max = 0.0
 
     def measure(self, problem, t=1.0):
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
         max_T = np.amax(problem.temperature.vector().get_local()) - problem.p.zero_C
         self.data.append(max_T)
         self.data_max(max_T)
 
 
 class DOHSensor(Sensor):
+    """A sensor that measure the degree of hydration at a point"""
     def __init__(self, where):
+        """
+        Arguments:
+            where : Point
+                location where the value is measured
+        """
         self.where = where
         self.data = []
         self.time = []
 
     def measure(self, problem, t=1.0):
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
         # get DOH
         # TODO: problem with projected field onto linear mesh!?!
         alpha = problem.degree_of_hydration(self.where)
@@ -96,11 +143,18 @@ class DOHSensor(Sensor):
 
 
 class MinDOHSensor(Sensor):
+    """A sensor that measure the minimum degree of hydration at each timestep"""
     def __init__(self):
         self.data = []
         self.time = []
 
     def measure(self, problem, t=1.0):
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
         # get min DOH
         min_DOH = np.amin(problem.q_degree_of_hydration.vector().get_local())
         self.data.append(min_DOH)
@@ -108,25 +162,42 @@ class MinDOHSensor(Sensor):
 
 
 class MaxYieldSensor(Sensor):
+    """A sensor that measure the maximum value of the yield function
+
+    A max value > 0 indicates that at some place the stress exceeds the limits"""
     def __init__(self):
         self.data = [0.0]
         self.time = [0.0]
         self.max = 0.0
 
     def measure(self, problem, t=1.0):
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
         max_yield = np.amax(problem.q_yield.vector().get_local())
         self.data.append(max_yield)
         self.time.append(t)
         self.data_max(max_yield)
 
 
-class ReactionForceSensor(Sensor):
+
+class ReactionForceSensorBottom(Sensor):
+    """A sensor that measure the reaction force at the bottom perpendicular to the surface"""
+
     def __init__(self):
         self.data = []
         self.time = []
 
     def measure(self, problem, t=1.0):
-
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
         # boundary condition
         bottom_surface = problem.experiment.boundary_bottom()
 
@@ -141,4 +212,3 @@ class ReactionForceSensor(Sensor):
 
         self.data.append(computed_force)
         self.time.append(t)
-

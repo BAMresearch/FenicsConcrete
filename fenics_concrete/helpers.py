@@ -24,24 +24,6 @@ class Parameters(dict):
         return dic
 
 
-class Sensors(dict):
-    """
-    Dict that also allows to access the parameter
-        p["parameter"]
-    via the matching attribute
-        p.parameter
-    to make access shorter
-    """
-    # TESTING a sensor dictionary
-    def __getattr__(self, key):
-        return self[key]
-
-    def __setattr__(self, key, value):
-        assert key in self
-        self[key] = value
-
-
-
 # helper functions for quadrature spaces
 def set_q(q, values):
     """
