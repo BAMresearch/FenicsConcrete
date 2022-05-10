@@ -118,6 +118,7 @@ class MaxTemperatureSensor(Sensor):
 
 class DOHSensor(Sensor):
     """A sensor that measure the degree of hydration at a point"""
+
     def __init__(self, where):
         """
         Arguments:
@@ -144,6 +145,7 @@ class DOHSensor(Sensor):
 
 class MinDOHSensor(Sensor):
     """A sensor that measure the minimum degree of hydration at each timestep"""
+
     def __init__(self):
         self.data = []
         self.time = []
@@ -165,6 +167,7 @@ class MaxYieldSensor(Sensor):
     """A sensor that measure the maximum value of the yield function
 
     A max value > 0 indicates that at some place the stress exceeds the limits"""
+
     def __init__(self):
         self.data = [0.0]
         self.time = [0.0]
@@ -181,7 +184,6 @@ class MaxYieldSensor(Sensor):
         self.data.append(max_yield)
         self.time.append(t)
         self.data_max(max_yield)
-
 
 
 class ReactionForceSensorBottom(Sensor):
@@ -211,4 +213,30 @@ class ReactionForceSensorBottom(Sensor):
         computed_force = (-df.assemble(df.action(problem.residual, v_reac)))
 
         self.data.append(computed_force)
+        self.time.append(t)
+
+
+class StressSensor(Sensor):
+    """A sensor that measure the stress tensor in at a point"""
+
+    def __init__(self, where):
+        """
+        Arguments:
+            where : Point
+                location where the value is measured
+        """
+        self.where = where
+        self.data = []
+        self.time = []
+
+    def measure(self, problem, t=1.0):
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
+        # get stress
+        stress = df.project(problem.sigma(problem.displacement), problem.visu_space_T)
+        self.data.append(stress(self.where))
         self.time.append(t)

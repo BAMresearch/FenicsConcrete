@@ -16,23 +16,30 @@ class ConcreteBeamExperiment(Experiment):
         p['length'] = 5 # m length
         p['height'] = 1 # height
         p['width'] = 0.8 # width
-        p['mesh_density'] = 4  # default boundary setting
+        p['mesh_density'] = 4  # number of elements in vertical dirrecton, the others are set accordingly
         p['bc_setting'] = 'full' # default boundary setting
         p = p + parameters
         super().__init__(p)
 
+        # initialize variable top_displacement
+        self.displ_load = df.Constant(0.0)  # applied via fkt: apply_displ_load(...)
+
+
     def setup(self):
-        # elements per spacial direction
+        # computing the number of elements in each direcction
+        n_height = int(self.p['mesh_density'])
+        n_width = int(n_height/self.p.height*self.p.width)
+        n_length = int(n_height/self.p.height*self.p.length)
+        if (n_length % 2) != 0: # check for odd number
+            n_length += 1 # n_length must be even for loading example
 
         if self.p.dim == 2:
              self.mesh = df.RectangleMesh(df.Point(0., 0.), df.Point(self.p.length, self.p.height),
-                                          int(self.p.mesh_density * self.p.length),
-                                          int(self.p.mesh_density * self.p.height), diagonal='right')
+                                          n_length,
+                                          n_height, diagonal='right')
         elif self.p.dim == 3:
             self.mesh = df.BoxMesh(df.Point(0, 0, 0), df.Point(self.p.length, self.p.width, self.p.height),
-                                   int(self.p.length * self.p.mesh_density),
-                                   int(self.p.width * self.p.mesh_density),
-                                   int(self.p.height * self.p.mesh_density))
+                                   n_length, n_width, n_height)
         else:
             raise Exception(f'wrong dimension {self.p.dim} for problem setup')
 
@@ -72,13 +79,28 @@ class ConcreteBeamExperiment(Experiment):
             return df.near(x[0], 0) and df.near(x[dir_id], 0)
         def right_support(x, on_boundary):
             return df.near(x[0], self.p.length) and df.near(x[dir_id], 0)
+        def center_top(x, on_boundary):
+            return df.near(x[0], self.p.length/2) and df.near(x[dir_id], self.p.height)
+
+
 
         # define displacement boundary
         displ_bcs = []
 
         displ_bcs.append(df.DirichletBC(V, fixed_bc, left_support, method='pointwise'))
         displ_bcs.append(df.DirichletBC(V.sub(dir_id), df.Constant(0), right_support, method='pointwise'))
+        displ_bcs.append(df.DirichletBC(V.sub(dir_id), self.displ_load, center_top, method='pointwise'))
 
         return displ_bcs
-        
-  
+
+
+    def apply_displ_load(self, displacement_load):
+        """Updates the applied displacement load
+
+        Parameters
+        ----------
+        top_displacement : float
+            Displacement of the top boundary in mm, > 0 ; tension, < 0 ; compression
+        """
+
+        self.displ_load.assign(df.Constant(displacement_load))
