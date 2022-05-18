@@ -7,3 +7,4 @@ from fenics_concrete.experimental_setups.concrete_cylinder import ConcreteCylind
 from fenics_concrete.material_problems.concrete_thermo_mechanical import ConcreteThermoMechanical
 from fenics_concrete.material_problems.linear_elasticity import LinearElasticity
 from fenics_concrete.helpers import Parameters
+from fenics_concrete.material_problems.concrete_thix_mechanical import ConcreteThixMechanical

@@ -69,3 +69,14 @@ class ConcreteCubeExperiment(Experiment):
             displ_bcs.append(df.DirichletBC(V, df.Constant((0, 0, 0)),  self.boundary_bottom()))
 
         return displ_bcs
+
+    def create_displ_load(self, V, u_bc=0):
+        # define non zero displacement at top
+        displ_load_bcs = []
+
+        if self.p.dim == 2:
+            displ_load_bcs.append(df.DirichletBC(V.sub(1), u_bc, self.boundary_top()))
+        elif self.p.dim == 3:
+            displ_load_bcs.append(df.DirichletBC(V.sub(1), u_bc,  self.boundary_top()))
+
+        return displ_load_bcs

@@ -20,8 +20,8 @@ warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 # copy from concrete_thermo_mechanical.py
 # change/ adapted models for modelling structural build-up
 class ConcreteThixMechanical(MaterialProblem):
-    def __init__(self, experiment=None, parameters=None, pv_name='pv_output_concrete-thermo-mechanical'):
-        # generate "dummy" experiement when none is passed
+    def __init__(self, experiment=None, parameters=None, pv_name='pv_output_concrete-thix'):
+        # generate "dummy" experiment when none is passed
         if experiment == None:
             experiment = experimental_setups.get_experiment('MinimalCube', parameters)
 
@@ -32,6 +32,7 @@ class ConcreteThixMechanical(MaterialProblem):
         default_p = Parameters()
         # Material parameter for concrete model with structural build-up
         default_p['density'] = 2070  # in kg/m^3 density of fresh concrete see Wolfs et al 2018
+        default_p['u_bc'] = 10 # displacement on top
 
         # temperature dependency on structural build-up not yet included
         default_p['T'] = 22 # current ambient temperature in degree celsius
@@ -43,37 +44,43 @@ class ConcreteThixMechanical(MaterialProblem):
         ### paramters for mechanics problem
         default_p['nu'] = 0.3  # Poissons Ratio see Wolfs et al 2018
         # stiffness evolution from cement paste experiments E=2(1+nu)G'
-        default_p['E_0'] = 15.08e-6 # Youngs Modulus Pa
-        default_p['R_E'] = 0.013e-6     # reflocculation rate of E modulus in Pa / s
-        default_p['A_E'] = 0.03e-6     # structuration rate of E modulus in Pa / s
-        default_p['t_f'] = 390     # reflocculation time in s
-        default_p['age_0'] = 0      # concrete age as start in s
+        default_p['E_0'] = 15000 # 15.08e-6 # Youngs Modulus Pa
+        default_p['R_E'] = 15 # 0.013e-6     # reflocculation rate of E modulus in Pa / s
+        default_p['A_E'] = 30 # 0.03e-6     # structuration rate of E modulus in Pa / s
+        default_p['t_f'] = 300     # reflocculation time in s
+        # default_p['age_0'] = 0      # concrete age as start in s  WHERE to PUT??? todo: ANNIKA set initial age where?
 
         self.p = default_p + self.p
 
         # create model
-        self.mechanics_problem = ConcreteThixModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
+        self.mechanics_problem = ConcreteThixElasticModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
 
         # setting bcs
-        self.mechanics_problem.set_bcs(self.experiment.create_displ_bcs(self.mechanics_problem.V))
+        bcs = self.experiment.create_displ_bcs(self.mechanics_problem.V) # fixed boundary bottom
+        try: # if displacement loads are available
+            bcs.extend(self.experiment.create_displ_load(self.mechanics_problem.V, u_bc=self.p.u_bc)) # free boundary top
+        except:
+            pass
+
+        self.mechanics_problem.set_bcs(bcs)
 
         # setting up the solver
         self.mechanics_solver = df.NewtonSolver()
         self.mechanics_solver.parameters['absolute_tolerance'] = 1e-9
         self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
 
-    def solve(self, t=1.0):
+    def set_initial_age(self, age):
+        self.mechanics_problem.set_initial_age(age)
 
-        # compute age of concrete
-        # self.mechanics_problem.q_age = # given at time==0 then a function from t HOW!!!
+    def solve(self, t=1.0):
 
         self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
 
+        # update age
+        self.mechanics_problem.update_history()
+
         # save fields to global problem for sensor output
         self.displacement = self.mechanics_problem.u
-        # self.degree_of_hydration = df.project(self.temperature_problem.q_alpha, self.temperature_problem.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
-        # self.q_degree_of_hydration = self.temperature_problem.q_alpha
-        # self.q_yield = self.mechanics_problem.q_yield
 
         # get sensor data
         for sensor_name in self.sensors:
@@ -85,17 +92,13 @@ class ConcreteThixMechanical(MaterialProblem):
         self.mechanics_problem.pv_plot(t=t)
 
     def set_timestep(self, dt):
-        self.dt = dt
-        self.dt_form.assign(df.Constant(self.dt))
+        self.mechanics_problem.set_timestep(dt)
 
     def get_E_fkt(self):
         return np.vectorize(self.mechanics_problem.E_fkt)
 
-    # def get_X_fkt(self):
-    #     return self.mechanics_problem.general_hydration_fkt
 
-
-class ConcreteThixModel(df.NonlinearProblem):
+class ConcreteThixElasticModel(df.NonlinearProblem):
     def __init__(self, mesh, p, pv_name='mechanics_output', **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
         self.p = p
@@ -141,15 +144,9 @@ class ConcreteThixModel(df.NonlinearProblem):
 
             # quadrature functions
             self.q_E = df.Function(q_V, name="youngs modulus")
-            # self.q_fc = df.Function(q_V, name="compressive strength")
-            # self.q_ft = df.Function(q_V, name="tensile strength")
-            # self.q_yield = df.Function(q_V, name="yield criterion")
-            # self.q_alpha = df.Function(q_V, name="degree of hydration")
             self.q_age = df.Function(q_V, name="age of concrete")
-
             self.q_sigma = df.Function(q_VT, name="stress")
-            # initialize degree of hydration to 1, in case machanics module is run without hydration coupling
-            self.q_alpha.vector()[:] = 1
+            self.q_eps = df.Function(q_VT, name="Strain")
 
             # Define variational problem
             self.u = df.Function(self.V)  # displacement
@@ -159,11 +156,7 @@ class ConcreteThixModel(df.NonlinearProblem):
             x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
             x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
 
-            # Stress computation for linear elastic problem without multiplication with E
-            def x_sigma(v):
-                return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
-
-            # Volume force            
+            # Volume force   todo: ANNIKA: dependent on age!
             if self.p.dim == 1:
                 f = df.Constant(-self.p.g * self.p.density)
             elif self.p.dim == 2:
@@ -171,9 +164,10 @@ class ConcreteThixModel(df.NonlinearProblem):
             elif self.p.dim == 3:
                 f = df.Constant((0, 0, -self.p.g * self.p.density))
 
-            self.sigma_ufl = self.q_E * x_sigma(self.u)
+            self.sigma_ufl = self.q_E * self.x_sigma(self.u, x_mu, x_lambda)
 
-            R_ufl = self.q_E * df.inner(x_sigma(self.u), df.sym(df.grad(v))) * dxm
+            # todo: ANNIKA define sigma from(u,t) in evalute material or here global E change ? (see damage example Thomas)
+            R_ufl = self.q_E * df.inner(self.x_sigma(self.u, x_mu, x_lambda), self.eps(v)) * dxm
             R_ufl += - df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
             # quadrature point part
             self.R = R_ufl
@@ -185,8 +179,15 @@ class ConcreteThixModel(df.NonlinearProblem):
             self.dR = dR_ufl
 
             self.project_sigma = LocalProjector(self.sigma_voigt(self.sigma_ufl), q_VT, dxm)
+            self.project_strain = LocalProjector(self.eps_voigt(self.u), q_VT, dxm)
 
             self.assembler = None  # set as default, to check if bc have been added???
+
+    def x_sigma(self, v, x_mu, x_lambda):
+        return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
+
+    def eps(self,v):
+        return df.sym(df.grad(v))
 
     def sigma_voigt(self, s):
         # 1D option
@@ -203,6 +204,20 @@ class ConcreteThixModel(df.NonlinearProblem):
 
         return stress_vector
 
+    def eps_voigt(self, e):
+        eT = self.eps(e)
+        # 1D option
+        if eT.ufl_shape == (1, 1):
+            strain_vector = df.as_vector((eT[0, 0]))
+        # 2D option
+        elif eT.ufl_shape == (2, 2):
+            strain_vector = df.as_vector((eT[0, 0], eT[1, 1], 2 * eT[0, 1]))
+        # 3D option
+        elif eT.ufl_shape == (3, 3):
+            strain_vector = df.as_vector((eT[0, 0], eT[1, 1], eT[2,2], 2 * eT[0, 1], 2*eT[1,2], 2*eT[0,2]))
+
+        return strain_vector
+
     def E_fkt(self, age, parameters):
 
         if age < parameters['t_f']:
@@ -211,115 +226,112 @@ class ConcreteThixModel(df.NonlinearProblem):
             E = parameters['E_0'] + parameters['R_E'] * parameters['t_f'] + parameters['A_E'] * (age-parameters['t_f'])
         return E
 
-    # def general_hydration_fkt(self, alpha, parameters):
+    # def principal_stress(self, stresses):
+    #     # checking type of problem
+    #     n = stresses.shape[1]  # number of stress components in stress vector
+    #     # finding eigenvalues of symmetric stress tensor
+    #     # 1D problem
+    #     if n == 1:
+    #         principal_stresses = stresses
+    #     # 2D problem
+    #     elif n == 3:
+    #         # the following uses
+    #         # lambda**2 - tr(sigma)lambda + det(sigma) = 0, solve for lambda using pq formula
+    #         p = - (stresses[:, 0] + stresses[:, 1])
+    #         q = stresses[:, 0] * stresses[:, 1] - stresses[:, 2] ** 2
     #
-    #     return parameters['X_inf'] * alpha ** (parameters['a_X'])
+    #         D = p ** 2 / 4 - q  # help varibale
+    #         assert np.all(D >= -1.0e-15)  # otherwise problem with imaginary numbers
+    #         sqrtD = np.sqrt(D)
+    #
+    #         eigenvalues_1 = -p / 2.0 + sqrtD
+    #         eigenvalues_2 = -p / 2.0 - sqrtD
+    #
+    #         # strack lists as array
+    #         principal_stresses = np.column_stack((eigenvalues_1, eigenvalues_2))
+    #
+    #         # principal_stress = np.array([ev1p,ev2p])
+    #     elif n == 6:
+    #         # for a symetric stress vector a b c e f d we need to solve:
+    #         # x**3 - x**2(a+b+c) - x(e**2+f**2+d**2-ab-bc-ac) + (abc-ae**2-bf**2-cd**2+2def) = 0, solve for x
+    #         principal_stresses = np.empty([len(stresses), 3])
+    #         # currently slow solution with loop over all stresses and subsequent numpy function call:
+    #         for i, stress in enumerate(stresses):
+    #             # convert voigt to tensor, (00,11,22,12,02,01)
+    #             stress_tensor = np.zeros((3, 3))
+    #             stress_tensor[0][0] = stress[0]
+    #             stress_tensor[1][1] = stress[1]
+    #             stress_tensor[2][2] = stress[2]
+    #             stress_tensor[0][1] = stress[5]
+    #             stress_tensor[1][2] = stress[3]
+    #             stress_tensor[0][2] = stress[4]
+    #             stress_tensor[1][0] = stress[5]
+    #             stress_tensor[2][1] = stress[3]
+    #             stress_tensor[2][0] = stress[4]
+    #             # use numpy for eigenvalues
+    #             principal_stress = np.linalg.eigvalsh(stress_tensor)
+    #             # sort principal stress from lagest to smallest!!!
+    #             principal_stresses[i] = -np.sort(-principal_stress)
+    #
+    #     return principal_stresses
 
-    def principal_stress(self, stresses):
-        # checking type of problem
-        n = stresses.shape[1]  # number of stress components in stress vector
-        # finding eigenvalues of symmetric stress tensor
-        # 1D problem
-        if n == 1:
-            principal_stresses = stresses
-        # 2D problem
-        elif n == 3:
-            # the following uses
-            # lambda**2 - tr(sigma)lambda + det(sigma) = 0, solve for lambda using pq formula
-            p = - (stresses[:, 0] + stresses[:, 1])
-            q = stresses[:, 0] * stresses[:, 1] - stresses[:, 2] ** 2
-
-            D = p ** 2 / 4 - q  # help varibale
-            assert np.all(D >= -1.0e-15)  # otherwise problem with imaginary numbers
-            sqrtD = np.sqrt(D)
-
-            eigenvalues_1 = -p / 2.0 + sqrtD
-            eigenvalues_2 = -p / 2.0 - sqrtD
-
-            # strack lists as array
-            principal_stresses = np.column_stack((eigenvalues_1, eigenvalues_2))
-
-            # principal_stress = np.array([ev1p,ev2p])
-        elif n == 6:
-            # for a symetric stress vector a b c e f d we need to solve:
-            # x**3 - x**2(a+b+c) - x(e**2+f**2+d**2-ab-bc-ac) + (abc-ae**2-bf**2-cd**2+2def) = 0, solve for x
-            principal_stresses = np.empty([len(stresses), 3])
-            # currently slow solution with loop over all stresses and subsequent numpy function call:
-            for i, stress in enumerate(stresses):
-                # convert voigt to tensor, (00,11,22,12,02,01)
-                stress_tensor = np.zeros((3, 3))
-                stress_tensor[0][0] = stress[0]
-                stress_tensor[1][1] = stress[1]
-                stress_tensor[2][2] = stress[2]
-                stress_tensor[0][1] = stress[5]
-                stress_tensor[1][2] = stress[3]
-                stress_tensor[0][2] = stress[4]
-                stress_tensor[1][0] = stress[5]
-                stress_tensor[2][1] = stress[3]
-                stress_tensor[2][0] = stress[4]
-                # use numpy for eigenvalues
-                principal_stress = np.linalg.eigvalsh(stress_tensor)
-                # sort principal stress from lagest to smallest!!!
-                principal_stresses[i] = -np.sort(-principal_stress)
-
-        return principal_stresses
-
-    def yield_surface(self, stresses, ft, fc):
-        # function for approximated yield surface
-        # first approximation, could be changed if we have numbers/information
-        fc2 = fc
-        # pass voigt notation and compute the principal stress
-        p_stresses = self.principal_stress(stresses)
-
-        # get the principle tensile stresses
-        t_stresses = np.where(p_stresses < 0, 0, p_stresses)
-
-        # get dimension of problem, ie. length of list with principal stresses
-        n = p_stresses.shape[1]
-        # check case
-        if n == 1:
-            # rankine for the tensile region
-            rk_yield_vals = t_stresses[:, 0] - ft[:]
-
-            # invariants for drucker prager yield surface
-            I1 = stresses[:, 0]
-            I2 = np.zeros_like(I1)
-        # 2D problem
-        elif n == 2:
-
-            # rankine for the tensile region
-            rk_yield_vals = (t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2) ** 0.5 - ft[:]
-
-            # invariants for drucker prager yield surface
-            I1 = stresses[:, 0] + stresses[:, 1]
-            I2 = ((stresses[:, 0] + stresses[:, 1]) ** 2 - ((stresses[:, 0]) ** 2 + (stresses[:, 1]) ** 2)) / 2
-
-        # 3D problem
-        elif n == 3:
-            # rankine for the tensile region
-            rk_yield_vals = (t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2 + t_stresses[:, 2] ** 2) ** 0.5 - ft[:]
-
-            # invariants for drucker prager yield surface
-            I1 = stresses[:, 0] + stresses[:, 1] + stresses[:, 2]
-            I2 = ((stresses[:, 0] + stresses[:, 1] + stresses[:, 2]) ** 2 - (
-                        (stresses[:, 0]) ** 2 + (stresses[:, 1]) ** 2 + (stresses[:, 2]) ** 2)) / 2
-        else:
-            raise ('Problem with input to yield surface, the array with stress values has the wrong size ')
-
-        J2 = 1 / 3 * I1 ** 2 - I2
-        beta = (3.0 ** 0.5) * (fc2 - fc) / (2 * fc2 - fc)
-        Hp = fc2 * fc / ((3.0 ** 0.5) * (2 * fc2 - fc))
-
-        dp_yield_vals = beta / 3 * I1 + J2 ** 0.5 - Hp
-
-        # TODO: is this "correct", does this make sense? for a compression state, what if rk yield > dp yield???
-        yield_vals = np.maximum(rk_yield_vals, dp_yield_vals)
-
-        return np.asarray(yield_vals)
+    # def yield_surface(self, stresses, ft, fc):
+    #     # function for approximated yield surface
+    #     # first approximation, could be changed if we have numbers/information
+    #     fc2 = fc
+    #     # pass voigt notation and compute the principal stress
+    #     p_stresses = self.principal_stress(stresses)
+    #
+    #     # get the principle tensile stresses
+    #     t_stresses = np.where(p_stresses < 0, 0, p_stresses)
+    #
+    #     # get dimension of problem, ie. length of list with principal stresses
+    #     n = p_stresses.shape[1]
+    #     # check case
+    #     if n == 1:
+    #         # rankine for the tensile region
+    #         rk_yield_vals = t_stresses[:, 0] - ft[:]
+    #
+    #         # invariants for drucker prager yield surface
+    #         I1 = stresses[:, 0]
+    #         I2 = np.zeros_like(I1)
+    #     # 2D problem
+    #     elif n == 2:
+    #
+    #         # rankine for the tensile region
+    #         rk_yield_vals = (t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2) ** 0.5 - ft[:]
+    #
+    #         # invariants for drucker prager yield surface
+    #         I1 = stresses[:, 0] + stresses[:, 1]
+    #         I2 = ((stresses[:, 0] + stresses[:, 1]) ** 2 - ((stresses[:, 0]) ** 2 + (stresses[:, 1]) ** 2)) / 2
+    #
+    #     # 3D problem
+    #     elif n == 3:
+    #         # rankine for the tensile region
+    #         rk_yield_vals = (t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2 + t_stresses[:, 2] ** 2) ** 0.5 - ft[:]
+    #
+    #         # invariants for drucker prager yield surface
+    #         I1 = stresses[:, 0] + stresses[:, 1] + stresses[:, 2]
+    #         I2 = ((stresses[:, 0] + stresses[:, 1] + stresses[:, 2]) ** 2 - (
+    #                     (stresses[:, 0]) ** 2 + (stresses[:, 1]) ** 2 + (stresses[:, 2]) ** 2)) / 2
+    #     else:
+    #         raise ('Problem with input to yield surface, the array with stress values has the wrong size ')
+    #
+    #     J2 = 1 / 3 * I1 ** 2 - I2
+    #     beta = (3.0 ** 0.5) * (fc2 - fc) / (2 * fc2 - fc)
+    #     Hp = fc2 * fc / ((3.0 ** 0.5) * (2 * fc2 - fc))
+    #
+    #     dp_yield_vals = beta / 3 * I1 + J2 ** 0.5 - Hp
+    #
+    #     # TODO: is this "correct", does this make sense? for a compression state, what if rk yield > dp yield???
+    #     yield_vals = np.maximum(rk_yield_vals, dp_yield_vals)
+    #
+    #     return np.asarray(yield_vals)
 
     def evaluate_material(self):
         # convert quadrature spaces to numpy vector
         age_list = self.q_age.vector().get_local()
+        print('age', age_list.max())
 
         parameters = {}
         parameters['t_f'] = self.p.t_f
@@ -329,25 +341,17 @@ class ConcreteThixModel(df.NonlinearProblem):
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(age_list, parameters)
+        print('E', E_list.max())
 
-        # parameters = {}
-        # parameters['X_inf'] = self.p.fc_inf
-        # parameters['a_X'] = self.p.a_fc
+        # get stress values
+        self.project_sigma(self.q_sigma)
         #
-        # fc_list = self.general_hydration_fkt(age_list, parameters)
-        #
-        # parameters = {}
-        # parameters['X_inf'] = self.p.ft_inf
-        # parameters['a_X'] = self.p.a_ft
-        #
-        # ft_list = self.general_hydration_fkt(age_list, parameters)
-        #
-        # # now do the yield function thing!!!
-        # # I need stresses!!!
-        # # get stress values
-        # self.project_sigma(self.q_sigma)
-        #
-        # sigma_list = self.q_sigma.vector().get_local().reshape((-1, self.stress_vector_dim))
+        sigma_list = self.q_sigma.vector().get_local().reshape((-1, self.stress_vector_dim))
+        print('sigma max', sigma_list.max())
+        # get strain values
+        self.project_strain(self.q_eps)
+        strain_list = self.q_eps.vector().get_local().reshape((-1, self.stress_vector_dim))
+        print('strain max', strain_list.max())
         #
         # # compute the yield values (values > 0 : failure)
         # yield_list = self.yield_surface(sigma_list, ft_list, fc_list)
@@ -360,11 +364,15 @@ class ConcreteThixModel(df.NonlinearProblem):
 
     def update_history(self):
         # no history field currently
-        pass
+        age_list = self.q_age.vector().get_local()
+        age_list += self.dt * np.ones_like(age_list)
+        set_q(self.q_age, age_list)
 
     def set_timestep(self, dt):
         self.dt = dt
-        self.dt_form.assign(df.Constant(self.dt))
+
+    def set_initial_age(self, age):
+        self.q_age.interpolate(age) # todo: ANNIKA: What's if this is not given as a dolfin expression?
 
     def set_bcs(self, bcs):
         # Only now (with the bcs) can we initialize the assembler
@@ -386,33 +394,14 @@ class ConcreteThixModel(df.NonlinearProblem):
 
         # displacement plot
         u_plot = df.project(self.u, self.V)
-        u_plot.rename("Displacement", "test string, what does this do??")  # TODO: what does the second string do?
+        u_plot.rename("Displacement", "displacemenet vector")
         self.pv_file.write(u_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
-
-        # Elasticity parameters without multiplication with E
-        x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
-        x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
-
-        def x_sigma(v):
-            return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
         sigma_plot = df.project(self.sigma_ufl, self.visu_space_T,
                                 form_compiler_parameters={'quadrature_degree': self.p.degree})
         E_plot = df.project(self.q_E, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
-        # fc_plot = df.project(self.q_fc, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
-        # ft_plot = df.project(self.q_ft, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
-        # yield_plot = df.project(self.q_yield, self.visu_space,
-        #                         form_compiler_parameters={'quadrature_degree': self.p.degree})
-        #
-        E_plot.rename("Young's Modulus", "test string, what does this do??")  # TODO: what does the second string do?
-        # fc_plot.rename("Compressive strength",
-        #                "test string, what does this do??")  # TODO: what does the second string do?
-        # ft_plot.rename("Tensile strength", "test string, what does this do??")  # TODO: what does the second string do?
-        # yield_plot.rename("Yield surface", "test string, what does this do??")  # TODO: what does the second string do?
-        sigma_plot.rename("Stress", "test string, what does this do??")  # TODO: what does the second string do?
+        E_plot.rename("Young's Modulus", "Young's modulus value")
+        sigma_plot.rename("Stress", "stress components")
 
         self.pv_file.write(E_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
-        # self.pv_file.write(fc_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
-        # self.pv_file.write(ft_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
-        # self.pv_file.write(yield_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
