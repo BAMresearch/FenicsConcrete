@@ -32,23 +32,21 @@ class ConcreteThixMechanical(MaterialProblem):
         default_p = Parameters()
         # Material parameter for concrete model with structural build-up
         default_p['density'] = 2070  # in kg/m^3 density of fresh concrete see Wolfs et al 2018
-        default_p['u_bc'] = 10 # displacement on top
+        default_p['u_bc'] = 0.1 # displacement on top
 
         # temperature dependency on structural build-up not yet included
         default_p['T'] = 22 # current ambient temperature in degree celsius
         default_p['T_ref'] = 25  # reference ambient temperature in degree celsius
 
         # polynomial degree
-        default_p['degree'] = 2  # default boundary setting ????
+        default_p['degree'] = 2  # default boundary setting
 
         ### paramters for mechanics problem
-        default_p['nu'] = 0.3  # Poissons Ratio see Wolfs et al 2018
-        # stiffness evolution from cement paste experiments E=2(1+nu)G'
-        default_p['E_0'] = 15000 # 15.08e-6 # Youngs Modulus Pa
-        default_p['R_E'] = 15 # 0.013e-6     # reflocculation rate of E modulus in Pa / s
-        default_p['A_E'] = 30 # 0.03e-6     # structuration rate of E modulus in Pa / s
-        default_p['t_f'] = 300     # reflocculation time in s
-        # default_p['age_0'] = 0      # concrete age as start in s  WHERE to PUT??? todo: ANNIKA set initial age where?
+        default_p['nu'] = 0.3       # Poissons Ratio see Wolfs et al 2018
+        default_p['E_0'] = 15000    # Youngs Modulus Pa # random values!!
+        default_p['R_E'] = 15       # reflocculation rate of E modulus in Pa / s
+        default_p['A_E'] = 30       # structuration rate of E modulus in Pa / s
+        default_p['t_f'] = 300      # reflocculation time in s
 
         self.p = default_p + self.p
 
@@ -57,16 +55,12 @@ class ConcreteThixMechanical(MaterialProblem):
 
         # setting bcs
         bcs = self.experiment.create_displ_bcs(self.mechanics_problem.V) # fixed boundary bottom
-        try: # if displacement loads are available
-            bcs.extend(self.experiment.create_displ_load(self.mechanics_problem.V, u_bc=self.p.u_bc)) # free boundary top
-        except:
-            pass
 
         self.mechanics_problem.set_bcs(bcs)
 
         # setting up the solver
         self.mechanics_solver = df.NewtonSolver()
-        self.mechanics_solver.parameters['absolute_tolerance'] = 1e-9
+        self.mechanics_solver.parameters['absolute_tolerance'] = 1e-8
         self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
 
     def set_initial_age(self, age):
@@ -74,18 +68,23 @@ class ConcreteThixMechanical(MaterialProblem):
 
     def solve(self, t=1.0):
 
+        # print('solve for',t)
         self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
-
-        # update age
-        self.mechanics_problem.update_history()
 
         # save fields to global problem for sensor output
         self.displacement = self.mechanics_problem.u
+        self.stress = self.mechanics_problem.sigma_ufl
+        self.strain = self.mechanics_problem.eps(self.mechanics_problem.u)
+        self.visu_space_T = self.mechanics_problem.visu_space_T
+        # further ?? stress/strain ...
 
         # get sensor data
         for sensor_name in self.sensors:
             # go through all sensors and measure
             self.sensors[sensor_name].measure(self, t)
+
+        # update age before next step!
+        self.mechanics_problem.update_age()
 
     def pv_plot(self, t=0):
         # calls paraview output for both problems
@@ -152,10 +151,6 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.u = df.Function(self.V)  # displacement
             v = df.TestFunction(self.V)
 
-            # Elasticity parameters without multiplication with E
-            x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
-            x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
-
             # Volume force   todo: ANNIKA: dependent on age!
             if self.p.dim == 1:
                 f = df.Constant(-self.p.g * self.p.density)
@@ -164,10 +159,13 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             elif self.p.dim == 3:
                 f = df.Constant((0, 0, -self.p.g * self.p.density))
 
-            self.sigma_ufl = self.q_E * self.x_sigma(self.u, x_mu, x_lambda)
+            # define sigma from(u,t) in evalute material or here global E change ? (see damage example Thomas) -> then tangent by hand!
+            # Elasticity parameters without multiplication with E
+            self.x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
+            self.x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+            self.sigma_ufl = self.q_E * self.x_sigma(self.u, self.x_mu, self.x_lambda)
 
-            # todo: ANNIKA define sigma from(u,t) in evalute material or here global E change ? (see damage example Thomas)
-            R_ufl = self.q_E * df.inner(self.x_sigma(self.u, x_mu, x_lambda), self.eps(v)) * dxm
+            R_ufl = self.q_E * df.inner(self.x_sigma(self.u, self.x_mu, self.x_lambda), self.eps(v)) * dxm
             R_ufl += - df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
             # quadrature point part
             self.R = R_ufl
@@ -184,6 +182,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.assembler = None  # set as default, to check if bc have been added???
 
     def x_sigma(self, v, x_mu, x_lambda):
+        #add plane stress plane strain options!!
         return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
     def eps(self,v):
@@ -331,7 +330,6 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
     def evaluate_material(self):
         # convert quadrature spaces to numpy vector
         age_list = self.q_age.vector().get_local()
-        print('age', age_list.max())
 
         parameters = {}
         parameters['t_f'] = self.p.t_f
@@ -341,28 +339,11 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(age_list, parameters)
-        print('E', E_list.max())
-
-        # get stress values
-        self.project_sigma(self.q_sigma)
-        #
-        sigma_list = self.q_sigma.vector().get_local().reshape((-1, self.stress_vector_dim))
-        print('sigma max', sigma_list.max())
-        # get strain values
-        self.project_strain(self.q_eps)
-        strain_list = self.q_eps.vector().get_local().reshape((-1, self.stress_vector_dim))
-        print('strain max', strain_list.max())
-        #
-        # # compute the yield values (values > 0 : failure)
-        # yield_list = self.yield_surface(sigma_list, ft_list, fc_list)
 
         # # project lists onto quadrature spaces
         set_q(self.q_E, E_list)
-        # set_q(self.q_fc, fc_list)
-        # set_q(self.q_ft, ft_list)
-        # set_q(self.q_yield, yield_list)
 
-    def update_history(self):
+    def update_age(self):
         # no history field currently
         age_list = self.q_age.vector().get_local()
         age_list += self.dt * np.ones_like(age_list)

@@ -237,6 +237,32 @@ class StressSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get stress
-        stress = df.project(problem.sigma(problem.displacement), problem.visu_space_T)
+        # stress = df.project(problem.sigma(problem.displacement), problem.visu_space_T)
+        stress = df.project(problem.stress, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
         self.data.append(stress(self.where))
+        self.time.append(t)
+
+class StrainSensor(Sensor):
+    """A sensor that measure the strain tensor in at a point"""
+
+    def __init__(self, where):
+        """
+        Arguments:
+            where : Point
+                location where the value is measured
+        """
+        self.where = where
+        self.data = []
+        self.time = []
+
+    def measure(self, problem, t=1.0):
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
+        # get strain
+        strain = df.project(problem.strain, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+        self.data.append(strain(self.where))
         self.time.append(t)
