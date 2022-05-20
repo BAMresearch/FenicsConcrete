@@ -237,6 +237,6 @@ class StressSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get stress
-        stress = df.project(problem.sigma(problem.displacement), problem.visu_space_T)
+        stress = df.project(problem.stress, problem.visu_space_T)
         self.data.append(stress(self.where))
         self.time.append(t)

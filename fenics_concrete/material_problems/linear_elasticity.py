@@ -96,6 +96,8 @@ class LinearElasticity(MaterialProblem):
         # solve
         df.solve(self.a == self.L, self.displacement, self.bcs)
 
+        self.stress = self.sigma(self.displacement)
+
         # TODO make some switch in sensor definition to trigger this...
         self.compute_residual()
 
@@ -117,6 +119,6 @@ class LinearElasticity(MaterialProblem):
         self.pv_file.write(u_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
         # stress plot
-        sigma_plot = df.project(self.sigma(self.displacement), self.visu_space_T)
+        sigma_plot = df.project(self.stress, self.visu_space_T)
         sigma_plot.rename("Stress", "test string, what does this do??")  # TODO: what does the second string do?
         self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
