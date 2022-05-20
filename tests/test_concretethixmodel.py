@@ -37,12 +37,18 @@ def setup_test(parameters,sensor):
     # computed stress at the end
     print('stresses',problem.sensors[sensor[0].name].data[-1])
     print('strains',problem.sensors[sensor[1].name].data[-1])
+    strains = problem.sensors[sensor[1].name].data[-1]
     sensor_stress_max = problem.sensors[sensor[0].name].data[-1].max()
     print(sensor_stress_max)
     # expected stress value
     age_end = time + parameters['age_zero']
     E_end = problem.p.E_0 + problem.p.R_E * problem.p.t_f + problem.p.A_E * (age_end - problem.p.t_f)
+    print('E_end',E_end)
     print(parameters['u_bc'] / 1 * E_end)
+
+    # #2D case plane stress:
+    # print(strains[0], strains[-1])
+    # print(E_end/(1-parameters["nu"]**2)*(parameters["nu"]*strains[0]+strains[-1]))
 
     assert sensor_stress_max == pytest.approx(
         parameters['u_bc'] / 1 * E_end)  # compare computed stress with the E*strain
@@ -60,6 +66,7 @@ def test_displ_thix_3D():
     parameters['u_bc'] = 0.1
     parameters['bc_setting'] = 'disp'
     parameters['age_zero'] = 10 #s
+    parameters['nu'] = 0.2
 
     # sensor
     sensor01 = fenics_concrete.sensors.StressSensor(df.Point(0.5, 0.5, 1))
@@ -74,25 +81,28 @@ def test_displ_thix_2D():
     parameters = fenics_concrete.Parameters() # using the current default values
 
     parameters['dim'] = 2
-    parameters['mesh_density'] = 2
+    parameters['mesh_density'] = 5
     parameters['log_level'] = 'INFO'
     parameters['density'] = 0.0
     parameters['u_bc'] = 0.1
     parameters['bc_setting'] = 'disp'
     parameters['age_zero'] = 10 #s
+    parameters['nu'] = 0.2
 
     # sensor
-    sensor01 = fenics_concrete.sensors.StressSensor(df.Point(0.5,1))
-    sensor02 = fenics_concrete.sensors.StrainSensor(df.Point(0.5,1))
+    sensor01 = fenics_concrete.sensors.StressSensor(df.Point(0.5,0.5))
+    sensor02 = fenics_concrete.sensors.StrainSensor(df.Point(0.5,0.5))
 
-    setup_test(parameters,sensor01)
+    setup_test(parameters,[sensor01,sensor02])
 
 if __name__ == '__main__':
 
 
     test_displ_thix_3D()
 
-    # test_displ_thix_2D()
+    input()
+
+    test_displ_thix_2D()
 
 
 

@@ -160,12 +160,12 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
                 f = df.Constant((0, 0, -self.p.g * self.p.density))
 
             # define sigma from(u,t) in evalute material or here global E change ? (see damage example Thomas) -> then tangent by hand!
-            # Elasticity parameters without multiplication with E
-            self.x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
-            self.x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
-            self.sigma_ufl = self.q_E * self.x_sigma(self.u, self.x_mu, self.x_lambda)
+            # # Elasticity parameters without multiplication with E
+            # self.x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
+            # self.x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+            self.sigma_ufl = self.q_E * self.x_sigma(self.u)
 
-            R_ufl = self.q_E * df.inner(self.x_sigma(self.u, self.x_mu, self.x_lambda), self.eps(v)) * dxm
+            R_ufl = self.q_E * df.inner(self.x_sigma(self.u), self.eps(v)) * dxm
             R_ufl += - df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
             # quadrature point part
             self.R = R_ufl
@@ -181,9 +181,23 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
             self.assembler = None  # set as default, to check if bc have been added???
 
-    def x_sigma(self, v, x_mu, x_lambda):
-        #add plane stress plane strain options!!
-        return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
+    def x_sigma(self, v):
+        print('in x_sigma')
+        if self.p.dim == 2:
+            if self.p.stress_case == 'plane_stress':
+                print("plane_stress")
+                x_mu = 1 / 2 / (1 + self.p.nu)
+                x_lambda = self.p.nu / (1 + self.p.nu) / (1 - 2 * self.p.nu)
+            elif self.p.stress_case == 'plane_strain':
+                print("plane_strain")
+                x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
+                x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+            return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
+        if self.p.dim == 3:
+            # Elasticity parameters without multiplication with E (E==1)
+            x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
+            x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+            return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
     def eps(self,v):
         return df.sym(df.grad(v))
@@ -339,6 +353,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(age_list, parameters)
+        print('E',E_list.max())
 
         # # project lists onto quadrature spaces
         set_q(self.q_E, E_list)
@@ -380,6 +395,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
         sigma_plot = df.project(self.sigma_ufl, self.visu_space_T,
                                 form_compiler_parameters={'quadrature_degree': self.p.degree})
+        print('sigma plot', sigma_plot.vector()[:].max())
         E_plot = df.project(self.q_E, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
         E_plot.rename("Young's Modulus", "Young's modulus value")
         sigma_plot.rename("Stress", "stress components")
