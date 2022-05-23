@@ -144,6 +144,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             # quadrature functions
             self.q_E = df.Function(q_V, name="youngs modulus")
             self.q_age = df.Function(q_V, name="age of concrete")
+            self.q_f = df.Function(q_V, name="density correction") # zero if age < 0 layer not active otherwise 1
             self.q_sigma = df.Function(q_VT, name="stress")
             self.q_eps = df.Function(q_VT, name="Strain")
 
@@ -166,7 +167,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.sigma_ufl = self.q_E * self.x_sigma(self.u)
 
             R_ufl = self.q_E * df.inner(self.x_sigma(self.u), self.eps(v)) * dxm
-            R_ufl += - df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
+            R_ufl += - self.q_f * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
             # quadrature point part
             self.R = R_ufl
 
@@ -182,22 +183,13 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.assembler = None  # set as default, to check if bc have been added???
 
     def x_sigma(self, v):
-        print('in x_sigma')
-        if self.p.dim == 2:
-            if self.p.stress_case == 'plane_stress':
-                print("plane_stress")
-                x_mu = 1 / 2 / (1 + self.p.nu)
-                x_lambda = self.p.nu / (1 + self.p.nu) / (1 - 2 * self.p.nu)
-            elif self.p.stress_case == 'plane_strain':
-                print("plane_strain")
-                x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
-                x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
-            return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
-        if self.p.dim == 3:
-            # Elasticity parameters without multiplication with E (E==1)
-            x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
-            x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
-            return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
+
+        x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
+        x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+        if self.p.dim ==2 and self.p.stress_case == 'plane_stress':
+            x_lambda = 2 * x_mu * x_lambda / (x_lambda + 2 * x_mu)
+
+        return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
     def eps(self,v):
         return df.sym(df.grad(v))
@@ -238,6 +230,14 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         else:
             E = parameters['E_0'] + parameters['R_E'] * parameters['t_f'] + parameters['A_E'] * (age-parameters['t_f'])
         return E
+
+    def f_fkt(self, age):
+        # decide if layer is active or not (age < 0 nonactive!)
+        if age < 0:
+            f_active = 0.0
+        else:
+            f_active = 1.0
+        return f_active
 
     # def principal_stress(self, stresses):
     #     # checking type of problem
@@ -353,10 +353,15 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(age_list, parameters)
-        print('E',E_list.max())
+        # print('E',E_list.max())
+        f_fkt_vectorized = np.vectorize(self.f_fkt)
+        f_list = f_fkt_vectorized(age_list)
+        # print('f', f_list.max(), f_list.min())
+
 
         # # project lists onto quadrature spaces
         set_q(self.q_E, E_list)
+        set_q(self.q_f, f_list)
 
     def update_age(self):
         # no history field currently
@@ -395,7 +400,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
         sigma_plot = df.project(self.sigma_ufl, self.visu_space_T,
                                 form_compiler_parameters={'quadrature_degree': self.p.degree})
-        print('sigma plot', sigma_plot.vector()[:].max())
+        # print('sigma plot', sigma_plot.vector()[:].max())
         E_plot = df.project(self.q_E, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
         E_plot.rename("Young's Modulus", "Young's modulus value")
         sigma_plot.rename("Stress", "stress components")
