@@ -187,7 +187,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
         x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
         if self.p.dim ==2 and self.p.stress_case == 'plane_stress':
-            x_lambda = 2 * x_mu * x_lambda / (x_lambda + 2 * x_mu)
+            x_lambda = 2 * x_mu * x_lambda / (x_lambda + 2 * x_mu) # see https://comet-fenics.readthedocs.io/en/latest/demo/elasticity/2D_elasticity.py.html
 
         return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
@@ -225,18 +225,18 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
     def E_fkt(self, age, parameters):
 
-        if age < parameters['t_f']:
+        E = df.DOLFIN_EPS # non-active
+        if age >=0 and age < parameters['t_f']:
             E = parameters['E_0'] + parameters['R_E'] * age
-        else:
+        elif age >= parameters['t_f']:
             E = parameters['E_0'] + parameters['R_E'] * parameters['t_f'] + parameters['A_E'] * (age-parameters['t_f'])
         return E
 
     def f_fkt(self, age):
         # decide if layer is active or not (age < 0 nonactive!)
-        if age < 0:
-            f_active = 0.0
-        else:
-            f_active = 1.0
+        f_active = df.DOLFIN_EPS  # non-active
+        if age >= 0:
+            f_active = 1.0 # active
         return f_active
 
     # def principal_stress(self, stresses):
@@ -344,7 +344,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
     def evaluate_material(self):
         # convert quadrature spaces to numpy vector
         age_list = self.q_age.vector().get_local()
-
+        # print(age_list)
         parameters = {}
         parameters['t_f'] = self.p.t_f
         parameters['E_0'] = self.p.E_0
@@ -402,8 +402,12 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
                                 form_compiler_parameters={'quadrature_degree': self.p.degree})
         # print('sigma plot', sigma_plot.vector()[:].max())
         E_plot = df.project(self.q_E, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
+        age_plot = df.project(self.q_age, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
+
         E_plot.rename("Young's Modulus", "Young's modulus value")
         sigma_plot.rename("Stress", "stress components")
+        age_plot.rename("Concrete age", "Concrete age value")
 
         self.pv_file.write(E_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+        self.pv_file.write(age_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
