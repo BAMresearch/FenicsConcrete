@@ -9,3 +9,4 @@ dependencies:
   - python=3.9
   - scipy
   - pytest
+  - mshr=2019.1.0
