@@ -8,3 +8,4 @@ dependencies:
   - numpy
   - python=3.9
   - scipy
+  - pytest
