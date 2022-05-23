@@ -1,0 +1,10 @@
+name: FenicsConcrete
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - fenics=2019.1.0
+  - loguru
+  - numpy
+  - python=3.9
+  - scipy
