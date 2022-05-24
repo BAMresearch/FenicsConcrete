@@ -43,10 +43,12 @@ class ConcreteThixMechanical(MaterialProblem):
 
         ### paramters for mechanics problem
         default_p['nu'] = 0.3       # Poissons Ratio see Wolfs et al 2018
-        default_p['E_0'] = 15000    # Youngs Modulus Pa # random values!!
-        default_p['R_E'] = 15       # reflocculation rate of E modulus in Pa / s
-        default_p['A_E'] = 30       # structuration rate of E modulus in Pa / s
-        default_p['t_f'] = 300      # reflocculation time in s
+                                    # Youngs modulus is changing over age (see E_fkt) following the bilinear approach Kruger et al 2019
+                                    # (https://www.sciencedirect.com/science/article/pii/S0950061819317507) with two different rates
+        default_p['E_0'] = 15000    # Youngs Modulus at age=0 in Pa # here random values!!
+        default_p['R_E'] = 15       # Reflocculation rate of E modulus from age=0 to age=t_f in Pa / s
+        default_p['A_E'] = 30       # Structuration rate of E modulus from age >= t_f in Pa / s
+        default_p['t_f'] = 300      # Reflocculation time (switch between reflocculation rate and structuration rate) in s
 
         self.p = default_p + self.p
 
@@ -238,108 +240,6 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         if age >= 0:
             f_active = 1.0 # active
         return f_active
-
-    # def principal_stress(self, stresses):
-    #     # checking type of problem
-    #     n = stresses.shape[1]  # number of stress components in stress vector
-    #     # finding eigenvalues of symmetric stress tensor
-    #     # 1D problem
-    #     if n == 1:
-    #         principal_stresses = stresses
-    #     # 2D problem
-    #     elif n == 3:
-    #         # the following uses
-    #         # lambda**2 - tr(sigma)lambda + det(sigma) = 0, solve for lambda using pq formula
-    #         p = - (stresses[:, 0] + stresses[:, 1])
-    #         q = stresses[:, 0] * stresses[:, 1] - stresses[:, 2] ** 2
-    #
-    #         D = p ** 2 / 4 - q  # help varibale
-    #         assert np.all(D >= -1.0e-15)  # otherwise problem with imaginary numbers
-    #         sqrtD = np.sqrt(D)
-    #
-    #         eigenvalues_1 = -p / 2.0 + sqrtD
-    #         eigenvalues_2 = -p / 2.0 - sqrtD
-    #
-    #         # strack lists as array
-    #         principal_stresses = np.column_stack((eigenvalues_1, eigenvalues_2))
-    #
-    #         # principal_stress = np.array([ev1p,ev2p])
-    #     elif n == 6:
-    #         # for a symetric stress vector a b c e f d we need to solve:
-    #         # x**3 - x**2(a+b+c) - x(e**2+f**2+d**2-ab-bc-ac) + (abc-ae**2-bf**2-cd**2+2def) = 0, solve for x
-    #         principal_stresses = np.empty([len(stresses), 3])
-    #         # currently slow solution with loop over all stresses and subsequent numpy function call:
-    #         for i, stress in enumerate(stresses):
-    #             # convert voigt to tensor, (00,11,22,12,02,01)
-    #             stress_tensor = np.zeros((3, 3))
-    #             stress_tensor[0][0] = stress[0]
-    #             stress_tensor[1][1] = stress[1]
-    #             stress_tensor[2][2] = stress[2]
-    #             stress_tensor[0][1] = stress[5]
-    #             stress_tensor[1][2] = stress[3]
-    #             stress_tensor[0][2] = stress[4]
-    #             stress_tensor[1][0] = stress[5]
-    #             stress_tensor[2][1] = stress[3]
-    #             stress_tensor[2][0] = stress[4]
-    #             # use numpy for eigenvalues
-    #             principal_stress = np.linalg.eigvalsh(stress_tensor)
-    #             # sort principal stress from lagest to smallest!!!
-    #             principal_stresses[i] = -np.sort(-principal_stress)
-    #
-    #     return principal_stresses
-
-    # def yield_surface(self, stresses, ft, fc):
-    #     # function for approximated yield surface
-    #     # first approximation, could be changed if we have numbers/information
-    #     fc2 = fc
-    #     # pass voigt notation and compute the principal stress
-    #     p_stresses = self.principal_stress(stresses)
-    #
-    #     # get the principle tensile stresses
-    #     t_stresses = np.where(p_stresses < 0, 0, p_stresses)
-    #
-    #     # get dimension of problem, ie. length of list with principal stresses
-    #     n = p_stresses.shape[1]
-    #     # check case
-    #     if n == 1:
-    #         # rankine for the tensile region
-    #         rk_yield_vals = t_stresses[:, 0] - ft[:]
-    #
-    #         # invariants for drucker prager yield surface
-    #         I1 = stresses[:, 0]
-    #         I2 = np.zeros_like(I1)
-    #     # 2D problem
-    #     elif n == 2:
-    #
-    #         # rankine for the tensile region
-    #         rk_yield_vals = (t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2) ** 0.5 - ft[:]
-    #
-    #         # invariants for drucker prager yield surface
-    #         I1 = stresses[:, 0] + stresses[:, 1]
-    #         I2 = ((stresses[:, 0] + stresses[:, 1]) ** 2 - ((stresses[:, 0]) ** 2 + (stresses[:, 1]) ** 2)) / 2
-    #
-    #     # 3D problem
-    #     elif n == 3:
-    #         # rankine for the tensile region
-    #         rk_yield_vals = (t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2 + t_stresses[:, 2] ** 2) ** 0.5 - ft[:]
-    #
-    #         # invariants for drucker prager yield surface
-    #         I1 = stresses[:, 0] + stresses[:, 1] + stresses[:, 2]
-    #         I2 = ((stresses[:, 0] + stresses[:, 1] + stresses[:, 2]) ** 2 - (
-    #                     (stresses[:, 0]) ** 2 + (stresses[:, 1]) ** 2 + (stresses[:, 2]) ** 2)) / 2
-    #     else:
-    #         raise ('Problem with input to yield surface, the array with stress values has the wrong size ')
-    #
-    #     J2 = 1 / 3 * I1 ** 2 - I2
-    #     beta = (3.0 ** 0.5) * (fc2 - fc) / (2 * fc2 - fc)
-    #     Hp = fc2 * fc / ((3.0 ** 0.5) * (2 * fc2 - fc))
-    #
-    #     dp_yield_vals = beta / 3 * I1 + J2 ** 0.5 - Hp
-    #
-    #     # TODO: is this "correct", does this make sense? for a compression state, what if rk yield > dp yield???
-    #     yield_vals = np.maximum(rk_yield_vals, dp_yield_vals)
-    #
-    #     return np.asarray(yield_vals)
 
     def evaluate_material(self):
         # convert quadrature spaces to numpy vector
