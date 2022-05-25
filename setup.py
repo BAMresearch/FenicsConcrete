@@ -16,7 +16,7 @@ DESCRIPTION='A Python package for a FEM concrete model',
 URL = 'https://github.com/BAMresearch/FenicsConcrete'
 EMAIL = 'erik.tamsen@bam.de'
 AUTHOR = 'Erik Tamsen'
-REQUIRES_PYTHON = '>=9.0.0'
+REQUIRES_PYTHON = '>=3.0.0'
 VERSION = '0.3.1'
 
 # What packages are required for this module to be executed?
