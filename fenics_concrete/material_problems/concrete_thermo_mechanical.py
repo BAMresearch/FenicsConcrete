@@ -9,7 +9,7 @@ from fenics_concrete.helpers import Parameters
 from fenics_concrete.helpers import set_q
 from fenics_concrete.helpers import LocalProjector
 from fenics_concrete import experimental_setups
-
+import fenics_concrete
 
 import warnings
 from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
@@ -23,7 +23,8 @@ class ConcreteThermoMechanical(MaterialProblem):
     def __init__(self, experiment=None, parameters=None, pv_name='pv_output_concrete-thermo-mechanical'):
         # generate "dummy" experiement when none is passed
         if experiment == None:
-            experiment = experimental_setups.get_experiment('MinimalCube', parameters)
+            #experiment = experimental_setups.get_experiment('MinimalCube', parameters)
+            experiment = fenics_concrete.MinimalCubeExperiment(parameters)
 
         super().__init__(experiment, parameters, pv_name)
 
