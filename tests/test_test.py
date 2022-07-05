@@ -1,4 +1,5 @@
 import numpy as np
+import feincs_concrete
 
 
 # import warnings
@@ -13,8 +14,3 @@ def test_this():
     assert 'this' == 'this'
     
     
-def test_that():
-    print('Moin')
-
-
-    assert 'this' == 'that'

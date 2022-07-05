@@ -2,7 +2,10 @@
 
 name: Tests for the concrete model
 
-on: [push]
+on:
+  push:
+    branches:
+      - master
 
 jobs:
   test_model:
