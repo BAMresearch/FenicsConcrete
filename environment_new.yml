@@ -5,7 +5,7 @@ channels:
 dependencies:
   - python=3.9.7
   - fenics=2019.1.0
-  - mshr=2019.1.0
+  - gmsh
   - matplotlib
   - mamba
   - scipy
