@@ -1,5 +1,5 @@
 import numpy as np
-import feincs_concrete
+import fenics_concrete
 
 
 # import warnings
