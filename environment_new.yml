@@ -8,6 +8,7 @@ dependencies:
   - mamba
   - scipy
   - numpy
+  - pytest
   - pip
   - pip:
     - -e .
