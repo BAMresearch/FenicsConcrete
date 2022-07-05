@@ -1,0 +1,32 @@
+# This workflow will install Python dependencies, run tests with concrete model
+name: Fixing the tests for the concrete model
+
+on:
+  push:
+    branches-ignore:
+
+  pull_request:
+    branches: [ main ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  testing_tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: checkout repo content
+        uses: actions/checkout@v2
+      - name: setup python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: setup-conda-environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          environment-file: environment_new.yml
+          mamba-version: "*"
+          auto-update-conda: true
+          activate-environment: FenicsConcrete
