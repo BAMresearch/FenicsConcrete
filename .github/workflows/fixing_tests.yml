@@ -35,7 +35,10 @@ jobs:
       - name: testing packages
         shell: bash -l {0}
         run: |
-            python
-            import numpy
+          conda info
+          conda list
+      
+      
+      
             
         
