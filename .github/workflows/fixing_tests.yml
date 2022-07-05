@@ -30,3 +30,12 @@ jobs:
           mamba-version: "*"
           auto-update-conda: true
           activate-environment: FenicsConcrete
+       
+      
+      - name: testing packages
+        shell: bash -l {0}
+        run: |
+            python
+            import numpy
+            
+        
