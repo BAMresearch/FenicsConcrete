@@ -6,8 +6,15 @@ import numpy as np
 #     import QuadratureRepresentationDeprecationWarning
 # warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
-def test_test():
+def test_this():
     print('Moin')
 
 
     assert 'this' == 'this'
+    
+    
+def test_that():
+    print('Moin')
+
+
+    assert 'this' == 'that'
