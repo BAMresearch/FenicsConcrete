@@ -9,7 +9,7 @@ def simple_setup(p, displacement, sensor):
 
     parameters['log_level'] = 'WARNING'
     parameters['bc_setting'] = 'free'
-    parameters['mesh_density'] = 6
+    parameters['mesh_density'] = 10
 
     parameters = parameters + p
 
