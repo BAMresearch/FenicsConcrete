@@ -6,6 +6,7 @@ dependencies:
   - python=3.9.7
   - fenics=2019.1.0
   - python-gmsh
+  - meshio
   - matplotlib
   - mamba
   - scipy
