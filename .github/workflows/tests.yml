@@ -30,13 +30,6 @@ jobs:
           mamba-version: "*"
           auto-update-conda: true
           activate-environment: FenicsConcrete
-       
-      
-      - name: testing packages
-        shell: bash -l {0}
-        run: |
-          conda info
-          conda list
       
       - name: Run tests
         shell: bash -l {0}
