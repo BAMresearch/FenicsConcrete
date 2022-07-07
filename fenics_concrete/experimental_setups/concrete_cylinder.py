@@ -62,7 +62,7 @@ def generate_cylinder_mesh(radius,height,mesh_density):
 
     # convert msh to xdmf
     meshio_mesh = meshio.read(msh_file)
-    meshio.write(xdmf_file, meshio.Mesh(points=meshio_mesh.points, cells=meshio_mesh.cells))
+    meshio.write(xdmf_file, meshio_mesh)
 
     # read xdmf as dolfin mesh
     mesh = df.Mesh()
