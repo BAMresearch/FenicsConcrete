@@ -1,5 +1,5 @@
 # This workflow will install Python dependencies, run tests with concrete model
-name: Fixing the tests for the concrete model
+name: Tests for fenics concrete
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
       - name: setup-conda-environment
         uses: conda-incubator/setup-miniconda@v2
         with:
-          environment-file: environment_new.yml
+          environment-file: environment.yml
           mamba-version: "*"
           auto-update-conda: true
           activate-environment: FenicsConcrete
