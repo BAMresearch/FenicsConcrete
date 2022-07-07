@@ -1,29 +1,41 @@
 # This workflow will install Python dependencies, run tests with concrete model
+name: Tests for fenics concrete
 
-name: Tests for the concrete model
+on:
+  push:
+    branches-ignore:
 
-on: [push]
+  pull_request:
+    branches: [ main ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
 
 jobs:
-  test_model:
-    runs-on: ${{ matrix.operating-system }}
-    strategy:
-      matrix:
-        operating-system: [ubuntu-latest]
+  testing_tests:
+    runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - uses: conda-incubator/setup-miniconda@v2
-      with:
-        python-version: "3.9"
-        mamba-version: "*"
-        channels: conda-forge
-        channel-priority: strict
-        auto-update-conda: true  
-        environment-file: environment_relaxed.yml
-    
-    - name: Run tests
-      shell: bash -l {0}
-      run: |
-        export PYTHONPATH=$PYTHONPATH:concrete_module
-        pytest -s -W error::UserWarning
+      - name: checkout repo content
+        uses: actions/checkout@v2
+      - name: setup python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+
+      - name: setup-conda-environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          environment-file: environment.yml
+          mamba-version: "*"
+          auto-update-conda: true
+          activate-environment: FenicsConcrete
+      
+      - name: Run tests
+        shell: bash -l {0}
+        run: |
+          pytest
+      
+      
+            
+        

@@ -2,7 +2,74 @@ from fenics_concrete.experimental_setups.experiment import Experiment
 from fenics_concrete.helpers import Parameters
 import dolfin as df
 import numpy as np
-import mshr
+import gmsh
+import os
+import meshio
+
+
+def generate_cylinder_mesh(radius,height,mesh_density):
+    '''Uses gmsh to generate a cylinder mesh for fenics
+
+    Paramters
+    ---------
+    radius : float
+        radius of the cylinder
+    height : float
+        height of the cylinder
+    mesh_density : float
+        defines the size of the elements
+        defines the minimum number of element edges in the height of the cylinder
+
+    Returns
+    -------
+    mesh : dolfin.cpp.mesh.Mesh object
+        cylinder mesh for dolfin
+    '''
+
+    # file names and location
+    folder_name = 'mesh'
+    file_name = 'cylinder'
+    msh_file = '{}/{}.msh'.format(folder_name,file_name)
+    xdmf_file = '{}/{}.xdmf'.format(folder_name,file_name)
+
+    # start gmsh
+    gmsh.initialize()
+    gmsh.model.add('cylinder_mesh')  # give the model a name
+
+    # generate cylinder geometry with origin in (0,0,0)
+    # syntax: add_cylinder(x,y,z,dx,dy,dz,radius,angle in radian)
+    membrane = gmsh.model.occ.add_cylinder(0,0,0,0,0,height,radius,angle=2*np.pi)
+    gmsh.model.occ.synchronize()
+    dim = 3
+    # only physical groups get exported
+    # syntax: add_physical_group(dim , list of 3d objects, tag)
+    gmsh.model.add_physical_group(dim, [membrane], 1)
+
+    # meshing
+    characteristic_length = height/mesh_density
+    gmsh.option.setNumber("Mesh.CharacteristicLengthMax",characteristic_length)
+    # setting for minimal length, arbitrarily chosen as half the max value
+    gmsh.option.setNumber("Mesh.CharacteristicLengthMin",characteristic_length/2)
+    gmsh.model.mesh.generate(dim)
+
+    # save it to disk as msh in folder
+    if not os.path.exists(folder_name):  # creat mesh folder if it does nto exists
+        os.mkdir(folder_name)
+
+    # write file
+    gmsh.write(msh_file)
+    gmsh.finalize()
+
+    # convert msh to xdmf
+    meshio_mesh = meshio.read(msh_file)
+    meshio.write(xdmf_file, meshio.Mesh(points=meshio_mesh.points, cells=meshio_mesh.cells))
+
+    # read xdmf as dolfin mesh
+    mesh = df.Mesh()
+    with df.XDMFFile(xdmf_file) as mesh_file:
+        mesh_file.read(mesh)
+
+    return mesh
 
 
 class ConcreteCylinderExperiment(Experiment):
@@ -54,11 +121,8 @@ class ConcreteCylinderExperiment(Experiment):
             # to reduce approximation errors due to the linear tetrahedron mesh, the mesh radius is iteratively changed
             # until the bottom surface area matches that of a circle with the initially defined radius
             def create_cylinder_mesh(radius, parameters):
-                # Cylinder ( center bottom, center top, radius bottom, radius top )
-                cylinder_geometry = mshr.Cylinder(df.Point(0, 0, 0), df.Point(0, 0, parameters.height),
-                                                  radius, radius)
-                # mesh ( geometry , mesh density )
-                mesh = mshr.generate_mesh(cylinder_geometry, parameters.mesh_density)
+                # generate cylinder mesh using gmsh
+                mesh = generate_cylinder_mesh(radius, parameters.height, parameters.mesh_density)
 
                 # compute bottom surface area
                 class BottomSurface(df.SubDomain):
@@ -170,3 +234,13 @@ class ConcreteCylinderExperiment(Experiment):
         """
 
         self.top_displacement.assign(df.Constant(top_displacement))
+
+
+# testing things
+
+
+radius = 50
+height = 300
+mesh_density = 5 # min number of elements in length direction
+
+generate_cylinder_mesh(radius,height,mesh_density)
