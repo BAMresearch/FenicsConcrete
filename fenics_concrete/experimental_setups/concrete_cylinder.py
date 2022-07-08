@@ -34,6 +34,7 @@ def generate_cylinder_mesh(radius,height,mesh_density):
 
     # start gmsh
     gmsh.initialize()
+    gmsh.option.set_number('General.Verbosity',3) # only print warnings etc
     gmsh.model.add('cylinder_mesh')  # give the model a name
 
     # generate cylinder geometry with origin in (0,0,0)
@@ -235,12 +236,3 @@ class ConcreteCylinderExperiment(Experiment):
 
         self.top_displacement.assign(df.Constant(top_displacement))
 
-
-# testing things
-
-
-radius = 50
-height = 300
-mesh_density = 5 # min number of elements in length direction
-
-generate_cylinder_mesh(radius,height,mesh_density)
