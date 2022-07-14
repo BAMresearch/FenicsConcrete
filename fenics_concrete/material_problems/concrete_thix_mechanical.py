@@ -54,6 +54,8 @@ class ConcreteThixMechanical(MaterialProblem):
 
         # create model
         self.mechanics_problem = ConcreteThixElasticModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
+        self.V = self.mechanics_problem.V # for reaction force sensor
+        self.residual = None # initialize
 
         # setting bcs
         bcs = self.experiment.create_displ_bcs(self.mechanics_problem.V) # fixed boundary bottom
@@ -81,6 +83,7 @@ class ConcreteThixMechanical(MaterialProblem):
         # further ?? stress/strain ...
 
         # get sensor data
+        self.residual = self.mechanics_problem.R  # for residual sensor
         for sensor_name in self.sensors:
             # go through all sensors and measure
             self.sensors[sensor_name].measure(self, t)
@@ -145,8 +148,8 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
             # quadrature functions
             self.q_E = df.Function(q_V, name="youngs modulus")
-            self.q_age = df.Function(q_V, name="age of concrete")
-            self.q_f = df.Function(q_V, name="density correction") # zero if age < 0 layer not active otherwise 1
+            self.q_age = df.Function(q_V, name="age of concrete") # also negative age possible mirrowing the path
+            self.q_f = df.Function(q_V, name="pseudo density") # zero if age < 0 layer not active otherwise 1
             self.q_sigma = df.Function(q_VT, name="stress")
             self.q_eps = df.Function(q_VT, name="Strain")
 
@@ -154,7 +157,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.u = df.Function(self.V)  # displacement
             v = df.TestFunction(self.V)
 
-            # Volume force   todo: ANNIKA: dependent on age!
+            # Volume force
             if self.p.dim == 1:
                 f = df.Constant(-self.p.g * self.p.density)
             elif self.p.dim == 2:
@@ -168,8 +171,10 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             # self.x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
             self.sigma_ufl = self.q_E * self.x_sigma(self.u)
 
+            # multiplication with activated elements / current Young's modulus
             R_ufl = self.q_E * df.inner(self.x_sigma(self.u), self.eps(v)) * dxm
             R_ufl += - self.q_f * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
+
             # quadrature point part
             self.R = R_ufl
 
@@ -227,7 +232,8 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
     def E_fkt(self, age, parameters):
 
-        E = df.DOLFIN_EPS # non-active
+        #E = df.DOLFIN_EPS # non-active
+        E = 0.001 * parameters['E_0']
         if age >=0 and age < parameters['t_f']:
             E = parameters['E_0'] + parameters['R_E'] * age
         elif age >= parameters['t_f']:
@@ -253,10 +259,10 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(age_list, parameters)
-        # print('E',E_list.max())
+        print('E',E_list.max(),E_list.min())
         f_fkt_vectorized = np.vectorize(self.f_fkt)
         f_list = f_fkt_vectorized(age_list)
-        # print('f', f_list.max(), f_list.min())
+        print('f', f_list.max(), f_list.min())
 
 
         # # project lists onto quadrature spaces
