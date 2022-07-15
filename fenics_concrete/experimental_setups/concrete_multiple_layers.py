@@ -5,7 +5,7 @@ import dolfin as df
 # layered experiment set-up in the moment only 2D
 # one mesh for all layers -> activate elements by pseudo-density
 
-class MultipleLayers2DExperiment(Experiment):
+class ConcreteMultipleLayers2DExperiment(Experiment):
     def __init__(self, parameters=None):
         # initialize a set of "basic paramters" (for now...)
         p = Parameters()

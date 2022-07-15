@@ -168,14 +168,14 @@ def test_density_thix_2D():
 
 
 
-if __name__ == '__main__':
-
-
-    test_displ_thix_2D()
-
-    test_displ_thix_2D()
-
-    test_density_thix_2D()
+# if __name__ == '__main__':
+#
+#
+#     test_displ_thix_2D()
+#
+#     test_displ_thix_3D()
+#
+#     test_density_thix_2D()
 
 
 
