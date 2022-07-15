@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-def setup_test(parameters,sensor,age0_given):
+def setup_test(parameters,sensor):
     experiment = fenics_concrete.ConcreteCubeUniaxialExperiment(parameters)
 
     file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
@@ -18,9 +18,6 @@ def setup_test(parameters,sensor,age0_given):
 
     # set time step
     problem.set_timestep(problem.p.dt)  # for time integration scheme
-
-    age0 = age0_given
-    problem.set_initial_age(age0)
 
     # initialize time
     t = 0
@@ -45,7 +42,7 @@ def test_displ_thix_3D():
     parameters['density'] = 0.0
     parameters['u_bc'] = 0.1
     parameters['bc_setting'] = 'disp'
-    parameters['age_zero'] = 10 #s
+    parameters['age_0'] = 10 #s # age of concrete at expriment start time
     parameters['nu'] = 0.2
 
     parameters['time'] = 30 * 60  # total simulation time in s
@@ -55,7 +52,7 @@ def test_displ_thix_3D():
     sensor01 = fenics_concrete.sensors.StressSensor(df.Point(0.5, 0.5, 1))
     sensor02 = fenics_concrete.sensors.StrainSensor(df.Point(0.5, 0.5, 1))
 
-    prop3D = setup_test(parameters,[sensor01,sensor02],df.Expression('age_zero', age_zero=parameters['age_zero'], degree=0))
+    prop3D = setup_test(parameters,[sensor01,sensor02])
 
     # tests
     # get stresses and strains at the end
@@ -73,7 +70,7 @@ def test_displ_thix_3D():
     sensor_stress_zz = prop3D.sensors[sensor01.name].data[
         -1][-1]
     # expected stress value
-    age_end = parameters['time'] + parameters['age_zero']
+    age_end = parameters['time'] + parameters['age_0']
     E_end = prop3D.p.E_0 + prop3D.p.R_E * prop3D.p.t_f + prop3D.p.A_E * (age_end - prop3D.p.t_f)
     assert sensor_stress_zz == pytest.approx(
         parameters['u_bc'] / 1 * E_end)  # compare computed stress with the E*strain
@@ -91,7 +88,7 @@ def test_displ_thix_2D():
     parameters['density'] = 0.0
     parameters['u_bc'] = 0.1
     parameters['bc_setting'] = 'disp'
-    parameters['age_zero'] = 10 #s
+    parameters['age_0'] = 10 #s # age of concrete at expriment start time
     parameters['nu'] = 0.2
     parameters['stress_state'] = 'plane_stress'
 
@@ -102,7 +99,7 @@ def test_displ_thix_2D():
     sensor01 = fenics_concrete.sensors.StressSensor(df.Point(0.5,1))
     sensor02 = fenics_concrete.sensors.StrainSensor(df.Point(0.5,1))
 
-    prop2D = setup_test(parameters,[sensor01,sensor02],df.Expression('age_zero', age_zero=parameters['age_zero'], degree=0))
+    prop2D = setup_test(parameters,[sensor01,sensor02])
 
     # tests
     # get stresses and strains at the end
@@ -117,7 +114,7 @@ def test_displ_thix_2D():
 
     sensor_stress_yy = prop2D.sensors[sensor01.name].data[-1][-1] # yy or zz direction depending on problem dimension
     # expected stress value
-    age_end = parameters['time'] + parameters['age_zero']
+    age_end = parameters['time'] + parameters['age_0']
     E_end = prop2D.p.E_0 + prop2D.p.R_E * prop2D.p.t_f + prop2D.p.A_E * (age_end - prop2D.p.t_f)
     assert sensor_stress_yy == pytest.approx(
         parameters['u_bc'] / 1 * E_end)  # compare computed stress with the E*strain
@@ -130,12 +127,12 @@ def test_density_thix_2D():
     parameters = fenics_concrete.Parameters() # using the current default values
 
     parameters['dim'] = 2
-    parameters['mesh_density'] = 50
+    parameters['mesh_density'] = 5
     parameters['degree'] = 2
     parameters['log_level'] = 'INFO'
     parameters['density'] = 2070.0
     parameters['bc_setting'] = 'density'
-    parameters['age_zero'] = 10 #s
+    parameters['age_0'] = 10 #s # age of concrete at expriment start time
     parameters['nu'] = 0.2
     parameters['stress_state'] = 'plane_stress'
 
@@ -150,8 +147,7 @@ def test_density_thix_2D():
     sensor02 = fenics_concrete.sensors.StrainSensor(df.Point(0.5,0.5)) #2.strainsensor middle middle
     sensor03 = fenics_concrete.sensors.ReactionForceSensorBottom()
 
-    age0_given = df.Expression('age_zero', age_zero=parameters['age_zero'], degree=0)
-    prop2D = setup_test(parameters,[sensor01,sensor02,sensor03],age0_given)
+    prop2D = setup_test(parameters,[sensor01,sensor02,sensor03])
 
     # tests
     # get stresses and strains at the end usually the sensor names are the sensor class name if same kind then numbered!!
@@ -161,7 +157,7 @@ def test_density_thix_2D():
     strain_bottom = prop2D.sensors[list(prop2D.sensors.keys())[0]].data[-1][-1] # yy
     strain_middle = prop2D.sensors[list(prop2D.sensors.keys())[1]].data[-1][-1] # yy
 
-    # print('reaction force', prop2D.sensors[list(prop2D.sensors.keys())[-1]].data[-1]) # or "ReactionForceSensor" = sensor03.name
+    # print('reaction force', prop2D.sensors[list(prop2D.sensors.keys())[-1]].data[-1]) # or "ReactionForceSensorBottom" = sensor03.name
     force_bottom = prop2D.sensors[sensor03.name].data[-1]
     # print('strain', -parameters['density']*prop2D.p.g/prop2D.p.E_0)
     # print('force bottom', -parameters['density']*prop2D.p.g*1*1)
@@ -173,13 +169,13 @@ def test_density_thix_2D():
 
 
 if __name__ == '__main__':
-#
-#
-#     test_displ_thix_2D()
-#
-#     test_displ_thix_2D()
 
-    # test_density_thix_2D()
+
+    test_displ_thix_2D()
+
+    test_displ_thix_2D()
+
+    test_density_thix_2D()
 
 
 

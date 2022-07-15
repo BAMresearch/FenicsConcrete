@@ -49,6 +49,7 @@ class ConcreteThixMechanical(MaterialProblem):
         default_p['R_E'] = 15       # Reflocculation rate of E modulus from age=0 to age=t_f in Pa / s
         default_p['A_E'] = 30       # Structuration rate of E modulus from age >= t_f in Pa / s
         default_p['t_f'] = 300      # Reflocculation time (switch between reflocculation rate and structuration rate) in s
+        default_p['age_0'] = 0      # start age of concrete [s]
 
         self.p = default_p + self.p
 
@@ -67,8 +68,8 @@ class ConcreteThixMechanical(MaterialProblem):
         self.mechanics_solver.parameters['absolute_tolerance'] = 1e-8
         self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
 
-    def set_initial_age(self, age):
-        self.mechanics_problem.set_initial_age(age)
+    def set_initial_path(self, path):
+        self.mechanics_problem.set_initial_path(path)
 
     def solve(self, t=1.0):
 
@@ -88,8 +89,8 @@ class ConcreteThixMechanical(MaterialProblem):
             # go through all sensors and measure
             self.sensors[sensor_name].measure(self, t)
 
-        # update age before next step!
-        self.mechanics_problem.update_age()
+        # update age & path before next step!
+        self.mechanics_problem.update_values()
 
     def pv_plot(self, t=0):
         # calls paraview output for both problems
@@ -147,9 +148,12 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             q_VT = df.FunctionSpace(mesh, quadrature_vector_element)
 
             # quadrature functions
+            # to initialize values (otherwise initialized by 0)
+            self.q_path = df.Function(q_V, name="path time defined overall")  # negative values where not active yet
+
+            # computed values
+            self.q_pd = df.Function(q_V, name="pseudo density") # active or nonactive
             self.q_E = df.Function(q_V, name="youngs modulus")
-            self.q_age = df.Function(q_V, name="age of concrete") # also negative age possible mirrowing the path
-            self.q_f = df.Function(q_V, name="pseudo density") # zero if age < 0 layer not active otherwise 1
             self.q_sigma = df.Function(q_VT, name="stress")
             self.q_eps = df.Function(q_VT, name="Strain")
 
@@ -157,7 +161,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.u = df.Function(self.V)  # displacement
             v = df.TestFunction(self.V)
 
-            # Volume force
+            # Volume force todo: ANNIKA: density should also evolve with time (?) ensuring constant strain for individual layer (?)
             if self.p.dim == 1:
                 f = df.Constant(-self.p.g * self.p.density)
             elif self.p.dim == 2:
@@ -173,7 +177,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
             # multiplication with activated elements / current Young's modulus
             R_ufl = self.q_E * df.inner(self.x_sigma(self.u), self.eps(v)) * dxm
-            R_ufl += - self.q_f * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
+            R_ufl += - self.q_pd * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
 
             # quadrature point part
             self.R = R_ufl
@@ -230,56 +234,66 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
         return strain_vector
 
-    def E_fkt(self, age, parameters):
+    def E_fkt(self, pd, path_time, parameters):
 
-        #E = df.DOLFIN_EPS # non-active
-        E = 0.001 * parameters['E_0']
-        if age >=0 and age < parameters['t_f']:
-            E = parameters['E_0'] + parameters['R_E'] * age
-        elif age >= parameters['t_f']:
-            E = parameters['E_0'] + parameters['R_E'] * parameters['t_f'] + parameters['A_E'] * (age-parameters['t_f'])
+        if pd > 0: # element active, compute current Young's modulus
+            age = parameters['age_0'] + path_time # age concrete
+            if age < parameters['t_f']:
+                E = parameters['E_0'] + parameters['R_E'] * age
+            elif age >= parameters['t_f']:
+                E = parameters['E_0'] + parameters['R_E'] * parameters['t_f'] + parameters['A_E'] * (age-parameters['t_f'])
+        else:
+            E = df.DOLFIN_EPS # non-active
+            # E = 0.001 * parameters['E_0']  # Emin?? TODO: how to define Emin?
+
         return E
 
-    def f_fkt(self, age):
-        # decide if layer is active or not (age < 0 nonactive!)
-        f_active = df.DOLFIN_EPS  # non-active
-        if age >= 0:
-            f_active = 1.0 # active
-        return f_active
+    def pd_fkt(self, path_time):
+        # pseudo denisty: decide if layer is active or not (age < 0 nonactive!)
+        # decision based on current path_time value
+        l_active = 0 # non-active
+        if path_time >= 0-df.DOLFIN_EPS:
+            l_active = 1.0 # active
+        return l_active
 
     def evaluate_material(self):
-        # convert quadrature spaces to numpy vector
-        age_list = self.q_age.vector().get_local()
-        # print(age_list)
+        # get path time; convert quadrature spaces to numpy vector
+        path_list = self.q_path.vector().get_local()
+        # print('check', path_list)
+        # vectorize the function for speed up
+        pd_fkt_vectorized = np.vectorize(self.pd_fkt)
+        pd_list = pd_fkt_vectorized(path_list) # current pseudo density 1 if path_time >=0 else 0
+        # print('pseudo density', pd_list.max(), pd_list.min())
+
+        # compute current Young's modulus
         parameters = {}
         parameters['t_f'] = self.p.t_f
         parameters['E_0'] = self.p.E_0
         parameters['R_E'] = self.p.R_E
         parameters['A_E'] = self.p.A_E
+        parameters['age_0'] = self.p.age_0
+        #
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
-        E_list = E_fkt_vectorized(age_list, parameters)
-        print('E',E_list.max(),E_list.min())
-        f_fkt_vectorized = np.vectorize(self.f_fkt)
-        f_list = f_fkt_vectorized(age_list)
-        print('f', f_list.max(), f_list.min())
-
+        E_list = E_fkt_vectorized(pd_list, path_list, parameters)
+        # print('E',E_list.max(),E_list.min())
 
         # # project lists onto quadrature spaces
         set_q(self.q_E, E_list)
-        set_q(self.q_f, f_list)
+        set_q(self.q_pd, pd_list)
 
-    def update_age(self):
+    def update_values(self):
         # no history field currently
-        age_list = self.q_age.vector().get_local()
-        age_list += self.dt * np.ones_like(age_list)
-        set_q(self.q_age, age_list)
+        path_list = self.q_path.vector().get_local()
+        path_list += self.dt * np.ones_like(path_list)
+
+        set_q(self.q_path, path_list)
 
     def set_timestep(self, dt):
         self.dt = dt
 
-    def set_initial_age(self, age):
-        self.q_age.interpolate(age) # todo: ANNIKA: What's if this is not given as a dolfin expression?
+    def set_initial_path(self, path_time):
+        self.q_path.interpolate(path_time)  # default = zero, given as expression
 
     def set_bcs(self, bcs):
         # Only now (with the bcs) can we initialize the assembler
@@ -308,12 +322,12 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
                                 form_compiler_parameters={'quadrature_degree': self.p.degree})
         # print('sigma plot', sigma_plot.vector()[:].max())
         E_plot = df.project(self.q_E, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
-        age_plot = df.project(self.q_age, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
+        pd_plot = df.project(self.q_pd, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
 
         E_plot.rename("Young's Modulus", "Young's modulus value")
         sigma_plot.rename("Stress", "stress components")
-        age_plot.rename("Concrete age", "Concrete age value")
+        pd_plot.rename("pseudo density", "pseudo density")
 
         self.pv_file.write(E_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
-        self.pv_file.write(age_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+        self.pv_file.write(pd_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
