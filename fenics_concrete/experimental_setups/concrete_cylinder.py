@@ -34,17 +34,17 @@ def generate_cylinder_mesh(radius,height,mesh_density):
 
     # start gmsh
     gmsh.initialize()
-    gmsh.option.set_number('General.Verbosity',3) # only print warnings etc
+    gmsh.option.setNumber('General.Verbosity',3) # only print warnings etc
     gmsh.model.add('cylinder_mesh')  # give the model a name
 
     # generate cylinder geometry with origin in (0,0,0)
     # syntax: add_cylinder(x,y,z,dx,dy,dz,radius,angle in radian)
-    membrane = gmsh.model.occ.add_cylinder(0,0,0,0,0,height,radius,angle=2*np.pi)
+    membrane = gmsh.model.occ.addCylinder(0,0,0,0,0,height,radius,angle=2*np.pi)
     gmsh.model.occ.synchronize()
     dim = 3
     # only physical groups get exported
     # syntax: add_physical_group(dim , list of 3d objects, tag)
-    gmsh.model.add_physical_group(dim, [membrane], 1)
+    gmsh.model.addPhysicalGroup(dim, [membrane], 1)
 
     # meshing
     characteristic_length = height/mesh_density
