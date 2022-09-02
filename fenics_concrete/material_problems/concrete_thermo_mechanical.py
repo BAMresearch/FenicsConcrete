@@ -458,7 +458,7 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
     def temp_adjust_tangent(self, T):
         val = 0
         if self.p.temp_adjust_law == 'exponential':
-            val = self.p.E_act / self.p.igc / T ** 2
+            val = self.temp_adjust(T) * self.p.E_act / self.p.igc / T ** 2
         return val
 
     # affinity function
