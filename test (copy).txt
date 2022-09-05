@@ -8,3 +8,5 @@
     - pytest
     - mumps-mpi=5.1.2=h5bebb2f_1007
     - mshr=2019.1.0=py37h255090a_1
+    
+    TEST
