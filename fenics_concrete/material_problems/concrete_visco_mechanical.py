@@ -2,7 +2,6 @@ import dolfin as df
 import numpy as np
 import scipy.optimize
 
-
 from fenics_concrete.material_problems.material_problem import MaterialProblem
 
 from fenics_concrete.helpers import Parameters
@@ -10,17 +9,14 @@ from fenics_concrete.helpers import set_q
 from fenics_concrete.helpers import LocalProjector
 from fenics_concrete import experimental_setups
 
-
 import warnings
 from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
 
 df.parameters["form_compiler"]["representation"] = "quadrature"
 warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
-# copy from concrete_thermo_mechanical.py
-# change/ adapted models for modelling structural build-up
-class ConcreteThixMechanical(MaterialProblem):
-    def __init__(self, experiment=None, parameters=None, pv_name='pv_output_concrete-thix'):
+class ConcreteViscoMechanical(MaterialProblem):
+    def __init__(self, experiment=None, parameters=None, pv_name='pv_output_concrete-visco'):
         # generate "dummy" experiment when none is passed
         if experiment == None:
             experiment = experimental_setups.get_experiment('MinimalCube', parameters)
@@ -30,36 +26,25 @@ class ConcreteThixMechanical(MaterialProblem):
     def setup(self):
         # setup initial material parameters
         default_p = Parameters()
-        # Material parameter for concrete model with structural build-up
-        default_p['density'] = 2070  # in kg/m^3 density of fresh concrete see Wolfs et al 2018
-        default_p['u_bc'] = 0.1 # displacement on top
-
-        # temperature dependency on structural build-up not yet included
-        default_p['T'] = 22 # current ambient temperature in degree celsius
-        default_p['T_ref'] = 25  # reference ambient temperature in degree celsius
-
+        # Material parameter for concrete model with viscoelasticity default values
+        default_p['density'] = 2070  # in kg/m^3 density of fresh concrete
         # polynomial degree
-        default_p['degree'] = 2  # default boundary setting
-
+        default_p['degree'] = 1  # default boundary setting
         ### paramters for mechanics problem
-        default_p['nu'] = 0.3       # Poissons Ratio see Wolfs et al 2018
-                                    # Youngs modulus is changing over age (see E_fkt) following the bilinear approach Kruger et al 2019
-                                    # (https://www.sciencedirect.com/science/article/pii/S0950061819317507) with two different rates
-        default_p['E_0'] = 15000    # Youngs Modulus at age=0 in Pa # here random values!!
-        default_p['R_E'] = 15       # Reflocculation rate of E modulus from age=0 to age=t_f in Pa / s
-        default_p['A_E'] = 30       # Structuration rate of E modulus from age >= t_f in Pa / s
-        default_p['t_f'] = 300      # Reflocculation time (switch between reflocculation rate and structuration rate) in s
-        default_p['age_0'] = 0      # start age of concrete [s]
+        default_p['nu'] = 0.3  # Poissons Ratio
+        default_p['E0'] = 40000  # Youngs Modulus Pa linear elastic
+        default_p['E1'] = 20000  # Youngs Modulus Pa visco element
+        default_p['eta'] = 1000   # Damping coeff
 
         self.p = default_p + self.p
 
         # create model
-        self.mechanics_problem = ConcreteThixElasticModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
-        self.V = self.mechanics_problem.V # for reaction force sensor
-        self.residual = None # initialize
+        self.mechanics_problem = ConcreteViscoElasticModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
+        self.V = self.mechanics_problem.V  # for reaction force sensor
+        self.residual = None  # initialize
 
         # setting bcs
-        bcs = self.experiment.create_displ_bcs(self.mechanics_problem.V) # fixed boundary bottom
+        bcs = self.experiment.create_displ_bcs(self.mechanics_problem.V)  # fixed boundary bottom
 
         self.mechanics_problem.set_bcs(bcs)
 
@@ -89,7 +74,7 @@ class ConcreteThixMechanical(MaterialProblem):
             # go through all sensors and measure
             self.sensors[sensor_name].measure(self, t)
 
-        # update age & path before next step!
+        # update before next step!
         self.mechanics_problem.update_values()
 
     def pv_plot(self, t=0):
@@ -99,11 +84,7 @@ class ConcreteThixMechanical(MaterialProblem):
     def set_timestep(self, dt):
         self.mechanics_problem.set_timestep(dt)
 
-    def get_E_fkt(self):
-        return np.vectorize(self.mechanics_problem.E_fkt)
-
-
-class ConcreteThixElasticModel(df.NonlinearProblem):
+class ConcreteViscoElasticModel(df.NonlinearProblem):
     def __init__(self, mesh, p, pv_name='mechanics_output', **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
         self.p = p
@@ -131,7 +112,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
                 self.visu_space = df.FunctionSpace(mesh, "P", 1)
                 self.visu_space_T = df.TensorFunctionSpace(mesh, "P", 1)
 
-            metadata = {"quadrature_degree": self.p.degree, "quadrature_scheme": "default"}
+            metadata = {"quadrature_degree": self.qd, "quadrature_scheme": "default"}
             dxm = df.dx(metadata=metadata)
 
             # solution field
@@ -152,16 +133,20 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.q_path = df.Function(q_V, name="path time defined overall")  # negative values where not active yet
 
             # computed values
-            self.q_pd = df.Function(q_V, name="pseudo density") # active or nonactive
+            self.q_u = df.Function(q_VT, name="u")
+            self.q_uold = df.Function(q_VT, name="uold")
+
+            self.q_pd = df.Function(q_V, name="pseudo density")  # active or nonactive
             self.q_E = df.Function(q_V, name="youngs modulus")
             self.q_sigma = df.Function(q_VT, name="stress")
-            self.q_eps = df.Function(q_VT, name="Strain")
+            self.q_eps = df.Function(q_VT, name="strain")
+            self.q_epsv = df.Function(q_VT, name='visco strain')
 
             # Define variational problem
-            self.u = df.Function(self.V)  # displacement
+            self.u = df.Function(self.V)  # full displacement
             v = df.TestFunction(self.V)
 
-            # Volume force
+            # Volume force ??? correct?
             if self.p.dim == 1:
                 f = df.Constant(-self.p.g * self.p.density)
             elif self.p.dim == 2:
@@ -169,14 +154,17 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             elif self.p.dim == 3:
                 f = df.Constant((0, 0, -self.p.g * self.p.density))
 
-            # define sigma from(u,t) in evalute material or here global E change ? (see damage example Thomas) -> then tangent by hand!
-            # # Elasticity parameters without multiplication with E
-            # self.x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
-            # self.x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
-            self.sigma_ufl = self.q_E * self.x_sigma(self.u)
+            # define sigma in evaluate material or here globally
+            self.mu_0 = 0.5 * self.p['E0'] / (1 + self.p['nu'])
+            self.lmbda_0 = self.p['E0'] * self.p['nu'] / ((1 - 2 * self.p['nu']) * (1 + self.p['nu']))
+            self.mu_1 = 0.5 * self.p['E1'] / (1 + self.p['nu'])  # 2nd Lame constant
+            self.lmbda_1 = self.p['E1'] * self.p['nu'] / ((1 - 2 * self.p['nu']) * (1 + self.p['nu']))
 
-            # multiplication with activated elements / current Young's modulus
-            R_ufl = self.q_E * df.inner(self.x_sigma(self.u), self.eps(v)) * dxm
+            self.sigma_ufl = self.sigma_el(self.u)+self.sigma_vi()
+
+            # multiplication with activated elements
+            R_ufl = self.q_E * df.inner(self.sigma_el(self.u), self.eps(v)) * dxm # elastic part
+            R_ufl += -df.inner(-self.sigma_vi(), self.eps(v)) * dxm  # visco part
             R_ufl += - self.q_pd * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
 
             # quadrature point part
@@ -193,17 +181,20 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
             self.assembler = None  # set as default, to check if bc have been added???
 
-    def x_sigma(self, v):
+    def sigma_el(self, v):  # Elastic stress
+        return self.dotC(self.mu_0, self.lmbda_0) * self.eps(v) + self.dotC(self.mu_1, self.lmbda_1) * self.eps(v)
 
-        x_mu = 1.0 / (2.0 * (1.0 + self.p.nu))
-        x_lambda = 1.0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
-        if self.p.dim ==2 and self.p.stress_case == 'plane_stress':
-            x_lambda = 2 * x_mu * x_lambda / (x_lambda + 2 * x_mu) # see https://comet-fenics.readthedocs.io/en/latest/demo/elasticity/2D_elasticity.py.html
-
-        return 2.0 * x_mu * df.sym(df.grad(v)) + x_lambda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
+    def sigma_vi(self):  # Stress dashpot
+        return self.dotC(self.mu_1, self.lmbda_1) * self.q_epsv
 
     def eps(self,v):
         return df.sym(df.grad(v))
+
+    def dotC(self, mu, lmbda):  # Elastic tensor
+        C = df.as_matrix([[2 * mu + lmbda, lmbda, 0],
+                       [lmbda, 2 * mu + lmbda, 0],
+                       [0, 0, mu]])
+        return C
 
     def sigma_voigt(self, s):
         # 1D option
@@ -237,11 +228,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
     def E_fkt(self, pd, path_time, parameters):
 
         if pd > 0: # element active, compute current Young's modulus
-            age = parameters['age_0'] + path_time # age concrete
-            if age < parameters['t_f']:
-                E = parameters['E_0'] + parameters['R_E'] * age
-            elif age >= parameters['t_f']:
-                E = parameters['E_0'] + parameters['R_E'] * parameters['t_f'] + parameters['A_E'] * (age-parameters['t_f'])
+            E = parameters['E_0'] # no thixotropy evaluation yet!!!
         else:
             E = df.DOLFIN_EPS # non-active
             # E = 0.001 * parameters['E_0']  # Emin?? TODO: how to define Emin?
@@ -267,11 +254,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
         # compute current Young's modulus
         parameters = {}
-        parameters['t_f'] = self.p.t_f
         parameters['E_0'] = self.p.E_0
-        parameters['R_E'] = self.p.R_E
-        parameters['A_E'] = self.p.A_E
-        parameters['age_0'] = self.p.age_0
         #
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
@@ -282,12 +265,24 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         set_q(self.q_E, E_list)
         set_q(self.q_pd, pd_list)
 
+        # visco part
+        # compute visco strain
+        self.q_eps
+        epsv_n = project((self.epsv_old + df.dt * self.p.E1 * self.mechanics_problem.epsilon(
+            self.mechanics_problem.du) / self.p.eta1) / (1 + df.dt * self.p.E1 / self.p.eta1),
+                         self.mechanics_problem.We)  # Viscoelastic strain at current time step
+        self.mechanics_problem.epsv.assign(epsv_n)
+
     def update_values(self):
         # no history field currently
         path_list = self.q_path.vector().get_local()
         path_list += self.dt * np.ones_like(path_list)
 
         set_q(self.q_path, path_list)
+
+        # update visco elastic strain and u
+        self.epsv_old.assign(self.epsv)
+        self.q_uold.assign(self.u)
 
     def set_timestep(self, dt):
         self.dt = dt
@@ -331,3 +326,5 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         self.pv_file.write(E_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(pd_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+
+
