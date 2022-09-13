@@ -96,7 +96,6 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
         elif self.p.dim == 3:
             self.stress_vector_dim = 6
 
-        # todo: I do not like the "meshless" setup right now
         if mesh != None:
             # initialize possible paraview output
             self.pv_file = df.XDMFFile(pv_name + '.xdmf')
@@ -133,13 +132,8 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             self.q_path = df.Function(q_V, name="path time defined overall")  # negative values where not active yet
 
             # computed values
-            self.q_u = df.Function(q_VT, name="u")
-            self.q_uold = df.Function(q_VT, name="uold")
-
             self.q_pd = df.Function(q_V, name="pseudo density")  # active or nonactive
             self.q_E = df.Function(q_V, name="youngs modulus")
-            self.q_sigma = df.Function(q_VT, name="stress")
-            self.q_eps = df.Function(q_VT, name="strain")
             self.q_epsv = df.Function(q_VT, name='visco strain')
 
             # Define variational problem
@@ -160,11 +154,11 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             self.mu_1 = 0.5 * self.p['E1'] / (1 + self.p['nu'])  # 2nd Lame constant
             self.lmbda_1 = self.p['E1'] * self.p['nu'] / ((1 - 2 * self.p['nu']) * (1 + self.p['nu']))
 
-            self.sigma_ufl = self.sigma_el(self.u)+self.sigma_vi()
+            self.sigma_ufl = self.sigma_el(self.u)-self.sigma_vi() # C_1 *eps + C_2 * (eps-epsv)
 
             # multiplication with activated elements
-            R_ufl = self.q_E * df.inner(self.sigma_el(self.u), self.eps(v)) * dxm # elastic part
-            R_ufl += -df.inner(-self.sigma_vi(), self.eps(v)) * dxm  # visco part
+            R_ufl = self.q_E * df.inner(self.sigma_1(self.u), self.eps(v)) * dxm # part with eps
+            R_ufl += - self.q_pd * df.inner(self.sigma_2(), self.eps(v)) * dxm  # visco part
             R_ufl += - self.q_pd * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
 
             # quadrature point part
@@ -176,15 +170,16 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             # quadrature part
             self.dR = dR_ufl
 
+            # stress and strain
             self.project_sigma = LocalProjector(self.sigma_voigt(self.sigma_ufl), q_VT, dxm)
             self.project_strain = LocalProjector(self.eps_voigt(self.u), q_VT, dxm)
 
             self.assembler = None  # set as default, to check if bc have been added???
 
-    def sigma_el(self, v):  # Elastic stress
+    def sigma_1(self, v):  # related to eps
         return self.dotC(self.mu_0, self.lmbda_0) * self.eps(v) + self.dotC(self.mu_1, self.lmbda_1) * self.eps(v)
 
-    def sigma_vi(self):  # Stress dashpot
+    def sigma_2(self):  # related to epsv
         return self.dotC(self.mu_1, self.lmbda_1) * self.q_epsv
 
     def eps(self,v):
@@ -228,10 +223,10 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
     def E_fkt(self, pd, path_time, parameters):
 
         if pd > 0: # element active, compute current Young's modulus
-            E = parameters['E_0'] # no thixotropy evaluation yet!!!
+            E = parameters['E0'] # no thixotropy evaluation yet!!!
         else:
             E = df.DOLFIN_EPS # non-active
-            # E = 0.001 * parameters['E_0']  # Emin?? TODO: how to define Emin?
+            # E = 0.001 * parameters['E_0']  # Emin??
 
         return E
 
@@ -254,7 +249,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
 
         # compute current Young's modulus
         parameters = {}
-        parameters['E_0'] = self.p.E_0
+        parameters['E_0'] = self.p.E0
         #
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
@@ -265,24 +260,21 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
         set_q(self.q_E, E_list)
         set_q(self.q_pd, pd_list)
 
-        # visco part
-        # compute visco strain
-        self.q_eps
-        epsv_n = project((self.epsv_old + df.dt * self.p.E1 * self.mechanics_problem.epsilon(
-            self.mechanics_problem.du) / self.p.eta1) / (1 + df.dt * self.p.E1 / self.p.eta1),
-                         self.mechanics_problem.We)  # Viscoelastic strain at current time step
-        self.mechanics_problem.epsv.assign(epsv_n)
-
     def update_values(self):
-        # no history field currently
+        # update process time
         path_list = self.q_path.vector().get_local()
         path_list += self.dt * np.ones_like(path_list)
 
         set_q(self.q_path, path_list)
 
         # update visco elastic strain and u
-        self.epsv_old.assign(self.epsv)
-        self.q_uold.assign(self.u)
+        eps_list = self.project_strain.vector().get_local() # strains time n
+        epsv_list = self.q_epsv.vector().get_local() # visco strains time n
+
+        factor = 1+self.dt*self.p.E1/self.p.eta
+        new_epsv = 1/factor * (epsv_list + self.dt * self.p.E1 * eps_list) # visco strain n+1
+
+        set_q(self.q_epsv, new_epsv)
 
     def set_timestep(self, dt):
         self.dt = dt
@@ -319,12 +311,17 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
         E_plot = df.project(self.q_E, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
         pd_plot = df.project(self.q_pd, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
 
+        # additional eps_v
+        epsv_plot = df.project(self.q_epsv, self.visu_space_T, form_compiler_parameters={'quadrature_degree': self.p.degree})
+
         E_plot.rename("Young's Modulus", "Young's modulus value")
         sigma_plot.rename("Stress", "stress components")
         pd_plot.rename("pseudo density", "pseudo density")
+        epsv_plot.rename("visco strain", "visco strain")
 
         self.pv_file.write(E_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(pd_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+        self.pv_file.write(epsv_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
 
