@@ -1,6 +1,6 @@
 Metadata-Version: 2.1
 Name: fenics-concrete
-Version: 0.4.0
+Version: 0.4.1
 Summary: ('A Python package for a FEM concrete model',)
 Home-page: https://github.com/BAMresearch/FenicsConcrete
 Author: Erik Tamsen

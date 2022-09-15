@@ -43,7 +43,7 @@ def setup_problem(parameters, pv_name):
     # define problem
     experiment = fenics_concrete.ConcreteMultipleLayers2DExperiment(parameters)
     file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
-    problem = fenics_concrete.ConcreteThixMechanical(experiment, parameters, pv_name=file_path + pv_name)
+    problem = fenics_concrete.ConcreteAMMechanical(experiment, parameters, mech_prob_string='ConcreteThixElasticModel', pv_name=file_path + pv_name)
 
     # sensor
     problem.add_sensor(fenics_concrete.sensors.ReactionForceSensorBottom())
@@ -233,10 +233,10 @@ def test_multiple_layer_2D_CS_dynamic():
 
 
 
-# if __name__ == '__main__':
-#
-    # test_single_layer_2D_CS()
-    #
-    # test_multiple_layer_2D_CS_static()
-    #
-    # test_multiple_layer_2D_CS_dynamic()
+if __name__ == '__main__':
+
+    test_single_layer_2D_CS()
+
+    test_multiple_layer_2D_CS_static()
+
+    test_multiple_layer_2D_CS_dynamic()

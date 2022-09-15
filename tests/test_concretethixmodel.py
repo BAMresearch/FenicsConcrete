@@ -9,7 +9,7 @@ def setup_test(parameters,sensor):
 
     file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
 
-    problem = fenics_concrete.ConcreteThixMechanical(experiment, parameters, pv_name=file_path + 'test_displ_thix')
+    problem = fenics_concrete.ConcreteAMMechanical(experiment, parameters, mech_prob_string='ConcreteThixElasticModel', pv_name=file_path + 'test_thix')
     if parameters['bc_setting'] == 'disp':
         problem.experiment.apply_displ_load(parameters['u_bc'])
     for i in range(len(sensor)):
@@ -168,14 +168,14 @@ def test_density_thix_2D():
 
 
 
-# if __name__ == '__main__':
-#
-#
-#     test_displ_thix_2D()
-#
-#     test_displ_thix_3D()
-#
-#     test_density_thix_2D()
+if __name__ == '__main__':
+
+
+    test_displ_thix_2D()
+
+    test_displ_thix_3D()
+
+    test_density_thix_2D()
 
 
 
