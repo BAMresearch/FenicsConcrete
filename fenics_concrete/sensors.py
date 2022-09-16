@@ -237,7 +237,11 @@ class StressSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get stress
-        stress = df.project(problem.stress, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+        try:
+            stress = df.project(problem.stress, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+        except:
+            stress = df.project(problem.stress, problem.visu_space_V, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+
         self.data.append(stress(self.where))
         self.time.append(t)
 
@@ -262,6 +266,10 @@ class StrainSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get strain
-        strain = df.project(problem.strain, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+        try:
+            strain = df.project(problem.strain, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+        except:
+            strain = df.project(problem.strain, problem.visu_space_V,
+                                form_compiler_parameters={'quadrature_degree': problem.p.degree})
         self.data.append(strain(self.where))
         self.time.append(t)

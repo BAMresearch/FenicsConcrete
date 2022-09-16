@@ -123,6 +123,7 @@ def test_displ_thix_2D():
 def test_density_thix_2D():
     '''
         uniaxial tension test with density without change in Young's modulus over time
+        checking general implementation
     '''
     parameters = fenics_concrete.Parameters() # using the current default values
 

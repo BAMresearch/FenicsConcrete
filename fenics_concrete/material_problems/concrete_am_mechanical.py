@@ -37,10 +37,6 @@ class ConcreteAMMechanical(MaterialProblem):
         default_p['density'] = 2070  # in kg/m^3 density of fresh concrete see Wolfs et al 2018
         default_p['u_bc'] = 0.1 # displacement on top
 
-        # temperature dependency on structural build-up not yet included
-        default_p['T'] = 22 # current ambient temperature in degree celsius
-        default_p['T_ref'] = 25  # reference ambient temperature in degree celsius
-
         # polynomial degree
         default_p['degree'] = 2  # default boundary setting
 
@@ -96,12 +92,16 @@ class ConcreteAMMechanical(MaterialProblem):
 
         # save fields to global problem for sensor output
         self.displacement = self.mechanics_problem.u
-        self.strain = self.mechanics_problem.eps(self.mechanics_problem.u)
-        self.visu_space_T = self.mechanics_problem.visu_space_T
-        try:
+
+        try: # if possible tensor functions from ufl formulations
             self.stress = self.mechanics_problem.sigma_ufl
-        except:
-            self.stress = None
+            self.strain = self.mechanics_problem.eps(self.mechanics_problem.u)
+            self.visu_space_T = self.mechanics_problem.visu_space_T
+        except: # use quadrature fct defined in law and project in sensor onto vector fct space
+            self.stress = self.mechanics_problem.q_sig
+            self.strain = self.mechanics_problem.q_eps
+            self.visu_space_V = self.mechanics_problem.visu_space_V
+
         # further ?? stress/strain ...
 
         # get sensor data
@@ -380,6 +380,8 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             else:
                 self.visu_space = df.FunctionSpace(mesh, "P", 1)
                 self.visu_space_T = df.TensorFunctionSpace(mesh, "P", 1)
+                self.visu_space_V = df.VectorFunctionSpace(mesh, 'P', 1,
+                                                           dim=self.stress_vector_dim)  # visu space for sigma and eps in voigt notation
 
             metadata = {"quadrature_degree": self.p.degree, "quadrature_scheme": "default"}
             dxm = df.dx(metadata=metadata)
@@ -406,6 +408,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             self.q_E = df.Function(q_V, name="youngs modulus")
             self.q_epsv = df.Function(q_VT, name='visco strain')
             self.q_eps = df.Function(q_VT, name='total strain')
+            self.q_sig = df.Function(q_VT, name='total stress')
 
             # Define variational problem
             self.u = df.Function(self.V)  # full displacement
@@ -442,7 +445,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             self.dR = dR_ufl
 
             # stress and strain projection methods
-            # self.project_sigma = LocalProjector(self.sigma_voigt(self.sigma_ufl), q_VT, dxm)
+            self.project_sigma = LocalProjector(self.sigma_1(self.u)-self.sigma_2(), q_VT, dxm)
             self.project_strain = LocalProjector(self.eps_voigt(self.u), q_VT, dxm)
 
             self.assembler = None  # set as default, to check if bc have been added???
@@ -451,6 +454,16 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
     def sigma_1(self, v):  # related to eps
         return self.dotC(self.mu_0, self.lmbda_0) * self.eps_voigt(v) + self.dotC(self.mu_1, self.lmbda_1) * self.eps_voigt(v)
 
+    def sigma_2(self):  # related to epsv
+        return self.dotC(self.mu_1, self.lmbda_1) * self.q_epsv
+    def dotC(self, mu, lmbda):  # Elastic tensor TODO: different dimensions and for 2D plane stress .vs. plane stress
+        C = df.as_matrix([[2 * mu + lmbda, lmbda, 0],
+                       [lmbda, 2 * mu + lmbda, 0],
+                       [0, 0, mu]])
+        return C
+
+    def eps(self,v):
+        return df.sym(df.grad(v))
     # def sigma_1(self, v): # related to eps
     #     lmbda_0, lmbda_1 = self.lmbda_0, self.lmbda_1
     #     mu_0, mu_1 = self.mu_0, self.mu_1
@@ -472,16 +485,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
     #     sig_2 = 2.0 * mu_1 * df.sym(self.q_epsv) + lmbda_1 * df.tr(df.sym(self.q_epsv)) * df.Identity(len(v)) # not possible
     #
     #     return sig_2
-    def sigma_2(self):  # related to epsv
-        return self.dotC(self.mu_1, self.lmbda_1) * self.q_epsv
-    def dotC(self, mu, lmbda):  # Elastic tensor TODO: different dimensions and for 2D plane stress .vs. plane stress
-        C = df.as_matrix([[2 * mu + lmbda, lmbda, 0],
-                       [lmbda, 2 * mu + lmbda, 0],
-                       [0, 0, mu]])
-        return C
 
-    def eps(self,v):
-        return df.sym(df.grad(v))
 
     def eps_voigt(self, e):
         eT = self.eps(e)
@@ -570,6 +574,11 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
         new_epsv = 1/factor * (epsv_list + self.dt * self.p.E_1 * eps_list) # new visco strain
 
         set_q(self.q_epsv, new_epsv)
+
+        self.project_sigma(self.q_sig)  # get current stress
+
+        print('strain', eps_list)
+        print('stresses', self.q_sig.vector().get_local())
 
     def set_timestep(self, dt):
         self.dt = dt
