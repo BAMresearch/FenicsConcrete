@@ -1,4 +1,7 @@
-# FenicsConcrete
-FE model representing the hardening of concrete
+# FenicsXConcrete
+FE model representing the hardening of concrete. 
 
-more details will be added
+## How to install locally
+Go to your dolfinx-environment and run
+`pip install -e .`
+in order to install an editable version.
