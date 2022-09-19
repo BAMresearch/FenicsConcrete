@@ -8,6 +8,8 @@ class Parameters(dict):
     via the matching attribute
         p.parameter
     to make access shorter
+    TODO: This does almost the exact same thing as namedtuple
+    https://docs.python.org/3/library/collections.html#collections.namedtuple
     """
     def __getattr__(self, key):
         return self[key]
