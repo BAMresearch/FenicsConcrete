@@ -12,7 +12,8 @@ class ConcreteCubeUniaxialExperiment(Experiment):
         p['mesh_setting'] = 'left/right'  # default boundary setting
         p['bc_setting'] = 'disp' # two boundary cases:
                                     #'disp': allow transverse contraction/ displacement on top apply_disp_load(value)
-                                    #'density': uniaxial with density load applied & allow transvrese contraction
+                                    #'density': uniaxial with density load applied & allow transverse contraction
+                                    #'force': force applied at top surface/ uniaxial bc in displacements
         p['stress_case'] = 'plane_stress'
         p = p + parameters
         super().__init__(p)

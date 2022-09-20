@@ -79,15 +79,15 @@ class ConcreteAMMechanical(MaterialProblem):
 
         # setting up the solver
         self.mechanics_solver = df.NewtonSolver()
-        self.mechanics_solver.parameters['absolute_tolerance'] = 1e-8
-        self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
+        self.mechanics_solver.parameters['absolute_tolerance'] = 1e-7
+        self.mechanics_solver.parameters['relative_tolerance'] = 1e-7
 
     def set_initial_path(self, path):
         self.mechanics_problem.set_initial_path(path)
 
     def solve(self, t=1.0):
 
-        # print('solve for',t)
+        print('solve for',t)
         self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
 
         # save fields to global problem for sensor output
@@ -355,6 +355,9 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
 
 class ConcreteViscoElasticModel(df.NonlinearProblem):
+    # viscoelastic material law derived from 1D linear standard solid model with 3D assumption:
+    # each element (2xsprings/damper) 2 moduli where the Poisson ratio is the same for all elements
+    # see https://comet-fenics.readthedocs.io/en/latest/demo/viscoelasticity/linear_viscoelasticity.html
     def __init__(self, mesh, p, pv_name='mechanics_output', **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
         self.p = p
@@ -422,14 +425,6 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             elif self.p.dim == 3:
                 f = df.Constant((0, 0, -self.p.g * self.p.density))
 
-            # define sigma in evaluate material or here globally
-            self.mu_0 = 0.5 * self.p.E_0 / (1 + self.p.nu)
-            self.lmbda_0 = self.p.E_0 * self.p.nu / ((1 - 2 * self.p.nu) * (1 + self.p.nu))
-            self.mu_1 = 0.5 * self.p.E_1 / (1 + self.p.nu)  # 2nd Lame constant
-            self.lmbda_1 = self.p.E_1 * self.p.nu / ((1 - 2 * self.p.nu) * (1 + self.p.nu))
-
-            # self.sigma_ufl = self.sigma_1(self.u)-self.sigma_2() # C_1 *eps + C_2 * (eps-epsv)
-
             # multiplication with activated elements
             R_ufl = self.q_E * df.inner(self.sigma_1(self.u), self.eps_voigt(v)) * dxm # part with eps
             R_ufl += - self.q_pd * df.inner(self.sigma_2(), self.eps_voigt(v)) * dxm  # visco part
@@ -444,6 +439,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             # quadrature part
             self.dR = dR_ufl
 
+            # self.sigma_ufl = self.sigma_1(self.u)-self.sigma_2() # C_1 *eps + C_2 * (eps-epsv) # not possible because of internal strain variable
             # stress and strain projection methods
             self.project_sigma = LocalProjector(self.sigma_1(self.u)-self.sigma_2(), q_VT, dxm)
             self.project_strain = LocalProjector(self.eps_voigt(self.u), q_VT, dxm)
@@ -452,40 +448,40 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
 
     # Aratz version
     def sigma_1(self, v):  # related to eps
-        return self.dotC(self.mu_0, self.lmbda_0) * self.eps_voigt(v) + self.dotC(self.mu_1, self.lmbda_1) * self.eps_voigt(v)
+        return df.Constant(self.p.E_0) * self.dotC() * self.eps_voigt(v) + df.Constant(self.p.E_1) * self.dotC() * self.eps_voigt(v)
 
     def sigma_2(self):  # related to epsv
-        return self.dotC(self.mu_1, self.lmbda_1) * self.q_epsv
-    def dotC(self, mu, lmbda):  # Elastic tensor TODO: different dimensions and for 2D plane stress .vs. plane stress
-        C = df.as_matrix([[2 * mu + lmbda, lmbda, 0],
-                       [lmbda, 2 * mu + lmbda, 0],
-                       [0, 0, mu]])
+        return df.Constant(self.p.E_1) * self.dotC() * self.q_epsv
+
+    def dotC(self):  # unit (E=1) linear elasticity matrix (Voigt notation)
+        # nu: Poisson ratio
+        nu = self.p.nu
+        C = df.as_matrix([[1]]) # 1D no Poisson ratio!
+        if self.p.dim == 2:
+            if self.p.stress_case == 'plane_stress':
+                C = df.as_matrix([[1./(1.-nu**2), nu/(1.-nu**2), 0.],
+                                  [nu/(1.-nu**2), 1./(1.-nu**2), 0.],
+                                  [0., 0., (1-nu)/(2.*(1-nu**2))] ])
+            else: # plane strain
+                lmb_1 = 1.0 * nu / ((1. - 2. * nu) * (1. + nu))
+                mu_1 = 0.5 * 1.0 / (1. + nu)
+                C = df.as_matrix([[2. * mu_1 + lmb_1, lmb_1, 0],
+                               [lmb_1, 2. * mu_1 + lmb_1, 0],
+                               [0, 0, mu_1]])
+        elif self.p.dim == 3:
+            lmb_1 = 1.0 * nu / ((1. - 2. * nu) * (1. + nu))
+            mu_1 = 0.5 * 1.0 / (1. + nu)
+            C = df.as_matrix([[2. * mu_1 + lmb_1, lmb_1, lmb_1, 0., 0., 0.],
+                              [lmb_1, 2. * mu_1 + lmb_1, lmb_1, 0., 0., 0.],
+                              [lmb_1, lmb_1, 2. * mu_1 + lmb_1, 0., 0., 0.],
+                              [0., 0., 0., mu_1, 0., 0.],
+                              [0., 0., 0., 0., mu_1, 0.],
+                              [0., 0., 0., 0., 0., mu_1] ])
+
         return C
 
     def eps(self,v):
         return df.sym(df.grad(v))
-    # def sigma_1(self, v): # related to eps
-    #     lmbda_0, lmbda_1 = self.lmbda_0, self.lmbda_1
-    #     mu_0, mu_1 = self.mu_0, self.mu_1
-    #
-    #     if self.p.dim ==2 and self.p.stress_case == 'plane_stress':
-    #         lmbda_0 = 2 * mu_0 * lmbda_0 / (lmbda_0 + 2 * mu_0) # see https://comet-fenics.readthedocs.io/en/latest/demo/elasticity/2D_elasticity.py.html
-    #         lmbda_1 = 2 * mu_1 * lmbda_1 / (lmbda_1 + 2 * mu_1)
-    #     sig_0 = 2.0 * mu_0 * df.sym(df.grad(v)) + lmbda_0 * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
-    #     sig_1 = 2.0 * mu_1 * df.sym(df.grad(v)) + lmbda_1 * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
-    #
-    #     return sig_0 + sig_1
-
-    # def sigma_2(self):  # related to epsv
-    #     lmbda_1, mu_1 = self.lmbda_1, self.mu_1
-    #
-    #     if self.p.dim ==2 and self.p.stress_case == 'plane_stress':
-    #         lmbda_1 = 2 * mu_1 * lmbda_1 / (lmbda_1 + 2 * mu_1)
-    #
-    #     sig_2 = 2.0 * mu_1 * df.sym(self.q_epsv) + lmbda_1 * df.tr(df.sym(self.q_epsv)) * df.Identity(len(v)) # not possible
-    #
-    #     return sig_2
-
 
     def eps_voigt(self, e):
         eT = self.eps(e)
@@ -500,23 +496,6 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             strain_vector = df.as_vector((eT[0, 0], eT[1, 1], eT[2,2], 2 * eT[0, 1], 2*eT[1,2], 2*eT[0,2]))
 
         return strain_vector
-
-    def sigma_voigt(self, s):
-        # 1D option
-        if s.ufl_shape == (1, 1):
-            stress_vector = df.as_vector((s[0, 0]))
-        # 2D option
-        elif s.ufl_shape == (2, 2):
-            stress_vector = df.as_vector((s[0, 0], s[1, 1], s[0, 1]))
-        # 3D option
-        elif s.ufl_shape == (3, 3):
-            stress_vector = df.as_vector((s[0, 0], s[1, 1], s[2, 2], s[0, 1], s[1, 2], s[0, 2]))
-        else:
-            raise ('Problem with stress tensor shape for voigt notation')
-
-        return stress_vector
-
-
 
     def E_fkt(self, pd, path_time, parameters):
 
@@ -558,27 +537,36 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
         set_q(self.q_E, E_list)
         set_q(self.q_pd, pd_list)
 
+        # get current strains and stresses
+        self.project_strain(self.q_eps)  # get current strains
+        self.project_sigma(self.q_sig)  # get current stress
+        eps_list = self.q_eps.vector().get_local()
+        epsv_list = self.q_epsv.vector().get_local()  # old visco strains
+
+        # compute visco strain from old one epsv point vice because of matrix multiplication! here with UFL
+        self.new_epsv = np.zeros_like(epsv_list)
+        num_gp = int(len(eps_list)/self.stress_vector_dim)
+        C = self.dotC()  # get C matrix
+        II = df.as_matrix(np.eye(self.stress_vector_dim))
+        for i in range(num_gp):
+            a = i*self.stress_vector_dim
+            b = (i+1)*self.stress_vector_dim
+
+            factor = II + self.dt * self.p.E_1 / self.p.eta * C
+            factor_inv = df.inv(factor)
+            self.new_epsv[a:b] = df.dot(factor_inv,df.as_vector(epsv_list[a:b])) + self.dt * self.p.E_1 / self.p.eta *df.dot(factor_inv, df.dot(C,df.as_vector(eps_list[a:b])))
+
+
+
     def update_values(self):
-        # update process time
+        # update process time and path variable
         path_list = self.q_path.vector().get_local()
         path_list += self.dt * np.ones_like(path_list)
 
         set_q(self.q_path, path_list)
 
-        # update visco elastic strain
-        self.project_strain(self.q_eps) # get current strains
-        eps_list = self.q_eps.vector().get_local()
-        epsv_list = self.q_epsv.vector().get_local() # old visco strains
-
-        factor = 1+self.dt*self.p.E_1/self.p.eta
-        new_epsv = 1/factor * (epsv_list + self.dt * self.p.E_1 * eps_list) # new visco strain
-
-        set_q(self.q_epsv, new_epsv)
-
-        self.project_sigma(self.q_sig)  # get current stress
-
-        print('strain', eps_list)
-        print('stresses', self.q_sig.vector().get_local())
+        # update visco strain
+        set_q(self.q_epsv, self.new_epsv)
 
     def set_timestep(self, dt):
         self.dt = dt
@@ -612,20 +600,21 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
         # sigma_plot = df.project(self.sigma_ufl, self.visu_space_T,
         #                         form_compiler_parameters={'quadrature_degree': self.p.degree})
         # print('sigma plot', sigma_plot.vector()[:].max())
+        sigma_plot = df.project(self.q_sig, self.visu_space_V, form_compiler_parameters={'quadrature_degree': self.p.degree})
+        eps_plot = df.project(self.q_eps, self.visu_space_V,
+                               form_compiler_parameters={'quadrature_degree': self.p.degree})
         E_plot = df.project(self.q_E, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
         pd_plot = df.project(self.q_pd, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
 
-        # additional eps_v
-        # epsv_plot = df.project(self.q_epsv, self.visu_space_T, form_compiler_parameters={'quadrature_degree': self.p.degree})
 
         E_plot.rename("Young's Modulus", "Young's modulus value")
-        # sigma_plot.rename("Stress", "stress components")
         pd_plot.rename("pseudo density", "pseudo density")
-        # epsv_plot.rename("visco strain", "visco strain")
+        sigma_plot.rename("Stress", "stress components voigt")
+        eps_plot.rename("strain", "strain components voigt")
 
         self.pv_file.write(E_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
-        # self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
         self.pv_file.write(pd_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
-        # self.pv_file.write(epsv_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+        self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+        self.pv_file.write(eps_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
 
