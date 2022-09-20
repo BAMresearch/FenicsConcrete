@@ -79,16 +79,16 @@ def test_relaxation_2D():
     # print('analytic 1D == 2D with nu=0', sig_yy)
     # print('stress over time', sig_o_time)
     error2ana = np.linalg.norm(sig_yy-np.array(sig_o_time))/np.linalg.norm(sig_yy)
-    print('norm error sig_yy', error2ana)
+    # print('norm error sig_yy', error2ana)
 
     assert error2ana < 5e-3
 
-    import matplotlib.pyplot as plt
-
-    plt.plot(time, sig_yy, '*r', label='analytic')
-    plt.plot(time, sig_o_time,'og', label='FEM')
-    plt.legend()
-    plt.show()
+    # import matplotlib.pyplot as plt
+    #
+    # plt.plot(time, sig_yy, '*r', label='analytic')
+    # plt.plot(time, sig_o_time,'og', label='FEM')
+    # plt.legend()
+    # plt.show()
 
     # get stresses and strains at the end
     # print('stresses',prop2D.sensors[sensor01.name].data[-1])
