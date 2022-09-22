@@ -12,7 +12,8 @@ from joblib import Memory
 
 class Randomfield(object):
 
-    def __init__(self,fct_space,cov_name='squared_exp',mean=0,rho=1,sigma=1,k=None,ktol=None, _type = ''):
+    #def __init__(self,fct_space,cov_name='squared_exp',mean=0,rho=1,sigma=1,k=None,ktol=None, _type = ''):
+    def __init__(self,fct_space,cov_name='squared_exp',mean=0,rho1=1,rho2=1, sigma=1,k=None,ktol=None, _type = ''):
         '''
         Class for random field
         generates a random field using Karahune Loeve decomposition
@@ -34,7 +35,9 @@ class Randomfield(object):
         self.cov_name = cov_name # name of covariance function to use
         self.cov = getattr(self, 'cov_'+cov_name) # select the right function
         self.mean = mean # mean of random field
-        self.rho = rho  # correlation length
+        #self.rho = rho  # correlation length
+        self.rho1 = rho1  # correlation length x
+        self.rho2 = rho2 # correlation length z
         self.sigma2 = sigma**2 # sigma**2 in covariance function
         self.V = fct_space # FE fct space for problem
         if k:
@@ -57,8 +60,10 @@ class Randomfield(object):
 
     def __str__(self):
         name = self.__class__.__name__
-        name += 'random field with cov fct %s, mean %s, rho %s, k %s, sig2 %s'
-        return name % (self.cov_name, self.mean, self.rho, self.k, self.sigma2)
+        #name += 'random field with cov fct %s, mean %s, rho %s, k %s, sig2 %s'
+        #return name % (self.cov_name, self.mean, self.rho, self.k, self.sigma2)
+        name += 'random field with cov fct %s, mean %s, rho1 %s, rho2 %s, k %s, sig2 %s'
+        return name % (self.cov_name, self.mean, self.rho1, self.rho2, self.k, self.sigma2)
 
     def __repr__(self):
         return str(self)
@@ -69,12 +74,14 @@ class Randomfield(object):
         '''
         return self.sigma2 * np.exp(-1 / self.rho * r)
 
-    def cov_squared_exp(self, r):
+    #def cov_squared_exp(self, r):
+    def cov_squared_exp(self, r1, r2):
         '''
             squared exponential covariance function: sig^2 exp(-r^2/2*rho^2)
             such things are also implemented in sklearn library (sklearn.gaussian_process.kernels e.g. RBF)
         '''
-        return self.sigma2 * np.exp(-1 / (2 * self.rho ** 2) * r ** 2)
+        #return self.sigma2 * np.exp(-1 / (2 * self.rho ** 2) * r ** 2)
+        return self.sigma2 * np.exp((-1 / (2 * self.rho1 ** 2) * r1 ** 2) - (1 / (2 * self.rho2 ** 2) * r2 ** 2))
 
     def generate_C(self):
         '''
@@ -106,8 +113,12 @@ class Randomfield(object):
             if self._type == 'x':
                 r = np.absolute(c0[:,0] - c1[:,0])
             else:
-                r = np.linalg.norm(c0 - c1, axis=1)
-            C = self.cov(r)
+                #r = np.linalg.norm(c0 - c1, axis=1)
+                r1 = c0[:,0] - c1[:,0]
+                r2 = c0[:,1] - c1[:,1]
+            #C = self.cov(r)
+            C = self.cov(r1, r2)
+
             # C = self.cov_squared_exp(r)
             # C = cov(c0-c1)
             C.shape = [L, L]
@@ -283,7 +294,7 @@ class Randomfield(object):
 
         if _type == 'random':
             # random selection of gaussian variables
-            self.values = np.random.normal(0, 1, self.k)
+            self.values = np.random.normal(0, 1, self.k) 
             self.logger.info('choose random values for xi %s', self.values)
         elif _type == 'given':
             self.logger.info('choose given values for xi %s', self.values)

@@ -1,5 +1,5 @@
-import sys
-print(sys.path)
+#import sys
+#print(sys.path)
 import dolfinx as df
 import ufl
 from petsc4py.PETSc import ScalarType
@@ -72,15 +72,17 @@ class LinearElasticity(MaterialProblem):
 
         # Creating random fields for E (Young's modulus) and Mu (Poisson's ratio) constants.
 
-        def random_field_generator(domain, cov_name, mean, correlation_length, variance, no_eigen_values):
+        def random_field_generator(domain, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values):
             field_function_space = df.fem.FunctionSpace(domain, ("CG", 1))
-            random_field = Randomfield(field_function_space, cov_name, mean, correlation_length, variance, no_eigen_values)
+            random_field = Randomfield(field_function_space, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values)
+            #random_field = Randomfield(fct_space=var_function_space, cov_name='squared_exp', mean=1, rho=0.5, sigma=1, k=10)
+            #random_field.solve_covariance_EVP()
             return random_field
 
-        self.p.E  = random_field_generator(self.experiment.mesh,'squared_exp', 1, 1, 1, 3) 
+        self.p.E  = random_field_generator(self.experiment.mesh,'squared_exp', 100, 0.3, 0.05, 0, 3) 
         self.p.E.create_random_field(_type='random')
 
-        self.p.nu = random_field_generator(self.experiment.mesh,'squared_exp', 0.2, 1, 1, 3)
+        self.p.nu = random_field_generator(self.experiment.mesh,'squared_exp', 0.2, 0.3, 0.05, 0, 3)
         self.p.nu.create_random_field(_type='random')
 
         # displacement field

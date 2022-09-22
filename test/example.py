@@ -1,4 +1,7 @@
 # This is the main exmaple file for solving the linear elasticity problem.
+import os, sys
+parentdir = os.path.dirname(os.path.dirname(__file__))
+sys.path.append(parentdir)
 import numpy as np
 import fenicsX_concrete
 
