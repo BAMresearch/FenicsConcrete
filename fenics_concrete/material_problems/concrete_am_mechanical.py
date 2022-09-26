@@ -65,6 +65,14 @@ class ConcreteAMMechanical(MaterialProblem):
             self.p = default_p + self.p
 
             self.mechanics_problem = ConcreteViscoElasticModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
+        elif self.mech_prob_string.lower() =='concreteviscodevelasticmodel':
+            ### default parameters required for visco elastic model
+            default_p['E_0'] = 40000  # Youngs Modulus Pa linear elastic
+            default_p['E_1'] = 20000  # Youngs Modulus Pa visco element
+            default_p['eta'] = 1000  # Damping coeff
+            self.p = default_p + self.p
+
+            self.mechanics_problem = ConcreteViscoDevElasticModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
         else:
             raise ValueError('given mechanics_problem not implemented')
 
@@ -125,6 +133,9 @@ class ConcreteAMMechanical(MaterialProblem):
 
 
 class ConcreteThixElasticModel(df.NonlinearProblem):
+    # linear elasticity law with time depenendent stiffness parameter (Youngs modulus) modelling the thixotropy
+    # tensor format
+
     def __init__(self, mesh, p, pv_name='mechanics_output', **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
         self.p = p
@@ -163,10 +174,10 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             q = "Quadrature"
 
             quadrature_element = df.FiniteElement(q, cell, degree=self.p.degree, quad_scheme="default")
-            quadrature_vector_element = df.VectorElement(q, cell, degree=self.p.degree, dim=self.stress_vector_dim,
-                                                         quad_scheme="default")
+            # quadrature_vector_element = df.VectorElement(q, cell, degree=self.p.degree, dim=self.stress_vector_dim,
+            #                                              quad_scheme="default")
             q_V = df.FunctionSpace(mesh, quadrature_element)
-            q_VT = df.FunctionSpace(mesh, quadrature_vector_element)
+            # q_VT = df.FunctionSpace(mesh, quadrature_vector_element)
 
             # quadrature functions
             # to initialize values (otherwise initialized by 0)
@@ -175,8 +186,8 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             # computed values
             self.q_pd = df.Function(q_V, name="pseudo density") # active or nonactive
             self.q_E = df.Function(q_V, name="youngs modulus")
-            self.q_sigma = df.Function(q_VT, name="stress")
-            self.q_eps = df.Function(q_VT, name="Strain")
+            # self.q_sigma = df.Function(q_VT, name="stress")
+            # self.q_eps = df.Function(q_VT, name="Strain")
 
             # Define variational problem
             self.u = df.Function(self.V)  # displacement
@@ -355,9 +366,11 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
 
 class ConcreteViscoElasticModel(df.NonlinearProblem):
-    # viscoelastic material law derived from 1D linear standard solid model with 3D assumption:
-    # each element (2xsprings/damper) 2 moduli where the Poisson ratio is the same for all elements
-    # see https://comet-fenics.readthedocs.io/en/latest/demo/viscoelasticity/linear_viscoelasticity.html
+    # viscoelastic material law derived from 1D linear standard solid model (Maxwell body in parallel with spring)
+    # with 3D with assumptions: 3D generalization where each element (2xsprings/damper) 2 moduli where the Poisson ratio is the same for all elements
+    #                           see https://comet-fenics.readthedocs.io/en/latest/demo/viscoelasticity/linear_viscoelasticity.html
+    # in VOIGT notation!!
+
     def __init__(self, mesh, p, pv_name='mechanics_output', **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
         self.p = p
@@ -380,6 +393,8 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             if self.p.degree == 1:
                 self.visu_space = df.FunctionSpace(mesh, "DG", 0)
                 self.visu_space_T = df.TensorFunctionSpace(mesh, "DG", 0)
+                self.visu_space_V = df.VectorFunctionSpace(mesh, 'DG', 0,
+                                                           dim=self.stress_vector_dim)  # visu space for sigma and eps in voigt notation
             else:
                 self.visu_space = df.FunctionSpace(mesh, "P", 1)
                 self.visu_space_T = df.TensorFunctionSpace(mesh, "P", 1)
@@ -556,8 +571,6 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             factor_inv = df.inv(factor)
             self.new_epsv[a:b] = df.dot(factor_inv,df.as_vector(epsv_list[a:b])) + self.dt * self.p.E_1 / self.p.eta *df.dot(factor_inv, df.dot(C,df.as_vector(eps_list[a:b])))
 
-
-
     def update_values(self):
         # update process time and path variable
         path_list = self.q_path.vector().get_local()
@@ -618,3 +631,264 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
         self.pv_file.write(eps_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
 
 
+class ConcreteViscoDevElasticModel(df.NonlinearProblem):
+    # viscoelastic material law derived from 1D linear standard solid model (Maxwell body in parallel with spring) [3Parametermodel]
+    # with deviatoric assumptions for 3D generalization:
+    # Deviatoric assumption: vol part of visco strain == 0 damper just working on deviatoric part!
+    # in tensor format!!
+
+    def __init__(self, mesh, p, pv_name='mechanics_output', **kwargs):
+        df.NonlinearProblem.__init__(self)  # apparently required to initialize things
+        self.p = p
+
+        if self.p.dim == 1:
+            self.stress_vector_dim = 1
+        elif self.p.dim == 2:
+            self.stress_vector_dim = 3
+        elif self.p.dim == 3:
+            self.stress_vector_dim = 6
+
+        if mesh != None:
+            # initialize possible paraview output
+            self.pv_file = df.XDMFFile(pv_name + '.xdmf')
+            self.pv_file.parameters["flush_output"] = True
+            self.pv_file.parameters["functions_share_mesh"] = True
+            # function space for single value per element, required for plot of quadrature space values
+
+            #
+            if self.p.degree == 1:
+                self.visu_space = df.FunctionSpace(mesh, "DG", 0)
+                self.visu_space_T = df.TensorFunctionSpace(mesh, "DG", 0)
+                self.visu_space_V = df.VectorFunctionSpace(mesh, 'DG', 0,
+                                                           dim=self.stress_vector_dim)  # visu space for sigma and eps in voigt notation
+            else:
+                self.visu_space = df.FunctionSpace(mesh, "P", 1)
+                self.visu_space_T = df.TensorFunctionSpace(mesh, "P", 1)
+                self.visu_space_V = df.VectorFunctionSpace(mesh, 'P', 1,
+                                                           dim=self.stress_vector_dim)  # visu space for sigma and eps in voigt notation
+
+            metadata = {"quadrature_degree": self.p.degree, "quadrature_scheme": "default"}
+            dxm = df.dx(metadata=metadata)
+
+            # solution field
+            self.V = df.VectorFunctionSpace(mesh, 'P', self.p.degree)
+
+            # generic quadrature function space
+            cell = mesh.ufl_cell()
+            q = "Quadrature"
+
+            quadrature_element = df.FiniteElement(q, cell, degree=self.p.degree, quad_scheme="default")
+            quadrature_vector_element = df.TensorElement(q, cell, degree=self.p.degree, quad_scheme="default")
+            quadrature_vector_element01 = df.VectorElement(q, cell, degree=self.p.degree, dim=self.stress_vector_dim,
+                                                         quad_scheme="default")
+            q_V = df.FunctionSpace(mesh, quadrature_element)
+            q_VT = df.FunctionSpace(mesh, quadrature_vector_element) # full tensor
+            q_VTV = df.FunctionSpace(mesh, quadrature_vector_element01) # voigt notation
+
+            # quadrature functions
+            # to initialize values (otherwise initialized by 0)
+            self.q_path = df.Function(q_V, name="path time defined overall")  # negative values where not active yet
+
+            # computed values
+            self.q_pd = df.Function(q_V, name="pseudo density")  # active or nonactive
+            self.q_E = df.Function(q_V, name="youngs modulus")
+            self.q_epsv = df.Function(q_VT, name='visco strain') # full tensor
+            self.q_eps_dev = df.Function(q_VT, name='deviatoric strain') # full tensor
+            self.q_eps = df.Function(q_VTV, name='total strain') # voigt notation
+            self.q_sig = df.Function(q_VTV, name='total stress') # voigt notation
+
+            # Define variational problem
+            self.u = df.Function(self.V)  # full displacement
+            v = df.TestFunction(self.V)
+
+            # Volume force ??? correct?
+            if self.p.dim == 1:
+                f = df.Constant(-self.p.g * self.p.density)
+            elif self.p.dim == 2:
+                f = df.Constant((0, -self.p.g * self.p.density))
+            elif self.p.dim == 3:
+                f = df.Constant((0, 0, -self.p.g * self.p.density))
+
+            # multiplication with activated elements
+            R_ufl = self.q_E * df.inner(self.sigma_1(self.u), self.eps(v)) * dxm  # part with eps
+            R_ufl += - self.q_pd * df.inner(self.sigma_2(), self.eps(v)) * dxm  # visco part
+            R_ufl += - self.q_pd * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
+
+            # quadrature point part
+            self.R = R_ufl
+
+            # derivative
+            # normal form
+            dR_ufl = df.derivative(R_ufl, self.u)
+            # quadrature part
+            self.dR = dR_ufl
+
+            # stress and strain projection methods
+            self.project_sigma = LocalProjector(self.sigma_voigt(self.sigma_1(self.u) - self.sigma_2()), q_VTV, dxm)
+            self.project_strain = LocalProjector(self.eps_voigt(self.u), q_VTV, dxm)
+            self.project_strain_dev = LocalProjector(self.eps_dev(self.u), q_VT, dxm)
+
+            self.assembler = None  # set as default, to check if bc have been added???
+
+    def sigma_1(self, v): #related to eps
+
+        mu_E0 = self.p.E_0 / (2.0 * (1.0 + self.p.nu))
+        lmb_E0 = self.p.E_0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+        mu_E1 = self.p.E_1 / (2.0 * (1.0 + self.p.nu))
+        lmb_E1 = self.p.E_1 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+        if self.p.dim ==2 and self.p.stress_case == 'plane_stress':
+            lmb_E0 = 2 * mu_E0 * lmb_E0 / (lmb_E0 + 2 * mu_E0) # see https://comet-fenics.readthedocs.io/en/latest/demo/elasticity/2D_elasticity.py.html
+            lmb_E1 = 2 * mu_E1 * lmb_E1 / (lmb_E1 + 2 * mu_E1)
+
+        return 2.0 * mu_E0 * self.eps(v) + lmb_E0 * df.tr(self.eps(v)) * df.Identity(self.p.dim) +  2.0 * mu_E1 * self.eps(v) + lmb_E1 * df.tr(self.eps(v)) * df.Identity(self.p.dim)
+
+    def sigma_2(self):  # related to epsv
+        mu_E1 = self.p.E_1 / (2.0 * (1. + self.p.nu))
+        return 2 * mu_E1 * self.q_epsv
+
+    def eps(self, v):
+        return df.sym(df.grad(v))
+
+    def eps_dev(self, v):
+        # deviatoric strain part
+        return self.eps(v) - 1/3 * df.tr(self.eps(v)) * df.Identity(self.p.dim)
+
+    def eps_voigt(self, e):
+        eT = self.eps(e)
+        # 1D option
+        if eT.ufl_shape == (1, 1):
+            strain_vector = df.as_vector((eT[0, 0]))
+        # 2D option
+        elif eT.ufl_shape == (2, 2):
+            strain_vector = df.as_vector((eT[0, 0], eT[1, 1], 2 * eT[0, 1]))
+        # 3D option
+        elif eT.ufl_shape == (3, 3):
+            strain_vector = df.as_vector((eT[0, 0], eT[1, 1], eT[2, 2], 2 * eT[0, 1], 2 * eT[1, 2], 2 * eT[0, 2]))
+
+        return strain_vector
+
+    def sigma_voigt(self, s):
+        # 1D option
+        if s.ufl_shape == (1, 1):
+            stress_vector = df.as_vector((s[0, 0]))
+        # 2D option
+        elif s.ufl_shape == (2, 2):
+            stress_vector = df.as_vector((s[0, 0], s[1, 1], s[0, 1]))
+        # 3D option
+        elif s.ufl_shape == (3, 3):
+            stress_vector = df.as_vector((s[0, 0], s[1, 1], s[2, 2], s[0, 1], s[1, 2], s[0, 2]))
+        else:
+            raise ('Problem with stress tensor shape for voigt notation')
+
+        return stress_vector
+
+    def E_fkt(self, pd, path_time, parameters):
+
+        if pd > 0:  # element active, compute current Young's modulus
+            E = parameters['E_0']  # no thixotropy evaluation yet!!!
+        else:
+            E = df.DOLFIN_EPS  # non-active
+            # E = 0.001 * parameters['E_0']  # Emin??
+
+        return E
+
+    def pd_fkt(self, path_time):
+        # pseudo denisty: decide if layer is active or not (age < 0 nonactive!)
+        # decision based on current path_time value
+        l_active = 0  # non-active
+        if path_time >= 0 - df.DOLFIN_EPS:
+            l_active = 1.0  # active
+        return l_active
+
+    def evaluate_material(self):
+        # get path time; convert quadrature spaces to numpy vector
+        path_list = self.q_path.vector().get_local()
+        # print('check', path_list)
+        # vectorize the function for speed up
+        pd_fkt_vectorized = np.vectorize(self.pd_fkt)
+        pd_list = pd_fkt_vectorized(path_list)  # current pseudo density 1 if path_time >=0 else 0
+        # print('pseudo density', pd_list.max(), pd_list.min())
+
+        # compute current Young's modulus
+        parameters = {}
+        parameters['E_0'] = self.p.E_0
+        #
+        # vectorize the function for speed up
+        E_fkt_vectorized = np.vectorize(self.E_fkt)
+        E_list = E_fkt_vectorized(pd_list, path_list, parameters)
+        # print('E',E_list.max(),E_list.min())
+
+        # # project lists onto quadrature spaces
+        set_q(self.q_E, E_list)
+        set_q(self.q_pd, pd_list)
+
+        # get current strains and stresses
+        self.project_strain_dev(self.q_eps_dev) # get current deviatoric part of strain full tensor
+        eps_dev_list = self.q_eps_dev.vector().get_local()
+        epsv_list = self.q_epsv.vector().get_local()  # old visco strains (=deviatoric part)
+
+        # compute visco strain from old one epsv
+        self.new_epsv = np.zeros_like(epsv_list)
+        mu_E1 = 0.5 * self.p.E_1 / (1. + self.p.nu)
+        factor = 1 + self.dt * 2. * mu_E1 / self.p.eta
+        self.new_epsv = 1. / factor * (epsv_list + self.dt * 2. * mu_E1 / self.p.eta * eps_dev_list)
+
+        # for sensors and visualization
+        self.project_strain(self.q_eps)  # get current strains voigt notation
+        self.project_sigma(self.q_sig)  # get current stress voigt notation
+
+    def update_values(self):
+        # update process time and path variable
+        path_list = self.q_path.vector().get_local()
+        path_list += self.dt * np.ones_like(path_list)
+
+        set_q(self.q_path, path_list)
+
+        # update visco strain
+        set_q(self.q_epsv, self.new_epsv)
+
+    def set_timestep(self, dt):
+        self.dt = dt
+
+    def set_initial_path(self, path_time):
+        self.q_path.interpolate(path_time)  # default = zero, given as expression
+
+    def set_bcs(self, bcs):
+        # Only now (with the bcs) can we initialize the assembler
+        self.assembler = df.SystemAssembler(self.dR, self.R, bcs)
+
+    def F(self, b, x):
+        # if self.dt <= 0:
+        #    raise RuntimeError("You need to `.set_timestep(dt)` larger than zero before the solve!")
+        if not self.assembler:
+            raise RuntimeError("You need to `.set_bcs(bcs)` before the solve!")
+        self.evaluate_material()
+        self.assembler.assemble(b, x)
+
+    def J(self, A, x):
+        self.assembler.assemble(A)
+
+    def pv_plot(self, t=0):
+        # paraview export
+
+        # displacement plot
+        u_plot = df.project(self.u, self.V)
+        u_plot.rename("Displacement", "displacemenet vector")
+        self.pv_file.write(u_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+
+        sigma_plot = df.project(self.q_sig, self.visu_space_V,
+                                form_compiler_parameters={'quadrature_degree': self.p.degree})
+        eps_plot = df.project(self.q_eps, self.visu_space_V,
+                              form_compiler_parameters={'quadrature_degree': self.p.degree})
+        E_plot = df.project(self.q_E, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
+        pd_plot = df.project(self.q_pd, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
+
+        E_plot.rename("Young's Modulus", "Young's modulus value")
+        pd_plot.rename("pseudo density", "pseudo density")
+        sigma_plot.rename("Stress", "stress components voigt")
+        eps_plot.rename("strain", "strain components voigt")
+
+        self.pv_file.write(E_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+        self.pv_file.write(pd_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+        self.pv_file.write(sigma_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
+        self.pv_file.write(eps_plot, t, encoding=df.XDMFFile.Encoding.ASCII)
