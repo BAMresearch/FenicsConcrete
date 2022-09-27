@@ -67,6 +67,7 @@ class ConcreteAMMechanical(MaterialProblem):
             self.mechanics_problem = ConcreteViscoElasticModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
         elif self.mech_prob_string.lower() =='concreteviscodevelasticmodel':
             ### default parameters required for visco elastic model
+            default_p['visco_case'] = 'CMaxwell' # maxwell body with spring in parallel
             default_p['E_0'] = 40000  # Youngs Modulus Pa linear elastic
             default_p['E_1'] = 20000  # Youngs Modulus Pa visco element
             default_p['eta'] = 1000  # Damping coeff
@@ -632,7 +633,15 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
 
 
 class ConcreteViscoDevElasticModel(df.NonlinearProblem):
-    # viscoelastic material law derived from 1D linear standard solid model (Maxwell body in parallel with spring) [3Parametermodel]
+    # viscoelastic material law derived from 1D Three Parameter Model
+    # two options param['visco_case']=='Cmaxwell' -> Maxwell chain with n=1! == linear standard solid model (Maxwell in parallel with spring)
+    #                                                ---------spring(E_0)-------
+    #                                                |                          |
+    #                                                --damper(eta)--spring(E_1)--
+    #             param['visco_case']=='Ckelvin' --> Kelvin chain with n=1! == Kelvin plus spring (in Reihe)
+    #                                                   ------spring(E_1)------
+    #                                   ---spring(E_0)--|                     |
+    #                                                   ------damper(eta)------
     # with deviatoric assumptions for 3D generalization:
     # Deviatoric assumption: vol part of visco strain == 0 damper just working on deviatoric part!
     # in tensor format!!
@@ -693,7 +702,7 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
             self.q_pd = df.Function(q_V, name="pseudo density")  # active or nonactive
             self.q_E = df.Function(q_V, name="youngs modulus")
             self.q_epsv = df.Function(q_VT, name='visco strain') # full tensor
-            self.q_eps_dev = df.Function(q_VT, name='deviatoric strain') # full tensor
+            self.q_sig1_ten = df.Function(q_VT, name='tensor strain') # full tensor
             self.q_eps = df.Function(q_VTV, name='total strain') # voigt notation
             self.q_sig = df.Function(q_VTV, name='total stress') # voigt notation
 
@@ -710,7 +719,7 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
                 f = df.Constant((0, 0, -self.p.g * self.p.density))
 
             # multiplication with activated elements
-            R_ufl = self.q_E * df.inner(self.sigma_1(self.u), self.eps(v)) * dxm  # part with eps
+            R_ufl = self.q_E * df.inner(self.sigma(self.u), self.eps(v)) * dxm  # part with eps
             R_ufl += - self.q_pd * df.inner(self.sigma_2(), self.eps(v)) * dxm  # visco part
             R_ufl += - self.q_pd * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
 
@@ -724,34 +733,60 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
             self.dR = dR_ufl
 
             # stress and strain projection methods
-            self.project_sigma = LocalProjector(self.sigma_voigt(self.sigma_1(self.u) - self.sigma_2()), q_VTV, dxm)
+            self.project_sigma = LocalProjector(self.sigma_voigt(self.sigma(self.u) - self.sigma_2()), q_VTV, dxm)
             self.project_strain = LocalProjector(self.eps_voigt(self.u), q_VTV, dxm)
-            self.project_strain_dev = LocalProjector(self.eps_dev(self.u), q_VT, dxm)
+            self.project_sig1_ten = LocalProjector(self.sigma_1(self.u), q_VT, dxm) # stress component for visco strain computation
 
             self.assembler = None  # set as default, to check if bc have been added???
 
-    def sigma_1(self, v): #related to eps
-
+    def sigma(self, v): #total stress without visco part
         mu_E0 = self.p.E_0 / (2.0 * (1.0 + self.p.nu))
         lmb_E0 = self.p.E_0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
-        mu_E1 = self.p.E_1 / (2.0 * (1.0 + self.p.nu))
-        lmb_E1 = self.p.E_1 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
-        if self.p.dim ==2 and self.p.stress_case == 'plane_stress':
-            lmb_E0 = 2 * mu_E0 * lmb_E0 / (lmb_E0 + 2 * mu_E0) # see https://comet-fenics.readthedocs.io/en/latest/demo/elasticity/2D_elasticity.py.html
-            lmb_E1 = 2 * mu_E1 * lmb_E1 / (lmb_E1 + 2 * mu_E1)
 
-        return 2.0 * mu_E0 * self.eps(v) + lmb_E0 * df.tr(self.eps(v)) * df.Identity(self.p.dim) +  2.0 * mu_E1 * self.eps(v) + lmb_E1 * df.tr(self.eps(v)) * df.Identity(self.p.dim)
+        if self.p.dim == 2 and self.p.stress_case == 'plane_stress':
+            lmb_E0 = 2 * mu_E0 * lmb_E0 / (
+                        lmb_E0 + 2 * mu_E0)  # see https://comet-fenics.readthedocs.io/en/latest/demo/elasticity/2D_elasticity.py.html
+
+        if self.p.visco_case.lower() == 'cmaxwell':
+            sig = 2.0 * mu_E0 * self.eps(v) + lmb_E0 * df.tr(self.eps(v)) * df.Identity(self.p.dim) + self.sigma_1(v) # stress stiffness zero + stress stiffness one
+        elif self.p.visco_case.lower() == 'ckelvin':
+            sig = 2.0 * mu_E0 * self.eps(v) + lmb_E0 * df.tr(self.eps(v)) * df.Identity(self.p.dim) # stress stiffness zero
+        else:
+            sig = None
+            raise ValueError('case not defined')
+
+
+        return sig
+
+    def sigma_1(self, v): #stress stiffness one
+        if self.p.visco_case.lower() == 'cmaxwell':
+            mu_E1 = self.p.E_1 / (2.0 * (1.0 + self.p.nu))
+            lmb_E1 = self.p.E_1 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+            if self.p.dim ==2 and self.p.stress_case == 'plane_stress':
+                lmb_E1 = 2 * mu_E1 * lmb_E1 / (lmb_E1 + 2 * mu_E1)
+            sig1 = 2.0 * mu_E1 * self.eps(v) + lmb_E1 * df.tr(self.eps(v)) * df.Identity(self.p.dim)
+        elif self.p.visco_case.lower() == 'ckelvin':
+            sig1 = self.sigma_0(v)
+        else:
+            sig = None
+            raise ValueError('case not defined')
+
+        return sig1
 
     def sigma_2(self):  # related to epsv
-        mu_E1 = self.p.E_1 / (2.0 * (1. + self.p.nu))
-        return 2 * mu_E1 * self.q_epsv
+        if self.p.visco_case.lower() == 'cmaxwell':
+            mu_E1 = self.p.E_1 / (2.0 * (1. + self.p.nu))
+            sig2 = 2 * mu_E1 * self.q_epsv
+        elif self.p.visco_case.lower() == 'ckelvin':
+            mu_E0 = self.p.E_0 / (2.0 * (1. + self.p.nu))
+            sig2 = 2 * mu_E0 * self.q_epsv
+        else:
+            sig = None
+            raise ValueError('case not defined')
+        return sig2
 
     def eps(self, v):
         return df.sym(df.grad(v))
-
-    def eps_dev(self, v):
-        # deviatoric strain part
-        return self.eps(v) - 1/3 * df.tr(self.eps(v)) * df.Identity(self.p.dim)
 
     def eps_voigt(self, e):
         eT = self.eps(e)
@@ -823,15 +858,25 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
         set_q(self.q_pd, pd_list)
 
         # get current strains and stresses
-        self.project_strain_dev(self.q_eps_dev) # get current deviatoric part of strain full tensor
-        eps_dev_list = self.q_eps_dev.vector().get_local()
+        self.project_sig1_ten(self.q_sig1_ten) # get stress component
+
         epsv_list = self.q_epsv.vector().get_local()  # old visco strains (=deviatoric part)
+        sig1_list = self.q_sig1_ten.vector().get_local()
 
         # compute visco strain from old one epsv
         self.new_epsv = np.zeros_like(epsv_list)
-        mu_E1 = 0.5 * self.p.E_1 / (1. + self.p.nu)
-        factor = 1 + self.dt * 2. * mu_E1 / self.p.eta
-        self.new_epsv = 1. / factor * (epsv_list + self.dt * 2. * mu_E1 / self.p.eta * eps_dev_list)
+
+        if self.p.visco_case.lower() == 'cmaxwell':
+            mu_E1 = 0.5 * self.p.E_1 / (1. + self.p.nu)
+            factor = 1 + self.dt * 2. * mu_E1 / self.p.eta
+            self.new_epsv = 1. / factor * (epsv_list + self.dt/self.p.eta * sig1_list)
+        elif self.p.visco_case.lower() == 'ckelvin':
+            mu_E1 = 0.5 * self.p.E_1 / (1. + self.p.nu)
+            mu_E0 = 0.5 * self.p.E_0 / (1. + self.p.nu)
+            factor = 1 + self.dt * 2. * mu_E0 / self.p.eta + self.dt * 2. * mu_E1 / self.p.eta
+            self.new_epsv = 1. / factor * (epsv_list + self.dt / self.p.eta * sig1_list)
+        else:
+            raise ValueError('visco case not defined')
 
         # for sensors and visualization
         self.project_strain(self.q_eps)  # get current strains voigt notation

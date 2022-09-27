@@ -79,10 +79,10 @@ def test_relaxation_2D():
     parameters['E_0'] = 70e3
     parameters['E_1'] = 20e3
     parameters['eta'] = 2e3     # relaxation time: tau = eta/E_1
-    parameters['nu'] = 0.3
+    parameters['nu'] = 0.2
     parameters['stress_state'] = 'plane_strain'
 
-    parameters['time'] = 1  # total simulation time in s
+    parameters['time'] = 1.5  # total simulation time in s
     parameters['dt'] = 0.01  # step (should be < tau=eta/E_1)
 
     # sensor
@@ -109,27 +109,17 @@ def test_relaxation_2D():
         # eps_o_time.append(prop2D.sensors[sensor02.name].data[-1][1])  # eps_yy
 
 
-    # check with analytic 1D solution
-    sig_yy=[]
-    tau = parameters['eta']/parameters['E_1']
-    eps_r = parameters['u_bc'] # L==1 -> u_bc = eps_r (prescriped strain)
-    for i in time:
-        sig_yy.append(parameters['E_0']*eps_r + parameters['E_1']*eps_r*np.exp(-i/tau))
-
-    print('analytic 1D == 2D with nu=0', sig_yy)
-    print('stress over time', sig_o_time)
-    error2ana = np.linalg.norm(sig_yy-np.array(sig_o_time))/np.linalg.norm(sig_yy)
-    #print('norm error sig_yy', error2ana) # 1e-5 if time step 1e-5!!
-
-    import matplotlib.pyplot as plt
-
-    plt.plot(time, sig_yy, '*r', label='analytic')
-    plt.plot(time, sig_o_time,'og', label='FEM')
-    plt.legend()
-    plt.show()
-
-
-    assert error2ana < 5e-3
+    # relaxtaion check - first and last value
+    eps_r = parameters['u_bc']  # L==1 -> u_bc = eps_r (prescriped strain)
+    #
+    print(prop2D.p.visco_case)
+    if prop2D.p.visco_case.lower() == 'cmaxwell':
+        sig0 = parameters['E_0']*eps_r + parameters['E_1']*eps_r
+        sigend = parameters['E_0']*eps_r
+        print('theory',sig0, sigend)
+        print('computed',sig_o_time[0] , sig_o_time[-1])
+        assert (sig_o_time[0] - sig0)/sig0 < 1e-8
+        assert (sig_o_time[-1]- sigend)/sigend < 1e-4
 
     # get stresses and strains at the end
     # print('stresses',prop2D.sensors[sensor01.name].data[-1])
@@ -138,6 +128,23 @@ def test_relaxation_2D():
     strain_yy = prop2D.sensors[sensor02.name].data[-1][1]
     assert strain_yy == pytest.approx(prop2D.p.u_bc) # L==1!
     assert strain_xx == pytest.approx(-prop2D.p.nu*prop2D.p.u_bc)
+
+
+    # plot analytic 1D solution against computed (for relaxation test)
+    sig_yy = []
+    tau = parameters['eta'] / parameters['E_1']
+    for i in time:
+        sig_yy.append(parameters['E_0'] * eps_r + parameters['E_1'] * eps_r * np.exp(-i / tau))
+
+    # print('analytic 1D == 2D with nu=0', sig_yy)
+    # print('stress over time', sig_o_time)
+
+    import matplotlib.pyplot as plt
+
+    plt.plot(time, sig_yy, '*r', label='analytic')
+    plt.plot(time, sig_o_time, 'og', label='FEM')
+    plt.legend()
+    plt.show()
 
 
 #TODO: add creep test requires load boundary condition not yet in the experiment framework
