@@ -143,6 +143,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
         if self.p.dim == 1:
             self.stress_vector_dim = 1
+            raise ValueError('Material law not implemented for 1D')
         elif self.p.dim == 2:
             self.stress_vector_dim = 3
         elif self.p.dim == 3:
@@ -195,9 +196,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             v = df.TestFunction(self.V)
 
             # Volume force
-            if self.p.dim == 1:
-                f = df.Constant(-self.p.g * self.p.density)
-            elif self.p.dim == 2:
+            if self.p.dim == 2:
                 f = df.Constant((0, -self.p.g * self.p.density))
             elif self.p.dim == 3:
                 f = df.Constant((0, 0, -self.p.g * self.p.density))
@@ -240,8 +239,9 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
     def sigma_voigt(self, s):
         # 1D option
+        print('s.ufl_shape', s.ufl_shape)
         if s.ufl_shape == (1, 1):
-            stress_vector = df.as_vector((s[0, 0]))
+            stress_vector = None
         # 2D option
         elif s.ufl_shape == (2, 2):
             stress_vector = df.as_vector((s[0, 0], s[1, 1], s[0, 1]))
@@ -257,7 +257,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         eT = self.eps(e)
         # 1D option
         if eT.ufl_shape == (1, 1):
-            strain_vector = df.as_vector((eT[0, 0]))
+            strain_vector = None
         # 2D option
         elif eT.ufl_shape == (2, 2):
             strain_vector = df.as_vector((eT[0, 0], eT[1, 1], 2 * eT[0, 1]))
@@ -370,7 +370,8 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
     # viscoelastic material law derived from 1D linear standard solid model (Maxwell body in parallel with spring)
     # with 3D with assumptions: 3D generalization where each element (2xsprings/damper) 2 moduli where the Poisson ratio is the same for all elements
     #                           see https://comet-fenics.readthedocs.io/en/latest/demo/viscoelasticity/linear_viscoelasticity.html
-    # in VOIGT notation!!
+    # in VOIGT notation!! regarding Aratz first implementation
+    # time integration: BACKWARD EULER
 
     def __init__(self, mesh, p, pv_name='mechanics_output', **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
@@ -378,6 +379,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
 
         if self.p.dim == 1:
             self.stress_vector_dim = 1
+            raise ValueError('Material law not implemented for 1D')
         elif self.p.dim == 2:
             self.stress_vector_dim = 3
         elif self.p.dim == 3:
@@ -434,9 +436,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             v = df.TestFunction(self.V)
 
             # Volume force ??? correct?
-            if self.p.dim == 1:
-                f = df.Constant(-self.p.g * self.p.density)
-            elif self.p.dim == 2:
+            if self.p.dim == 2:
                 f = df.Constant((0, -self.p.g * self.p.density))
             elif self.p.dim == 3:
                 f = df.Constant((0, 0, -self.p.g * self.p.density))
@@ -472,7 +472,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
     def dotC(self):  # unit (E=1) linear elasticity matrix (Voigt notation)
         # nu: Poisson ratio
         nu = self.p.nu
-        C = df.as_matrix([[1]]) # 1D no Poisson ratio!
+        C = None
         if self.p.dim == 2:
             if self.p.stress_case == 'plane_stress':
                 C = df.as_matrix([[1./(1.-nu**2), nu/(1.-nu**2), 0.],
@@ -485,6 +485,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
                                [lmb_1, 2. * mu_1 + lmb_1, 0],
                                [0, 0, mu_1]])
         elif self.p.dim == 3:
+            print('dim==3')
             lmb_1 = 1.0 * nu / ((1. - 2. * nu) * (1. + nu))
             mu_1 = 0.5 * 1.0 / (1. + nu)
             C = df.as_matrix([[2. * mu_1 + lmb_1, lmb_1, lmb_1, 0., 0., 0.],
@@ -501,11 +502,8 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
 
     def eps_voigt(self, e):
         eT = self.eps(e)
-        # 1D option
-        if eT.ufl_shape == (1, 1):
-            strain_vector = df.as_vector((eT[0, 0]))
         # 2D option
-        elif eT.ufl_shape == (2, 2):
+        if eT.ufl_shape == (2, 2):
             strain_vector = df.as_vector((eT[0, 0], eT[1, 1], 2 * eT[0, 1]))
         # 3D option
         elif eT.ufl_shape == (3, 3):
@@ -560,6 +558,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
         epsv_list = self.q_epsv.vector().get_local()  # old visco strains
 
         # compute visco strain from old one epsv point vice because of matrix multiplication! here with UFL
+        # VERY SLOW BETTER tensor format with UFL or mcode interface
         self.new_epsv = np.zeros_like(epsv_list)
         num_gp = int(len(eps_list)/self.stress_vector_dim)
         C = self.dotC()  # get C matrix
@@ -570,7 +569,8 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
 
             factor = II + self.dt * self.p.E_1 / self.p.eta * C
             factor_inv = df.inv(factor)
-            self.new_epsv[a:b] = df.dot(factor_inv,df.as_vector(epsv_list[a:b])) + self.dt * self.p.E_1 / self.p.eta *df.dot(factor_inv, df.dot(C,df.as_vector(eps_list[a:b])))
+            self.new_epsv[a:b] = df.dot(factor_inv, df.as_vector(np.array(epsv_list[a:b]))) + \
+                                 self.dt * self.p.E_1 / self.p.eta *df.dot(factor_inv, df.dot(C,df.as_vector(np.array(eps_list[a:b]))))
 
     def update_values(self):
         # update process time and path variable
@@ -634,17 +634,18 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
 
 class ConcreteViscoDevElasticModel(df.NonlinearProblem):
     # viscoelastic material law derived from 1D Three Parameter Model
-    # two options param['visco_case']=='Cmaxwell' -> Maxwell chain with n=1! == linear standard solid model (Maxwell in parallel with spring)
+    # two options: param['visco_case']=='Cmaxwell' -> Maxwell chain with n=1! == linear standard solid model (Maxwell in parallel with spring)
     #                                                ---------spring(E_0)-------
     #                                                |                          |
     #                                                --damper(eta)--spring(E_1)--
-    #             param['visco_case']=='Ckelvin' --> Kelvin chain with n=1! == Kelvin plus spring (in Reihe)
+    #              param['visco_case']=='Ckelvin' --> Kelvin chain with n=1! == Kelvin plus spring (in Reihe)
     #                                                   ------spring(E_1)------
     #                                   ---spring(E_0)--|                     |
     #                                                   ------damper(eta)------
     # with deviatoric assumptions for 3D generalization:
     # Deviatoric assumption: vol part of visco strain == 0 damper just working on deviatoric part!
     # in tensor format!!
+    # time integration: BACKWARD EULER
 
     def __init__(self, mesh, p, pv_name='mechanics_output', **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
@@ -652,6 +653,7 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
 
         if self.p.dim == 1:
             self.stress_vector_dim = 1
+            raise ValueError('Material law not implemented for 1D')
         elif self.p.dim == 2:
             self.stress_vector_dim = 3
         elif self.p.dim == 3:
@@ -711,9 +713,7 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
             v = df.TestFunction(self.V)
 
             # Volume force ??? correct?
-            if self.p.dim == 1:
-                f = df.Constant(-self.p.g * self.p.density)
-            elif self.p.dim == 2:
+            if self.p.dim == 2:
                 f = df.Constant((0, -self.p.g * self.p.density))
             elif self.p.dim == 3:
                 f = df.Constant((0, 0, -self.p.g * self.p.density))
@@ -766,7 +766,7 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
                 lmb_E1 = 2 * mu_E1 * lmb_E1 / (lmb_E1 + 2 * mu_E1)
             sig1 = 2.0 * mu_E1 * self.eps(v) + lmb_E1 * df.tr(self.eps(v)) * df.Identity(self.p.dim)
         elif self.p.visco_case.lower() == 'ckelvin':
-            sig1 = self.sigma_0(v)
+            sig1 = self.sigma(v)
         else:
             sig = None
             raise ValueError('case not defined')
@@ -790,11 +790,8 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
 
     def eps_voigt(self, e):
         eT = self.eps(e)
-        # 1D option
-        if eT.ufl_shape == (1, 1):
-            strain_vector = df.as_vector((eT[0, 0]))
         # 2D option
-        elif eT.ufl_shape == (2, 2):
+        if eT.ufl_shape == (2, 2):
             strain_vector = df.as_vector((eT[0, 0], eT[1, 1], 2 * eT[0, 1]))
         # 3D option
         elif eT.ufl_shape == (3, 3):
@@ -803,11 +800,8 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
         return strain_vector
 
     def sigma_voigt(self, s):
-        # 1D option
-        if s.ufl_shape == (1, 1):
-            stress_vector = df.as_vector((s[0, 0]))
         # 2D option
-        elif s.ufl_shape == (2, 2):
+        if s.ufl_shape == (2, 2):
             stress_vector = df.as_vector((s[0, 0], s[1, 1], s[0, 1]))
         # 3D option
         elif s.ufl_shape == (3, 3):
