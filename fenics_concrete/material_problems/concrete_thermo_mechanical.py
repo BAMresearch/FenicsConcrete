@@ -37,13 +37,13 @@ class ConcreteThermoMechanical(MaterialProblem):
         default_p = Parameters()
         # Material parameter for concrete model with temperature and hydration
         default_p['density'] = 2350  # in kg/m^3 density of concrete
-        default_p['density_binder'] = 1440  # in kg/m^3 density of the binder
         default_p['themal_cond'] = 2.0  # effective thermal conductivity, approx in Wm^-3K^-1, concrete!
         # self.specific_heat_capacity = 9000  # effective specific heat capacity in J kg⁻1 K⁻1
         default_p['vol_heat_cap'] = 2.4e6  # volumetric heat cap J/(m3 K)
-        default_p['b_ratio'] = 0.2  # volume percentage of binder
+        # TODO: Q_pot needs to be removed and heat of hydration function turned into a static function will all the others...
         default_p['Q_pot'] = 500e3  # potential heat per weight of binder in J/kg
-        # p['Q_inf'] = self.Q_pot * self.density_binder * self.b_ratio  # potential heat per concrete volume in J/m3
+        #default_p['Q_inf'] = default_p['Q_pot'] * default_p['density_binder'] * default_p['b_ratio']  # potential heat per concrete volume in J/m3
+        default_p['Q_inf'] = 144000000  # potential heat per concrete volume in J/m3
         default_p['B1'] = 2.916E-4  # in 1/s
         default_p['B2'] = 0.0024229  # -
         default_p['eta'] = 5.554  # something about diffusion
@@ -54,7 +54,7 @@ class ConcreteThermoMechanical(MaterialProblem):
         # option: 'exponential' and 'off'
         default_p['temp_adjust_law'] = 'exponential'
         # polinomial degree
-        default_p['degree'] = 2  # default boundary setting
+        default_p['degree'] = 2  #
 
         ### paramters for mechanics problem
         default_p['E_28'] = 15000000  # Youngs Modulus N/m2 or something... TODO: check units!
@@ -217,14 +217,14 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
             # quadrature point part
 
             self.R = R_ufl - df.Constant(
-                self.p.Q_pot * self.p.density_binder * self.p.b_ratio) * self.q_delta_alpha * vT * dxm
+                self.p.Q_inf) * self.q_delta_alpha * vT * dxm
 
             # derivative
             # normal form
             dR_ufl = df.derivative(R_ufl, self.T)
             # quadrature part
             self.dR = dR_ufl - df.Constant(
-                self.p.Q_pot * self.p.density_binder * self.p.b_ratio) * self.q_ddalpha_dT * T_ * vT * dxm
+                self.p.Q_inf) * self.q_ddalpha_dT * T_ * vT * dxm
 
             # setup projector to project continuous funtionspace to quadrature
             self.project_T = LocalProjector(self.T, q_V, dxm)
@@ -558,13 +558,13 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
             R_ufl = self.q_E * df.inner(x_sigma(self.u), df.sym(df.grad(v))) * dxm
             R_ufl += - df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
             # quadrature point part
-            self.R = R_ufl  # - Constant(p.Q_inf) * self.q_delta_alpha * vT * dxm
+            self.R = R_ufl
 
             # derivative
             # normal form
             dR_ufl = df.derivative(R_ufl, self.u)
             # quadrature part
-            self.dR = dR_ufl  # - Constant(p.Q_inf) * self.q_ddalpha_dT * T_ * vT * dxm
+            self.dR = dR_ufl
 
             self.project_sigma = LocalProjector(self.sigma_voigt(self.sigma_ufl), q_VT, dxm)
 
