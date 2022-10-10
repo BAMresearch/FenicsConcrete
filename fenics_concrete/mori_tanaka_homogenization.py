@@ -16,7 +16,7 @@ def get_k_g_from_e_nu(E, nu):
 
 class ConcreteHomogenization():
     # object to compute homogenized parameters for cement matrix and aggregates
-    def __init__(self, E_matrix, nu_matrix, fc_matrix, rho_matrix = 1, kappa_matrix = 1, C_matrix = 1):
+    def __init__(self, E_matrix, nu_matrix, fc_matrix, rho_matrix = 1, kappa_matrix = 1, C_matrix = 1, Q_matrix = 1):
         """ initializes the object
 
         matrix parameters are set
@@ -35,6 +35,8 @@ class ConcreteHomogenization():
             Thermal conductivity of the matrix
         C_matrix : float, optional
             Specific/volumetric heat capacity of the matrix
+        Q_matrix : float, optional
+            Heat release in Energy per Weight of binder
         """
         self.E_matrix = E_matrix
         self.nu_matrix = nu_matrix
@@ -42,8 +44,10 @@ class ConcreteHomogenization():
         self.kappa_matrix = kappa_matrix
         self.C_matrix = C_matrix
         self.rho_matrix = rho_matrix
+        self.Q_matrix = Q_matrix
         self.vol_frac_matrix = 1
         self.vol_frac_binder = 1  # when coated inclusions are considered these still count as binder volume
+        self.Q_eff = self.Q_matrix * self.rho_matrix * self.vol_frac_binder
 
         self.K_matrix, self.G_matrix = get_k_g_from_e_nu(E_matrix,nu_matrix)
 
@@ -374,3 +378,6 @@ class ConcreteHomogenization():
         j2_matrix = np.sqrt(3 / 2 * sum(sum(np.multiply(sigma_dev_matrix, sigma_dev_matrix))))
         fc = j2_0 / j2_matrix * strength_test
         self.fc_eff = fc
+
+        # update heat release
+        self.Q_eff = self.Q_matrix * self.rho_matrix * self.vol_frac_binder
