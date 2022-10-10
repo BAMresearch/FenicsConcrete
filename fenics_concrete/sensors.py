@@ -42,8 +42,12 @@ class Sensor:
         return self.__class__.__name__
 
     def data_max(self, value):
-        if value > self.max:
+        if self.max: # check for initial value (None is default)
+            if value > self.max:
+                self.max = value
+        else:
             self.max = value
+
 
 
 class DisplacementSensor(Sensor):
@@ -100,9 +104,9 @@ class MaxTemperatureSensor(Sensor):
     """A sensor that measure the maximum temperature at each timestep"""
 
     def __init__(self):
-        self.data = [0.0]
-        self.time = [0.0]
-        self.max = 0.0
+        self.data = []
+        self.time = []
+        self.max = None
 
     def measure(self, problem, t=1.0):
         """
@@ -114,6 +118,7 @@ class MaxTemperatureSensor(Sensor):
         max_T = np.amax(problem.temperature.vector().get_local()) - problem.p.zero_C
         self.data.append(max_T)
         self.data_max(max_T)
+        self.time.append(t)
 
 
 class DOHSensor(Sensor):
@@ -169,9 +174,9 @@ class MaxYieldSensor(Sensor):
     A max value > 0 indicates that at some place the stress exceeds the limits"""
 
     def __init__(self):
-        self.data = [0.0]
-        self.time = [0.0]
-        self.max = 0.0
+        self.data = []
+        self.time = []
+        self.max = None
 
     def measure(self, problem, t=1.0):
         """
