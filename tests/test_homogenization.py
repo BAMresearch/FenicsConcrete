@@ -133,3 +133,26 @@ def test_volume_averages():
     assert homgenized_concrete_1.rho_eff == pytest.approx(homgenized_concrete_2.rho_eff)
     assert homgenized_concrete_1.rho_eff == pytest.approx(20)
     assert homgenized_concrete_1.C_eff == pytest.approx(20)
+
+
+def test_heat_release():
+        # input values
+        E = 10  # MPa
+        poissions_ratio = 0.2
+        compressive_strength = 10
+        aggregate_vol_frac = 0.5  # volume fraction
+        rho = 42
+        Q = 7
+
+        homgenized_concrete = fenics_concrete.ConcreteHomogenization(E_matrix=E,
+                                                                     nu_matrix=poissions_ratio,
+                                                                     fc_matrix=compressive_strength,
+                                                                     rho_matrix = rho,
+                                                                     Q_matrix=Q)
+        # testing computation of heat release wrt volume
+        assert homgenized_concrete.Q_eff ==  pytest.approx(Q*rho)
+
+        # adding aggregates
+        homgenized_concrete.add_uncoated_particle(E=E, nu=poissions_ratio, volume_fraction=aggregate_vol_frac, rho=rho)
+
+        assert homgenized_concrete.Q_eff ==  pytest.approx(Q*rho*aggregate_vol_frac)
