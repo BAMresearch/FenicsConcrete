@@ -34,9 +34,9 @@ class ConcreteHomogenization():
         kappa_matrix : float, optional
             Thermal conductivity of the matrix
         C_matrix : float, optional
-            Specific/volumetric heat capacity of the matrix
+            Specific heat capacity of the matrix in energy per weight
         Q_matrix : float, optional
-            Heat release in Energy per Weight of binder
+            Heat release in energy per weight of binder
         """
         self.E_matrix = E_matrix
         self.nu_matrix = nu_matrix
@@ -47,7 +47,7 @@ class ConcreteHomogenization():
         self.Q_matrix = Q_matrix
         self.vol_frac_matrix = 1
         self.vol_frac_binder = 1  # when coated inclusions are considered these still count as binder volume
-        self.Q_eff = self.Q_matrix * self.rho_matrix * self.vol_frac_binder
+        self.Q_vol_eff = self.Q_matrix * self.rho_matrix * self.vol_frac_binder
 
         self.K_matrix, self.G_matrix = get_k_g_from_e_nu(E_matrix,nu_matrix)
 
@@ -58,7 +58,7 @@ class ConcreteHomogenization():
         self.nu_eff = nu_matrix
         self.fc_eff = fc_matrix
         self.kappa_eff = kappa_matrix
-        self.C_eff = C_matrix
+        self.C_vol_eff = C_matrix*rho_matrix
         self.rho_eff = rho_matrix
 
         # list for inclusion values (all phases that are not matrix
@@ -100,7 +100,7 @@ class ConcreteHomogenization():
         kappa : float, optional
             Thermal conductivity
         C : float, optional
-            Specific/volumetric heat capacity
+            Specific heat capacity in energy per weight
 
         """
         K, G = get_k_g_from_e_nu(E, nu)
@@ -161,7 +161,7 @@ class ConcreteHomogenization():
         k : float, optional
             Thermal conductivity of the particle, the coat is ignored
         C : float, optional
-            Specific/volumetric heat capacity of the inclusion
+            Specific heat capacity of the inclusion in energy per weight
         """
         # set values - inclusion, coating, matrix
         E = np.array([E_inclusion, self.E_matrix*itz_ratio, self.E_matrix])
@@ -301,7 +301,7 @@ class ConcreteHomogenization():
         kappa_eff_numerator = self.vol_frac_matrix * self.kappa_matrix
         kappa_eff_denominator = self.vol_frac_matrix
         self.rho_eff = self.vol_frac_matrix * self.rho_matrix
-        self.C_eff = self.vol_frac_matrix * self.C_matrix
+        self.C_vol_eff = self.vol_frac_matrix * self.C_matrix * self.rho_matrix
         vol_test = self.vol_frac_matrix
 
         for i in range(self.n_incl):
@@ -313,7 +313,7 @@ class ConcreteHomogenization():
             kappa_eff_numerator += self.vol_frac_incl[i] * self.kappa_incl[i] * self.A_therm_incl[i]
             kappa_eff_denominator += self.vol_frac_incl[i] * self.A_therm_incl[i]
             self.rho_eff += self.vol_frac_incl[i] * self.rho_incl[i]
-            self.C_eff += self.vol_frac_incl[i] * self.C_incl[i]
+            self.C_vol_eff += self.vol_frac_incl[i] * self.C_incl[i] * self.rho_incl[i]
             vol_test += self.vol_frac_incl[i]
 
         assert vol_test == pytest.approx(1)  # sanity check that vol fraction have been corretly computed
@@ -380,4 +380,4 @@ class ConcreteHomogenization():
         self.fc_eff = fc
 
         # update heat release
-        self.Q_eff = self.Q_matrix * self.rho_matrix * self.vol_frac_binder
+        self.Q_vol_eff = self.Q_matrix * self.rho_matrix * self.vol_frac_binder
