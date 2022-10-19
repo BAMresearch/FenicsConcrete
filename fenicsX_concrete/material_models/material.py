@@ -1,6 +1,6 @@
 import dolfinx as df
-import sys
-print(sys.path)
+#import sys
+#print(sys.path)
 from fenicsX_concrete.helpers import Parameters
 from fenicsX_concrete.sensors import Sensors
 

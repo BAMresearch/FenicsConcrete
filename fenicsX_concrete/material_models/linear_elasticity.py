@@ -72,18 +72,31 @@ class LinearElasticity(MaterialProblem):
 
         # Creating random fields for E (Young's modulus) and Mu (Poisson's ratio) constants.
 
-        def random_field_generator(domain, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values):
+        def random_field_generator(domain, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol):
             field_function_space = df.fem.FunctionSpace(domain, ("CG", 1))
-            random_field = Randomfield(field_function_space, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values)
+            random_field = Randomfield(field_function_space, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol)
             #random_field = Randomfield(fct_space=var_function_space, cov_name='squared_exp', mean=1, rho=0.5, sigma=1, k=10)
             #random_field.solve_covariance_EVP()
             return random_field
 
-        self.p.E  = random_field_generator(self.experiment.mesh,'squared_exp', 100, 0.3, 0.05, 0, 3) 
-        self.p.E.create_random_field(_type='random')
+        def parameters_conversion(lognormal_mean, lognormal_sigma):
+            from numpy import log
+            from math import sqrt
+            normal_mean = log(lognormal_mean/sqrt(1 + (lognormal_sigma/lognormal_mean)**2))
+            normal_sigma = log(1 + (lognormal_sigma/lognormal_mean)**2)
+            return normal_mean, normal_sigma
 
-        self.p.nu = random_field_generator(self.experiment.mesh,'squared_exp', 0.2, 0.3, 0.05, 0, 3)
-        self.p.nu.create_random_field(_type='random')
+        E_mean, E_variance = parameters_conversion(self.p.E, 3)
+        Nu_mean, Nu_variance = parameters_conversion(self.p.nu, 0.03)
+
+        # print(E_mean, E_variance, Nu_mean, Nu_variance)
+        # Deterministic self.p.E changes to random field version here!
+
+        self.p.E  = random_field_generator(self.experiment.mesh,'squared_exp', E_mean, 0.3, 0.05, E_variance, 3, 0.01) 
+        self.p.E.create_random_field(_type='random', _dist='LN')
+
+        self.p.nu = random_field_generator(self.experiment.mesh,'squared_exp', Nu_mean, 0.3, 0.05, Nu_variance, 3, 0.01)
+        self.p.nu.create_random_field(_type='random', _dist='LN')
 
         # displacement field
         #self.displacement = df.Function(self.V)
@@ -144,8 +157,6 @@ class LinearElasticity(MaterialProblem):
         for sensor_name in self.sensors:
             # go through all sensors and measure
             self.sensors[sensor_name].measure(self, t)
-
-
             
     #def compute_residual(self):
     #    # compute reaction forces
