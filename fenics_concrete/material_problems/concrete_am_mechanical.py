@@ -65,6 +65,7 @@ class ConcreteAMMechanical(MaterialProblem):
             self.p = default_p + self.p
 
             self.mechanics_problem = ConcreteViscoElasticModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
+
         elif self.mech_prob_string.lower() =='concreteviscodevelasticmodel':
             ### default parameters required for visco elastic model
             default_p['visco_case'] = 'CMaxwell' # maxwell body with spring in parallel
@@ -74,6 +75,21 @@ class ConcreteAMMechanical(MaterialProblem):
             self.p = default_p + self.p
 
             self.mechanics_problem = ConcreteViscoDevElasticModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
+
+        elif self.mech_prob_string.lower() =='concreteviscodevthixelasticmodel':
+            ### default parameters required for visco elastic model
+            default_p['visco_case'] = 'CKelvin' # maxwell body with spring in parallel
+            default_p['E_0'] = 40000  # Youngs Modulus Pa linear elastic
+            default_p['E_1'] = 20000  # Youngs Modulus Pa visco element
+            default_p['eta'] = 1000  # Damping coeff
+            default_p['R_i'] = [0,0,0]
+            default_p['A_i'] = [0,0,0]
+            default_p['t_f'] = [0,0,0]
+            default_p['age_0'] = 0.  # start age of concrete [s]
+            self.p = default_p + self.p
+
+            self.mechanics_problem = ConcreteViscoDevThixElasticModel(self.experiment.mesh, self.p, pv_name=self.pv_name)
+
         else:
             raise ValueError('given mechanics_problem not implemented')
 
@@ -702,7 +718,8 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
 
             # computed values
             self.q_pd = df.Function(q_V, name="pseudo density")  # active or nonactive
-            self.q_E = df.Function(q_V, name="youngs modulus")
+            self.q_E = df.Function(q_V, name="youngs modulus") # for element activation only not age dependent!
+
             self.q_epsv = df.Function(q_VT, name='visco strain') # full tensor
             self.q_sig1_ten = df.Function(q_VT, name='tensor strain') # full tensor
             self.q_eps = df.Function(q_VTV, name='total strain') # voigt notation
@@ -1003,7 +1020,10 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
 
             # computed values
             self.q_pd = df.Function(q_V, name="pseudo density")  # active or nonactive
-            self.q_E = df.Function(q_V, name="elastic youngs modulus")
+            self.q_E0 = df.Function(q_V, name="elastic youngs modulus")
+            self.q_E1 = df.Function(q_V, name="visco youngs modulus")
+            self.q_eta = df.Function(q_V, name="vsico damper modulus")
+
             self.q_epsv = df.Function(q_VT, name='visco strain') # full tensor
             self.q_sig1_ten = df.Function(q_VT, name='tensor strain') # full tensor
             self.q_eps = df.Function(q_VTV, name='total strain') # voigt notation
@@ -1041,8 +1061,8 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
             self.assembler = None  # set as default, to check if bc have been added???
 
     def sigma(self, v): #total stress without visco part
-        mu_E0 = self.p.E_0 / (2.0 * (1.0 + self.p.nu))
-        lmb_E0 = self.p.E_0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+        mu_E0 = self.q_E0 / (2.0 * (1.0 + self.p.nu))
+        lmb_E0 = self.q_E0 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
 
         if self.p.dim == 2 and self.p.stress_case == 'plane_stress':
             lmb_E0 = 2 * mu_E0 * lmb_E0 / (
@@ -1059,10 +1079,10 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
 
         return sig
 
-    def sigma_1(self, v): #stress stiffness one
+    def sigma_1(self, v): # stress for visco strain computation
         if self.p.visco_case.lower() == 'cmaxwell':
-            mu_E1 = self.p.E_1 / (2.0 * (1.0 + self.p.nu))
-            lmb_E1 = self.p.E_1 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+            mu_E1 = self.q_E1 / (2.0 * (1.0 + self.p.nu))
+            lmb_E1 = self.q_E1 * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
             if self.p.dim ==2 and self.p.stress_case == 'plane_stress':
                 lmb_E1 = 2 * mu_E1 * lmb_E1 / (lmb_E1 + 2 * mu_E1)
             sig1 = 2.0 * mu_E1 * self.eps(v) + lmb_E1 * df.tr(self.eps(v)) * df.Identity(self.p.dim)
@@ -1074,12 +1094,12 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
 
         return sig1
 
-    def sigma_2(self):  # related to epsv
+    def sigma_2(self):  # damper stress related to epsv
         if self.p.visco_case.lower() == 'cmaxwell':
-            mu_E1 = self.p.E_1 / (2.0 * (1. + self.p.nu))
+            mu_E1 = self.q_E1 / (2.0 * (1. + self.p.nu))
             sig2 = 2 * mu_E1 * self.q_epsv
         elif self.p.visco_case.lower() == 'ckelvin':
-            mu_E0 = self.p.E_0 / (2.0 * (1. + self.p.nu))
+            mu_E0 = self.q_E0 / (2.0 * (1. + self.p.nu))
             sig2 = 2 * mu_E0 * self.q_epsv
         else:
             sig = None
@@ -1112,27 +1132,21 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
 
         return stress_vector
 
-    def E_fkt(self, pd, path_time, parameters):
-
+    def E_fkt(self, pd, path_time, param):
+        # bilinear fkt for material parameter P
+        # fkt defined by param-dict: {'P0','R','A','t_f'}
+        # P0 start value; R first slope; A second slope; t_f time at which slope changes
         if pd > 0:  # element active, compute current Young's modulus
-            age = parameters['age_0'] + path_time  # age concrete
-            if age < parameters['t_f'][0]:
-                E0 = parameters['E_0'] + parameters['R_i'][0] * age
-                E1 = parameters['E_1'] + parameters['R_i'][1] * age
-                eta = parameters['E_1'] + parameters['R_i'][2] * age
-            elif age >= parameters['t_f'][0]:
-                E0 = parameters['E_0'] + parameters['R_i'][0] * parameters['t_f'][0] + parameters['A_i'][0] * (
-                            age - parameters['t_f'][0])
-                E1 = parameters['E_1'] + parameters['R_i'][1] * parameters['t_f'][1] + parameters['A_i'][1] * (
-                        age - parameters['t_f'][1])
-                eta = parameters['E_1'] + parameters['R_i'][2] * parameters['t_f'][2] + parameters['A_i'][2] * (
-                        age - parameters['t_f'][2])
+            age = self.p.age_0 + path_time  # age concrete
+            if age < param['t_f']:
+                P = param['P0'] + param['R'] * age
+            elif age >= param['t_f']:
+                P = param['P0'] + param['R'] * param['t_f'] + param['A'] * (
+                            age - param['t_f'])
         else:
-            E0 = df.DOLFIN_EPS  # non-active
-            E1 = df.DOLFIN_EPS  # non-active
-            eta = df.DOLFIN_EPS  # non-active
+            P = df.DOLFIN_EPS  # non-active
 
-        return E0, E1, eta
+        return P
 
     def pd_fkt(self, path_time):
         # pseudo denisty: decide if layer is active or not (age < 0 nonactive!)
@@ -1152,16 +1166,21 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
         # print('pseudo density', pd_list.max(), pd_list.min())
 
         # compute current Young's modulus
-        parameters = {}
-        parameters['E_0'] = self.p.E_0
-        #
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
-        E_list = E_fkt_vectorized(pd_list, path_list, parameters)
-        # print('E',E_list.max(),E_list.min())
+        E0_list = E_fkt_vectorized(pd_list, path_list, {'P0': self.p.E_0,
+                                                        'R': self.p.R_i[0], 'A': self.p.A_i[0], 't_f': self.p.t_f[0]})
+        E1_list = E_fkt_vectorized(pd_list, path_list, {'P0': self.p.E_1,
+                                                        'R': self.p.R_i[1], 'A': self.p.A_i[1], 't_f': self.p.t_f[1]})
+        eta_list = E_fkt_vectorized(pd_list, path_list, {'P0': self.p.eta,
+                                                        'R': self.p.R_i[2], 'A': self.p.A_i[2], 't_f': self.p.t_f[2]})
+        print('E0',E0_list.max(),E0_list.min(), len(E0_list))
 
         # # project lists onto quadrature spaces
-        set_q(self.q_E, E_list)
+        set_q(self.q_E0, E0_list)
+        set_q(self.q_E1, E1_list)
+        set_q(self.q_eta, eta_list)
+
         set_q(self.q_pd, pd_list)
 
         # get current strains and stresses
@@ -1172,16 +1191,18 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
 
         # compute visco strain from old one epsv
         self.new_epsv = np.zeros_like(epsv_list)
+        print(len(self.new_epsv))
 
         if self.p.visco_case.lower() == 'cmaxwell':
-            mu_E1 = 0.5 * self.p.E_1 / (1. + self.p.nu)
-            factor = 1 + self.dt * 2. * mu_E1 / self.p.eta
-            self.new_epsv = 1. / factor * (epsv_list + self.dt/self.p.eta * sig1_list)
+            mu_E1 = 0.5 * E1_list / (1. + self.p.nu) # list of E1 at each quadrature point
+            factor = 1 + self.dt * 2. * mu_E1 / eta_list  # at each quadrature point
+            print(len(factor), len(mu_E1))
+            self.new_epsv = 1. / np.repeat(factor,self.p.degree**2) * (epsv_list + self.dt / np.repeat(eta_list,self.p.degree**2) * sig1_list) # reshaped material parameters per eps entry!!
         elif self.p.visco_case.lower() == 'ckelvin':
-            mu_E1 = 0.5 * self.p.E_1 / (1. + self.p.nu)
-            mu_E0 = 0.5 * self.p.E_0 / (1. + self.p.nu)
-            factor = 1 + self.dt * 2. * mu_E0 / self.p.eta + self.dt * 2. * mu_E1 / self.p.eta
-            self.new_epsv = 1. / factor * (epsv_list + self.dt / self.p.eta * sig1_list)
+            mu_E1 = 0.5 * E1_list / (1. + self.p.nu)
+            mu_E0 = 0.5 * E0_list / (1. + self.p.nu)
+            factor = 1 + self.dt * 2. * mu_E0 / eta_list + self.dt * 2. * mu_E1 / eta_list
+            self.new_epsv = 1. / np.repeat(factor,self.p.degree**2) * (epsv_list + self.dt / np.repeat(eta_list,self.p.degree**2) * sig1_list)
         else:
             raise ValueError('visco case not defined')
 
@@ -1232,10 +1253,10 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
                                 form_compiler_parameters={'quadrature_degree': self.p.degree})
         eps_plot = df.project(self.q_eps, self.visu_space_V,
                               form_compiler_parameters={'quadrature_degree': self.p.degree})
-        E_plot = df.project(self.q_E, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
+        E_plot = df.project(self.q_E0, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
         pd_plot = df.project(self.q_pd, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
 
-        E_plot.rename("Young's Modulus", "Young's modulus value")
+        E_plot.rename("elastic Young's Modulus", "elastic Young's modulus value")
         pd_plot.rename("pseudo density", "pseudo density")
         sigma_plot.rename("Stress", "stress components voigt")
         eps_plot.rename("strain", "strain components voigt")

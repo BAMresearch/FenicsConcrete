@@ -25,6 +25,13 @@ def setup_test_2D(parameters, mech_prob_string, sensor):
     parameters['time'] = 1.5  # total simulation time in s
     parameters['dt'] = 0.01  # step (should be < tau=eta/E_1)
 
+
+    # thixotropy parameter
+    parameters['R_i'] = [80., 125., 3.]
+    parameters['A_i'] = [160., 255., 6.5]
+    parameters['t_f'] = [0.5, 0.5, 0.5]
+    parameters['age_0'] = 0.
+
     # experiment
     experiment = fenics_concrete.ConcreteCubeUniaxialExperiment(parameters)
     file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
@@ -152,6 +159,8 @@ def test_relaxation(visco_case, mech_prob_string,dim):
 #     # test_relaxation('cmaxwell', 'ConcreteViscoDevElasticModel',2)
 #
 #     # test_relaxation('ckelvin', 'ConcreteViscoDevElasticModel',2)
+#
+#     test_relaxation('ckelvin', 'ConcreteViscoDevThixElasticModel', 2)
 
 
 
