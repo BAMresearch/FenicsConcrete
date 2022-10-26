@@ -70,36 +70,41 @@ class LinearElasticity(MaterialProblem):
         #self.L = ufl.dot(f, v) * ufl.dx + ufl.dot(T, v) * ds
         #self.L = df.inner(f, v) * df.dx                          # older version
 
-        # Creating random fields for E (Young's modulus) and Mu (Poisson's ratio) constants.
+        #Deterministic
+        self.lambda_ = self.p.E * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+        self.mu = self.p.E / (2.0 * (1.0 + self.p.nu))
 
-        def random_field_generator(domain, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol):
-            field_function_space = df.fem.FunctionSpace(domain, ("CG", 1))
-            random_field = Randomfield(field_function_space, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol)
-            #random_field = Randomfield(fct_space=var_function_space, cov_name='squared_exp', mean=1, rho=0.5, sigma=1, k=10)
-            #random_field.solve_covariance_EVP()
-            return random_field
-
-        def parameters_conversion(lognormal_mean, lognormal_sigma):
-            from numpy import log
-            from math import sqrt
-            normal_mean = log(lognormal_mean/sqrt(1 + (lognormal_sigma/lognormal_mean)**2))
-            normal_sigma = log(1 + (lognormal_sigma/lognormal_mean)**2)
-            return normal_mean, normal_sigma
-
-        E_mean, E_variance = parameters_conversion(self.p.E, 3)
-        Nu_mean, Nu_variance = parameters_conversion(self.p.nu, 0.03)
-
-        # print(E_mean, E_variance, Nu_mean, Nu_variance)
-        # Deterministic self.p.E changes to random field version here!
-
-        self.p.E  = random_field_generator(self.experiment.mesh,'squared_exp', E_mean, 0.3, 0.05, E_variance, 3, 0.01) 
-        self.p.E.create_random_field(_type='random', _dist='LN')
-
-        self.p.nu = random_field_generator(self.experiment.mesh,'squared_exp', Nu_mean, 0.3, 0.05, Nu_variance, 3, 0.01)
-        self.p.nu.create_random_field(_type='random', _dist='LN')
-
-        # displacement field
-        #self.displacement = df.Function(self.V)
+        ##Probabilistic
+        ## Creating random fields for E (Young's modulus) and Mu (Poisson's ratio) constants.
+#
+        #def random_field_generator(domain, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol):
+        #    field_function_space = df.fem.FunctionSpace(domain, ("CG", 1))
+        #    random_field = Randomfield(field_function_space, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol)
+        #    #random_field = Randomfield(fct_space=var_function_space, cov_name='squared_exp', mean=1, rho=0.5, sigma=1, k=10)
+        #    #random_field.solve_covariance_EVP()
+        #    return random_field
+#
+        #def parameters_conversion(lognormal_mean, lognormal_sigma):
+        #    from numpy import log
+        #    from math import sqrt
+        #    normal_mean = log(lognormal_mean/sqrt(1 + (lognormal_sigma/lognormal_mean)**2))
+        #    normal_sigma = log(1 + (lognormal_sigma/lognormal_mean)**2)
+        #    return normal_mean, normal_sigma
+#
+        #E_mean, E_variance = parameters_conversion(self.p.E, 3)#3
+        #Nu_mean, Nu_variance = parameters_conversion(self.p.nu, 0.03)#0.03
+#
+        #            # print(E_mean, E_variance, Nu_mean, Nu_variance)
+        #            # Deterministic self.p.E changes to random field version here!
+#
+        #self.p.E  = random_field_generator(self.experiment.mesh,'squared_exp', E_mean, 0.3, 0.05, E_variance, 3, 0.01) 
+        #self.p.E.create_random_field(_type='random', _dist='LN')
+#
+        #self.p.nu = random_field_generator(self.experiment.mesh,'squared_exp', Nu_mean, 0.3, 0.05, Nu_variance, 3, 0.01)
+        #self.p.nu.create_random_field(_type='random', _dist='LN')
+#
+        #            # displacement field
+        #            #self.displacement = df.Function(self.V)
 
         # TODO better names!!!!
         #self.visu_space_T = df.TensorFunctionSpace(self.experiment.mesh, "Lagrange", self.p.degree)
@@ -131,8 +136,13 @@ class LinearElasticity(MaterialProblem):
     def epsilon(self, u):
         return ufl.sym(ufl.grad(u)) 
 
+    #Probablistic
+    #def sigma(self, u):
+    #    return self.lambda_() * ufl.nabla_div(u) * ufl.Identity(u.geometric_dimension()) + 2*self.mu()*self.epsilon(u)
+
+    #Deterministic
     def sigma(self, u):
-        return self.lambda_() * ufl.nabla_div(u) * ufl.Identity(u.geometric_dimension()) + 2*self.mu()*self.epsilon(u)
+        return self.lambda_ * ufl.nabla_div(u) * ufl.Identity(u.geometric_dimension()) + 2*self.mu*self.epsilon(u)
 
 
     #def sigma(self, v):

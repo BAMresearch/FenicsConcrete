@@ -1,0 +1,25 @@
+\documentclass[12pt]{article}
+\usepackage{graphicx}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18} 
+
+\title{Cantilever Beam Plot}
+\author{}
+%xlabel near ticks,
+%ylabel near ticks
+
+\begin{document}
+\maketitle
+
+\begin{figure}[h]
+    \centering
+    \begin{tikzpicture}
+        \begin{axis}[
+        xlabel= {Position along $x$-direction},
+		ylabel= {Vertical displacement}]
+		\addplot[line width=1pt,solid,color=blue] table[header=false, x index = 0 , y index = 1] {/home/dtyagi/FenicsConcrete/pydoit/example_doit.dat};
+        \end{axis}
+    \end{tikzpicture}
+\end{figure}
+A plot for vertical displacement of the nodes at the center of a cantilever beam - A linear elastic model.
+\end{document}
