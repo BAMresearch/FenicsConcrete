@@ -11,7 +11,7 @@ class concreteSlabExperiment(Experiment):
         p = Parameters()
         # boundary values...
         p['bc_setting'] = 'full'  # default boundary setting
-        p['degree'] = 2  # polynomial degree
+        p['degree'] = 1  # polynomial degree
         #p['dim'] = 2  # default boundary setting
         p = p + parameters
         super().__init__(p)

@@ -4,6 +4,3 @@ from fenicsX_concrete.experimental_setups import experiment
 from fenicsX_concrete.material_models.linear_elasticity import LinearElasticity
 from fenicsX_concrete.material_models import material
 from fenicsX_concrete.helpers import Parameters
-
-
-

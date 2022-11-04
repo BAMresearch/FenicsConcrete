@@ -3,7 +3,7 @@
 import dolfinx as df
 import ufl
 from petsc4py.PETSc import ScalarType
-from fenicsX_concrete.randomfieldModified import Randomfield
+#from fenicsX_concrete.randomfieldModified import Randomfield
 from fenicsX_concrete.material_models.material import MaterialProblem
 from fenicsX_concrete.helpers import Parameters
 
@@ -70,10 +70,6 @@ class LinearElasticity(MaterialProblem):
         #self.L = ufl.dot(f, v) * ufl.dx + ufl.dot(T, v) * ds
         #self.L = df.inner(f, v) * df.dx                          # older version
 
-        #Deterministic
-        self.lambda_ = self.p.E * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
-        self.mu = self.p.E / (2.0 * (1.0 + self.p.nu))
-
         ##Probabilistic
         ## Creating random fields for E (Young's modulus) and Mu (Poisson's ratio) constants.
 #
@@ -110,10 +106,9 @@ class LinearElasticity(MaterialProblem):
         #self.visu_space_T = df.TensorFunctionSpace(self.experiment.mesh, "Lagrange", self.p.degree)
 
         # Define variational problem
-        u_trial = ufl.TrialFunction(self.experiment.V)
-        v = ufl.TestFunction(self.experiment.V)
-        #self.a = ufl.inner(self.sigma(u_trial), df.grad(v)) * df.dx
-
+        self.u_trial = ufl.TrialFunction(self.experiment.V)
+        self.v = ufl.TestFunction(self.experiment.V)
+        
         if self.p.dim == 2:
             #f = df.Constant((0, 0))
             f = df.fem.Constant(self.experiment.mesh, ScalarType((0, -self.p.rho*self.p.g))) 
@@ -122,17 +117,27 @@ class LinearElasticity(MaterialProblem):
             f = df.fem.Constant(self.experiment.mesh, ScalarType((0, 0, -self.p.rho*self.p.g))) 
         else:
             raise Exception(f'wrong dimension {self.p.dim} for problem setup')
-        self.a = ufl.inner(self.sigma(u_trial), self.epsilon(v)) * ufl.dx
-        self.L = ufl.dot(f, v) * ufl.dx
+        
+        self.L = ufl.dot(f, self.v) * ufl.dx
 
-    # Stress computation for linear elastic problem
+        #self.E = df.fem.Constant(self.experiment.mesh, 100.)
+        #self.nu = df.fem.Constant(self.experiment.mesh, 0.2)
+        
+        E = 100
+        nu = 0.2 
 
-    def lambda_(self): #Lame's constant
-        return (self.p.E.field * self.p.nu.field)/((1 + self.p.E.field)*(1-2*self.p.nu.field))
+        self.lambda_ = df.fem.Constant(self.experiment.mesh, E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)))
+        self.mu = df.fem.Constant(self.experiment.mesh, E / (2.0 * (1.0 + nu)))
 
-    def mu(self):     #Lame's constant
-        return self.p.E.field/(2*(1+self.p.nu.field))
+        #self.lambda_ = E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu))
+        #self.mu = E / (2.0 * (1.0 + nu))
 
+        self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
+
+        self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=self.experiment.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+
+
+    # Stress computation for linear elastic problem 
     def epsilon(self, u):
         return ufl.sym(ufl.grad(u)) 
 
@@ -144,16 +149,21 @@ class LinearElasticity(MaterialProblem):
     def sigma(self, u):
         return self.lambda_ * ufl.nabla_div(u) * ufl.Identity(u.geometric_dimension()) + 2*self.mu*self.epsilon(u)
 
-
-    #def sigma(self, v):
-    #    # v is the displacement field
-    #    return 2.0 * self.p.mu * df.sym(df.grad(v)) + self.p.lmbda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
-
     def solve(self, t=1.0):
+        #Deterministic
+        #self.lambda_ = self.p.E * self.p.nu / ((1.0 + self.p.nu) * (1.0 - 2.0 * self.p.nu))
+        #self.mu = self.p.E / (2.0 * (1.0 + self.p.nu))
+
+        #self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
+        
         # time in this example only relevant for the naming of the paraview steps and the sensor output
         # solve
-        weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=self.experiment.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-        self.displacement = weak_form_problem.solve()
+        # weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=self.experiment.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        # self.displacement = weak_form_problem.solve()
+
+        self.displacement = self.weak_form_problem.solve()
+        #print(self.displacement.x.array.shape)
+        #print(self.displacement._V.tabulate_dof_coordinates().shape)
         #print(self.displacement.x.array)
 
         #df.solve(self.a == self.L, self.displacement, self.bcs)
