@@ -160,8 +160,10 @@ def test_density_thix_2D():
 
     # print('reaction force', prop2D.sensors[list(prop2D.sensors.keys())[-1]].data[-1]) # or "ReactionForceSensorBottom" = sensor03.name
     force_bottom = prop2D.sensors[sensor03.name].data[-1]
-    # print('strain', -parameters['density']*prop2D.p.g/prop2D.p.E_0)
-    # print('force bottom', -parameters['density']*prop2D.p.g*1*1)
+    print('strain analytic', -parameters['density']*prop2D.p.g/prop2D.p.E_0)
+    print('strain bottom, strain middle', strain_bottom, strain_middle)
+    print('dead load', -parameters['density']*prop2D.p.g*1*1)
+    print('force_bottom', force_bottom)
 
     assert force_bottom == pytest.approx(-parameters['density']*prop2D.p.g*1*1) # dead load of full structure
     assert strain_middle == pytest.approx(strain_bottom / 2., abs=1e-4) # linear increase of strain over heigth
@@ -172,10 +174,10 @@ def test_density_thix_2D():
 if __name__ == '__main__':
 
 
-    test_displ_thix_2D()
+    # test_displ_thix_2D()
 
-    test_displ_thix_3D()
-
+    # test_displ_thix_3D()
+    #
     test_density_thix_2D()
 
 
