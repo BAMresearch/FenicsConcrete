@@ -41,6 +41,10 @@ class Sensor:
     def name(self):
         return self.__class__.__name__
 
+    @property
+    def datatlist(self):
+        raise NotImplementedError()
+
     def data_max(self, value):
         if value > self.max:
             self.max = value
@@ -191,15 +195,18 @@ class ReactionForceSensorBottom(Sensor):
 
     def __init__(self):
         self.data = []
+        self.dataoffset = []
         self.time = []
+        self.LOCATION = 'GLOBAL'
 
-    def measure(self, problem, t=1.0):
+    def measure(self, problem, t = 1.0, new_measurement_series = False):
         """
         Arguments:
             problem : FEM problem object
             t : float, optional
                 time of measurement for time dependent problems
         """
+        if new_measurement_series: self.dataoffset.append(len(self.data))
         # boundary condition
         bottom_surface = problem.experiment.boundary_bottom()
 
@@ -227,15 +234,18 @@ class StressSensor(Sensor):
         """
         self.where = where
         self.data = []
+        self.dataoffset = []
         self.time = []
+        self.LOCATION = 'NODE'
 
-    def measure(self, problem, t=1.0):
+    def measure(self, problem, t=1.0, new_measurement_series = False):
         """
         Arguments:
             problem : FEM problem object
             t : float, optional
                 time of measurement for time dependent problems
         """
+        if new_measurement_series: self.dataoffset.append(len(self.data))
         # get stress
         stress = df.project(problem.stress, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
         self.data.append(stress(self.where))

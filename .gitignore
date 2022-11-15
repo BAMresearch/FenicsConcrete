@@ -3,3 +3,5 @@
 .idea
 __pycache__
 !ref_*.xdmf
+build
+fenics_concrete.egg-info

@@ -3,6 +3,8 @@ import dolfin as df
 from fenics_concrete.helpers import Parameters
 from fenics_concrete.sensors import Sensors
 
+from scipy import constants as consts
+
 from loguru import logger
 import logging
 import sys
@@ -31,43 +33,9 @@ class MaterialProblem():
         self.p = self.p + self.experiment.p + parameters
 
         # set log level...
-        if self.p.log_level == 'NOTSET':
-            df.set_log_level(0)
-            logging.getLogger("FFC").setLevel(logging.NOTSET)
-            logging.getLogger("UFL").setLevel(logging.NOTSET)
-            logger.add(sys.stderr, level="NOTSET")
-        elif self.p.log_level == 'DEBUG':
-            df.set_log_level(10)
-            logging.getLogger("FFC").setLevel(logging.DEBUG)
-            logging.getLogger("UFL").setLevel(logging.DEBUG)
-            logger.add(sys.stderr, level="DEBUG")
-        elif self.p.log_level == 'INFO':
-            df.set_log_level(20)
-            logging.getLogger("FFC").setLevel(logging.INFO)
-            logging.getLogger("UFL").setLevel(logging.INFO)
-            logger.add(sys.stderr, level="INFO")
-        elif self.p.log_level == 'WARNING':
-            df.set_log_level(30)
-            logging.getLogger("FFC").setLevel(logging.WARNING)
-            logging.getLogger("UFL").setLevel(logging.WARNING)
-            logger.add(sys.stderr, level="WARNING")
-        elif self.p.log_level == 'ERROR':
-            df.set_log_level(40)
-            logging.getLogger("FFC").setLevel(logging.ERROR)
-            logging.getLogger("UFL").setLevel(logging.ERROR)
-            logger.add(sys.stderr, level="ERROR")
-        elif self.p.log_level == 'CRITICAL':
-            df.set_log_level(50)
-            logging.getLogger("FFC").setLevel(logging.CRITICAL)
-            logging.getLogger("UFL").setLevel(logging.CRITICAL)
-            logger.add(sys.stderr, level="CRITICAL")
-        else:
-            level = self.p['log_level']
-            raise Exception(f'unknown log level {level}')
-
+        self._setlogger()
 
         self.sensors =  Sensors()  # list to hold attached sensors
-
 
         self.pv_name = pv_name
 
@@ -80,6 +48,53 @@ class MaterialProblem():
         # setup the material object to access the function
         self.setup()
 
+    def _setlogger(self):
+        log_level = self.p.log_level
+        if log_level == 'NOTSET':
+            df.set_log_level(0)
+            logging.getLogger("FFC").setLevel(logging.NOTSET)
+            logging.getLogger("UFL").setLevel(logging.NOTSET)
+            logger.add(sys.stderr, level="NOTSET")
+        elif log_level == 'DEBUG':
+            df.set_log_level(10)
+            logging.getLogger("FFC").setLevel(logging.DEBUG)
+            logging.getLogger("UFL").setLevel(logging.DEBUG)
+            logger.add(sys.stderr, level="DEBUG")
+        elif log_level == 'INFO':
+            df.set_log_level(20)
+            logging.getLogger("FFC").setLevel(logging.INFO)
+            logging.getLogger("UFL").setLevel(logging.INFO)
+            logger.add(sys.stderr, level="INFO")
+        elif log_level == 'WARNING':
+            df.set_log_level(30)
+            logging.getLogger("FFC").setLevel(logging.WARNING)
+            logging.getLogger("UFL").setLevel(logging.WARNING)
+            logger.add(sys.stderr, level="WARNING")
+        elif log_level == 'ERROR':
+            df.set_log_level(40)
+            logging.getLogger("FFC").setLevel(logging.ERROR)
+            logging.getLogger("UFL").setLevel(logging.ERROR)
+            logger.add(sys.stderr, level="ERROR")
+        elif log_level == 'CRITICAL':
+            df.set_log_level(50)
+            logging.getLogger("FFC").setLevel(logging.CRITICAL)
+            logging.getLogger("UFL").setLevel(logging.CRITICAL)
+            logger.add(sys.stderr, level="CRITICAL")
+        else:
+            raise Exception(f'unknown log level {log_level}')
+
+    def set_material(self = 'unknown', name = 'unknown', material_id = 'unknown', type = None, description = None, state = None,
+                    idealization = None, physics = None, solution = None):
+        self.name = name
+        self.material_id = material_id
+        self.material_optional = {}
+        self.material_optional['type'] = type
+        self.material_optional['description'] = description
+        self.material_optional['state'] = state
+        self.material_optional['idealization'] = idealization
+        self.material_optional['physics'] = physics
+        self.material_optional['solution'] = solution
+
     def setup(self):
         # initialization of this specific problem
         raise NotImplementedError()
@@ -89,5 +104,4 @@ class MaterialProblem():
         raise NotImplementedError()
 
     def add_sensor(self, sensor):
-
         self.sensors[sensor.name] = sensor
