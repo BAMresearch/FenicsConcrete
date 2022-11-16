@@ -1,4 +1,3 @@
-
 import os, sys
 parentdir = os.path.dirname(os.path.dirname(__file__))
 sys.path.append(parentdir)
@@ -7,57 +6,6 @@ import numpy as np
 import fenicsX_concrete
 from scipy import optimize
 
-def simple_setup(p, sensor):
-    parameters = fenicsX_concrete.Parameters()  # using the current default values
-
-    #parameters['log_level'] = 'WARNING'
-    parameters['bc_setting'] = 'free'
-    parameters['mesh_density'] = 10
-
-    parameters = parameters + p
-
-    experiment = fenicsX_concrete.concreteSlabExperiment(parameters)         # Specifies the domain, discretises it and apply Dirichlet BCs
-
-    problem = fenicsX_concrete.LinearElasticity(experiment, parameters)      # Specifies the material law and weak forms.
-    #print(help(fenics_concrete.LinearElasticity))
-
-    for i in range(len(sensor)):
-        problem.add_sensor(sensor[i])
-
-    #problem.experiment.apply_load_bc(displacement)
-
-    problem.solve()  # solving this
-
-    #print(problem.displacement([0,2]))
-
-    #problem.pv_plot()
-
-    # last measurement
-    
-    #return sensor_output
-
-    return problem.sensors
-
-p = fenicsX_concrete.Parameters()  # using the current default values
-p['E'] = 100
-p['nu'] = 0.2
-p['length'] = 1
-p['breadth'] = 0.2
-p['num_elements_length'] = 20
-p['num_elements_breadth'] = 10
-p['dim'] = 2
-#displacement = -3
-
-sensor = []
-number_of_sensors = 20
-for i in range(number_of_sensors):
-    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1/20*(i+1), 0.1, 0]])))
-    #sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1, 0.02*(i+1),  0]])))
-
-# Synthetic data generation
-solution = simple_setup(p, sensor)
-number_of_sensors =20
-
 def collect_sensor_solutions(model_solution, total_sensors):
     counter=0
     disp_model = np.zeros((total_sensors,2))
@@ -65,50 +13,105 @@ def collect_sensor_solutions(model_solution, total_sensors):
         disp_model[counter] = model_solution[i].data[-1]
         counter += 1
     return disp_model
-    #print(measured[i].data[-1])
 
-displacement_data = collect_sensor_solutions(solution, number_of_sensors)
-max_disp_value = np.amax(np.absolute(displacement_data[:,1]))
-#print(displacement_data)
+# Synthetic data generation
+para = fenicsX_concrete.Parameters()  # using the current default values
+para['length'] = 1
+para['breadth'] = 0.2
+para['num_elements_length'] = 20
+para['num_elements_breadth'] = 10
+para['dim'] = 2
+para['bc_setting'] = 'free'
+para['mesh_density'] = 10
+experiment = fenicsX_concrete.concreteSlabExperiment(para)         # Specifies the domain, discretises it and apply Dirichlet BCs
+problem = fenicsX_concrete.LinearElasticity(experiment, para)      # Specifies the material law and weak forms.
 
-sigma_error = 0.1*max_disp_value
-sigma_prior = 0.1*max_disp_value
+
+sensor = []
+for i in range(20):
+    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1/20*(i+1), 0.2, 0]])))
+    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1/20*(i+1), 0.15, 0]])))
+    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1/20*(i+1), 0.05, 0]])))
+    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1/20*(i+1), 0, 0]])))
+    #sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1, 0.02*(i+1),  0]])))
+
+number_of_sensors = len(sensor)
+
+for i in range(number_of_sensors):
+    problem.add_sensor(sensor[i])
+
+
+#mt=MemoryTracker()
+problem.solve()
+displacement_data = collect_sensor_solutions(problem.sensors, number_of_sensors)
+
+#Clean the sensor data for the next simulation run
+problem.clean_sensor_data()
+
+max_disp_value_ver= np.amax(np.absolute(displacement_data[:,1]))
+max_disp_value_hor= np.amax(np.absolute(displacement_data[:,0]))
+
+sigma_error_hor = 0.1*max_disp_value_hor
+sigma_error_ver = 0.1*max_disp_value_ver
+#sigma_prior = 0.1*max_disp_value
 
 np.random.seed(42) 
-distortion = np.random.normal(0, sigma_error, (number_of_sensors,2))
-#print(distortion) 
+distortion_hor = np.random.normal(0, sigma_error_hor, (number_of_sensors))
+distortion_ver = np.random.normal(0, sigma_error_ver, (number_of_sensors))
 
-displacement_measured = displacement_data + distortion
-#print(displacement_measured)
+displacement_measured_hor = displacement_data[:,0] + distortion_hor
+displacement_measured_ver = displacement_data[:,1] + distortion_ver
 
+displacement_measured = np.stack((displacement_measured_hor, displacement_measured_ver), axis = -1)
+
+
+def forward_model_run(param1, param2, ndim):
+    problem.lambda_.value = param1 * param2 / ((1.0 + param2) * (1.0 - 2.0 * param2))
+    problem.mu.value = param1 / (2.0 * (1.0 + param2))
+    #problem.lambda_ = param_vector[0] * param_vector[1] / ((1.0 + param_vector[1]) * (1.0 - 2.0 * param_vector[1]))
+    #problem.mu = param_vector[0] / (2.0 * (1.0 + param_vector[1]))
+    problem.solve() 
+    #mt("MCMC run")
+    model_data = collect_sensor_solutions(problem.sensors, number_of_sensors)
+    problem.clean_sensor_data()
+    if ndim == 1:
+        return model_data[:,1]
+    if ndim == 2:
+        return model_data
+        
 #Cost function plot
-def cost_func_and_jac(optimised_parameters, measured_data, regularisation_constant = 0, placed_sensors = sensor):
+def cost_func_deterministic(optimised_parameters, measured_data, regularisation_constant = 0.):
+    ndim = measured_data.ndim
+
     #Cost function evaluation
-    p = fenicsX_concrete.Parameters()
-    p['E'] = optimised_parameters[0]
-    p['nu'] = optimised_parameters[1]
-    p['length'] = 1
-    p['breadth'] = 0.2
-    p['num_elements_length'] = 20
-    p['num_elements_breadth'] = 10
-    p['dim'] = 2
-    sim_output = simple_setup(p, placed_sensors)
-    predicted_displacement = collect_sensor_solutions(sim_output, 20)
-    del sim_output
-    delta = predicted_displacement - measured_data
+    sim_output = forward_model_run(optimised_parameters[0], optimised_parameters[1], ndim)
 
-    parameters_vector = np.array([p.E, p.nu])
+    delta = sim_output - measured_data
+
+    parameters_vector = np.array([optimised_parameters[0], optimised_parameters[1]])
     
+    normed_vector = parameters_vector/np.linalg.norm(parameters_vector) #parameters_vector #
+    #normed_vector = np.array([optimised_parameters[0]/100, (optimised_parameters[1]-0.2)/0.2])
+    normed_vector = np.array([optimised_parameters[0]/100, (optimised_parameters[1])/0.5])
 
-    normed_vector = parameters_vector#parameters_vector/np.linalg.norm(parameters_vector)
+    if ndim == 2:
+        norm_vec_delta = np.linalg.norm(delta, axis=1)
+    else:
+        norm_vec_delta = np.copy(delta)
+    
+    first_term = np.dot(norm_vec_delta, norm_vec_delta)
+    second_term = regularisation_constant*np.dot(normed_vector,normed_vector)
+    cost_function_value = np.dot(norm_vec_delta, norm_vec_delta) + regularisation_constant*np.dot(normed_vector,normed_vector)
+    #print(parameters_vector, cost_function_value)
 
-    cost_function_value = np.dot(delta[:,1], delta[:,1]) + regularisation_constant*np.dot(normed_vector,normed_vector)
-    print(parameters_vector, cost_function_value)
+    #delta_disp = delta.flatten()
+    #cost_function_value = np.dot(delta_disp, delta_disp) + regularisation_constant*np.dot(normed_vector,normed_vector)
+
     return cost_function_value
 
-
+""" 
 # Parameter vs cost-function plot
-E_buildup = np.linspace(80,120,30)
+E_buildup = np.linspace(107,115,30)
 E_samples = np.zeros((270,))
 for index in range (len(E_buildup)):
     E_samples[9*index:9*(index+1)] = E_buildup[index]
@@ -139,44 +142,60 @@ fig.update_layout(
     yaxis_title="Poissons Ratio")
 #fig.update_traces(contours_z=dict(show=True, usecolormap=True,
 #                                  highlightcolor="limegreen", project_z=True))
+fig.show()  """
 
-fig.show()
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from matplotlib.ticker import LinearLocator
+
+def cost_function_plot():
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+    #counter=0
+    E_buildup = np.linspace(50,200,100)
+    nu_buildup = np.linspace(0,0.8,15)
+    E_buildup, nu_buildup= np.meshgrid(E_buildup, nu_buildup)
+    cost_func_val = np.zeros((E_buildup.shape[0],E_buildup.shape[1]))
+    for i in range(E_buildup.shape[0]):
+        for j in range(nu_buildup.shape[1]):
+
+            cost_func_val[i,j] = cost_func_deterministic(np.array([E_buildup[i,j],nu_buildup[i,j]]), displacement_measured)
+
+    # Plot the surface.
+    surf = ax.plot_surface(E_buildup, nu_buildup, cost_func_val, cmap=cm.coolwarm,
+                           linewidth=0, antialiased=False)
+
+    # Add a color bar which maps values to colors.
+    fig.colorbar(surf, shrink=0.5, aspect=5)
+    plt.show()
 
 
 #Inverse Problem
-""" def cost_func_and_jac(optimised_parameters, measured_data, regularisation_constant = 0, placed_sensors = sensor):
+def cost_func_and_jac(optimised_parameters, measured_data, regularisation_constant = 0.):
     #Cost function evaluation
-    p = fenicsX_concrete.Parameters()
-    p['E'] = optimised_parameters[0]
-    p['nu'] = optimised_parameters[1]
-    p['length'] = 1
-    p['breadth'] = 0.2
-    p['num_elements_length'] = 20
-    p['num_elements_breadth'] = 10
-    p['dim'] = 2
-    predicted_displacement = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
-    delta = predicted_displacement - measured_data
+    ndim = measured_data.ndim
+    sim_output = forward_model_run(optimised_parameters[0], optimised_parameters[1], ndim)
 
-    parameters_vector = np.array([p.E, p.nu])
-    print(parameters_vector, np.dot(delta[:,1], delta[:,1]))
+    delta = sim_output - measured_data
 
-    cost_function_value = np.dot(delta[:,1], delta[:,1]) + regularisation_constant*np.dot(parameters_vector,parameters_vector)
+    if ndim == 2:
+        norm_vec_delta = np.linalg.norm(delta, axis=1)
+    else:
+        norm_vec_delta = np.copy(delta)
+
+    parameters_vector = np.array([optimised_parameters[0], optimised_parameters[1]])
+
+    cost_function_value = np.dot(norm_vec_delta, norm_vec_delta) + regularisation_constant*np.dot(parameters_vector,parameters_vector)
 
     
     #Jacobian evaluation
     delta_E = 0.001
-    p['E'] = optimised_parameters[0] + delta_E
-    measured_Eplus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
-    p['E'] = optimised_parameters[0] - delta_E
-    measured_Eminus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
+    measured_Eplus = forward_model_run(optimised_parameters[0] + delta_E, optimised_parameters[1])
+    measured_Eminus = forward_model_run(optimised_parameters[0] - delta_E, optimised_parameters[1])
     derv_E = (measured_Eplus[:,1] - measured_Eminus[:,1])/(2*delta_E)
 
     delta_nu = 0.0001
-    p['E'] = optimised_parameters[0]
-    p['nu'] = optimised_parameters[1] + delta_nu
-    measured_nuplus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
-    p['nu'] = optimised_parameters[1] - delta_nu
-    measured_numinus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
+    measured_nuplus = forward_model_run(optimised_parameters[0], optimised_parameters[1] + delta_nu)
+    measured_numinus = forward_model_run(optimised_parameters[0], optimised_parameters[1] - delta_nu)
     derv_nu = (measured_nuplus[:,1]  - measured_numinus[:,1])/(2*delta_nu)
     print('jacobian called')
     jacobian_value1= 2*np.dot(delta[:,1],derv_E)
@@ -184,52 +203,31 @@ fig.show()
     jacobian_value = np.array([jacobian_value1, jacobian_value2])
     return cost_function_value, jacobian_value
 
-def hessian_function(optimised_parameters, measured_data=displacement_measured, placed_sensors = sensor):
+def hessian_function(optimised_parameters, measured_data=displacement_measured):
     #Cost function evaluation
-    p = fenicsX_concrete.Parameters()
-    p['E'] = optimised_parameters[0]
-    p['nu'] = optimised_parameters[1]
-    p['length'] = 1
-    p['breadth'] = 0.2
-    p['num_elements_length'] = 20
-    p['num_elements_breadth'] = 10
-    p['dim'] = 2
-    predicted_displacement = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
+    predicted_displacement = forward_model_run(optimised_parameters[0], optimised_parameters[1])
 
     delta_E = 0.001
-    p['E'] = optimised_parameters[0] + delta_E
-    measured_Eplus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
-    p['E'] = optimised_parameters[0] - delta_E
-    measured_Eminus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
+    measured_Eplus = forward_model_run(optimised_parameters[0] + delta_E, optimised_parameters[1])
+    measured_Eminus = forward_model_run(optimised_parameters[0] - delta_E, optimised_parameters[1])
 
     derv_E = (measured_Eplus[:,1]  - measured_Eminus[:,1])/(2*delta_E)
     double_derv_E = (measured_Eplus[:,1]  - 2*predicted_displacement[:,1]  + measured_Eminus[:,1] )/delta_E**2
 
     delta_nu = 0.0001
-    p['E'] = optimised_parameters[0]
-    p['nu'] = optimised_parameters[1] + delta_nu
-    measured_nuplus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
-    p['nu'] = optimised_parameters[1] - delta_nu
-    measured_numinus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
+    measured_nuplus = forward_model_run(optimised_parameters[0], optimised_parameters[1] + delta_nu)
+    measured_numinus = forward_model_run(optimised_parameters[0], optimised_parameters[1] - delta_nu)
 
     derv_nu = (measured_nuplus[:,1]  - measured_numinus[:,1])/(2*delta_nu)
     double_derv_nu = (measured_nuplus[:,1]  - 2*predicted_displacement[:,1]  + measured_numinus[:,1] )/delta_nu**2
 
-    p['E'] = optimised_parameters[0] + delta_E
-    p['nu'] = optimised_parameters[1] + delta_nu
-    measured_Eplus_nuplus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
+    measured_Eplus_nuplus = forward_model_run(optimised_parameters[0] + delta_E, optimised_parameters[1] + delta_nu)
 
-    p['E'] = optimised_parameters[0] - delta_E
-    p['nu'] = optimised_parameters[1] - delta_nu
-    measured_Eminus_numinus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
+    measured_Eminus_numinus = forward_model_run(optimised_parameters[0] - delta_E, optimised_parameters[1] - delta_nu)
 
-    p['E'] = optimised_parameters[0] + delta_E
-    p['nu'] = optimised_parameters[1] - delta_nu
-    measured_Eplus_numinus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
+    measured_Eplus_numinus = forward_model_run(optimised_parameters[0] + delta_E, optimised_parameters[1] - delta_nu)
 
-    p['E'] = optimised_parameters[0] - delta_E
-    p['nu'] = optimised_parameters[1] + delta_nu
-    measured_Eminus_nuplus = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
+    measured_Eminus_nuplus = forward_model_run(optimised_parameters[0] - delta_E, optimised_parameters[1] + delta_nu)
 
     mixed_derv_E_nu = (measured_Eminus_numinus[:,1]  + measured_Eplus_nuplus[:,1]  - measured_Eplus_numinus[:,1]  - measured_Eminus_nuplus[:,1] )/(4*delta_E*delta_nu)
 
@@ -241,54 +239,47 @@ def hessian_function(optimised_parameters, measured_data=displacement_measured, 
     hessian[0][1] = 2*(np.dot(derv_E,derv_nu) + np.dot(delta[:,1],mixed_derv_E_nu))
     hessian[1][0] = 2*(np.dot(derv_E,derv_nu) + np.dot(delta[:,1],mixed_derv_E_nu))
     return hessian
- """
 
-#Deterministic
-""" def cost_func(optimised_parameters, measured_data, regularisation_constant = 0, placed_sensors = sensor):
-    #Cost function evaluation
-    p = fenicsX_concrete.Parameters()
-    p['E'] = optimised_parameters[0]
-    p['nu'] = optimised_parameters[1]
-    p['length'] = 1
-    p['breadth'] = 0.2
-    p['num_elements_length'] = 20
-    p['num_elements_breadth'] = 10
-    p['dim'] = 2
-    predicted_displacement = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
-    delta = predicted_displacement - measured_data
-
-    parameters_vector = np.array([p.E, p.nu])
-    print(parameters_vector, np.dot(delta[:,1], delta[:,1]))
-
-    cost_function_value = np.dot(delta[:,1], delta[:,1]) + regularisation_constant*np.dot(parameters_vector,parameters_vector)
-
-    return cost_function_value """
 
 #Probabilistic
-
-""" def cost_func(optimised_parameters, measured_data, std_dev_error = sigma_error, std_dev_prior = 20 ,placed_sensors = sensor):
+def cost_func_probablisitic(optimised_parameters, measured_data, std_dev_error, _sigma_prior):
+#def cost_func_probablisitic(optimised_parameters, measured_data, std_dev_error=0.05*max_disp_value_ver, _sigma_prior=sigma_prior):
     #Cost function evaluation
-    p = fenicsX_concrete.Parameters()
-    p['E'] = optimised_parameters[0]
-    p['nu'] = optimised_parameters[1]
-    p['length'] = 1
-    p['breadth'] = 0.2
-    p['num_elements_length'] = 20
-    p['num_elements_breadth'] = 10
-    p['dim'] = 2
-    predicted_displacement = collect_sensor_solutions(simple_setup(p, placed_sensors), 20)
-    delta = predicted_displacement - measured_data
+    sim_output = forward_model_run(optimised_parameters[0], optimised_parameters[1])
 
-    parameters_vector = np.array([p.E, p.nu])
-    print(parameters_vector, np.dot(delta[:,1], delta[:,1]))
+    delta = sim_output - measured_data
 
+    parameters_vector = np.array([optimised_parameters[0], optimised_parameters[1]])
+    
+    normed_vector = parameters_vector/np.linalg.norm(parameters_vector)
 
-    cost_function_value = np.dot(delta[:,1], delta[:,1]) + (std_dev_error**2/std_dev_prior**2)*np.dot(parameters_vector,parameters_vector)
+    norm_vec_delta = np.linalg.norm(delta, axis=1)
+    first_term = np.dot(norm_vec_delta, norm_vec_delta)
+    second_term = std_dev_error**2*np.dot(parameters_vector, np.linalg.solve(_sigma_prior, parameters_vector))
+    cost_function_value = np.dot(norm_vec_delta, norm_vec_delta) + std_dev_error**2*np.dot(parameters_vector, np.linalg.solve(_sigma_prior, parameters_vector))
 
-    return cost_function_value
+    return cost_function_value 
 
 
-print('Cost function optimisation started...')
-result = optimize.minimize(cost_func, (80, 0.2), args=(displacement_measured),  method='powell') #Newton-CG
-#result = optimize.minimize(cost_func_and_jac, (80, 0.4), args=(displacement_measured), jac=True, hess=hessian_function, method='Newton-CG') #Newton-CG
+#Deterministic
+result = optimize.minimize(cost_func_deterministic, np.array([80, 0.25]), args=(displacement_measured,),  method='powell') #Newton-CG
+#result = optimize.minimize(cost_func_and_jac, (80, 0.15), args=(displacement_measured), jac=True, hess=hessian_function, method='Newton-CG') #Newton-CG
+print(result)
+
+#Constrained Optimisation
+#from scipy.optimize import Bounds
+#paramter_bounds = Bounds([0.,0.], [np.inf,0.45])
+#result = optimize.minimize(cost_func_deterministic, np.array([75, 0.15]), options={'verbose': 1}, bounds=paramter_bounds, args=(displacement_measured),  method='trust-constr') #SLSQP
+#print(result.x)
+
+cost_function_plot()
+#Probabilistic (MAP)
+""" import math
+sigma_error = 0.1*math.sqrt(max_disp_value_ver**2 + max_disp_value_hor**2)
+sigma_prior= np.zeros((2,2))
+sigma_prior[0,0] = 2.5**2
+sigma_prior[1,1] = 0.075**2
+result = optimize.minimize(cost_func_probablisitic, np.array([95, 0.18]), args=(displacement_measured, sigma_error, sigma_prior),  method='powell')
 print(result) """
+
+#Constrained Optimisation

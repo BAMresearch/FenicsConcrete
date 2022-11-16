@@ -3,6 +3,7 @@ from fenicsX_concrete.helpers import Parameters
 import dolfinx as df
 from mpi4py import MPI
 import numpy as np
+import ufl
 from petsc4py.PETSc import ScalarType
 
 class concreteSlabExperiment(Experiment):
@@ -57,5 +58,25 @@ class concreteSlabExperiment(Experiment):
 
         return displ_bcs
 
-    #def apply_load_bc(self, V):
+    def create_neumann_boundary(self):
+        boundaries = [(1, lambda x: np.isclose(x[0], 1))]
 
+        facet_indices, facet_markers = [], []
+        fdim = self.mesh.topology.dim - 1
+        for (marker, locator) in boundaries:
+            facets = df.mesh.locate_entities(self.mesh, fdim, locator)
+            facet_indices.append(facets)
+            facet_markers.append(np.full_like(facets, marker))
+        facet_indices = np.hstack(facet_indices).astype(np.int32)
+        facet_markers = np.hstack(facet_markers).astype(np.int32)
+        sorted_facets = np.argsort(facet_indices)
+        facet_tag = df.mesh.meshtags(self.mesh, fdim, facet_indices[sorted_facets], facet_markers[sorted_facets])
+        
+        
+        #self.mesh.topology.create_connectivity(fdim, self.mesh.topology.dim)
+        #with df.io.XDMFFile(self.mesh.comm, "facet_tags.xdmf", "w") as xdmf:
+        #    xdmf.write_mesh(self.mesh)
+        #    xdmf.write_meshtags(facet_tag)
+
+        _ds = ufl.Measure("ds", domain=self.mesh, subdomain_data=facet_tag)
+        return _ds

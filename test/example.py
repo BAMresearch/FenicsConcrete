@@ -31,15 +31,16 @@ def simple_setup(p, sensor):
 
     #print(problem.displacement([0,2]))
 
-    #problem.pv_plot()
+    problem.pv_plot()
 
     # last measurement
     
     #return sensor_output
 
     return problem.sensors
-
+import math
 p = fenicsX_concrete.Parameters()  # using the current default values
+
 p['E'] = 100
 p['nu'] = 0.2
 p['length'] = 1
@@ -78,3 +79,8 @@ fig.update_layout(
     title_text='Vertical Displacement Curve'
 )
 fig.show()
+
+""" import matplotlib.pyplot as plt
+#import numpy as np
+plt.plot(sensor_pos_x, displacement_data[:,1])
+plt.show() """

@@ -118,13 +118,15 @@ class LinearElasticity(MaterialProblem):
         else:
             raise Exception(f'wrong dimension {self.p.dim} for problem setup')
         
-        self.L = ufl.dot(f, self.v) * ufl.dx
+        self.T = df.fem.Constant(self.experiment.mesh, ScalarType((10, 0)))
+        ds = self.experiment.create_neumann_boundary()
+        self.L =  ufl.dot(self.T, self.v) * ds(1) #+ ufl.dot(f, self.v) * ufl.dx
 
         #self.E = df.fem.Constant(self.experiment.mesh, 100.)
         #self.nu = df.fem.Constant(self.experiment.mesh, 0.2)
         
         E = 100
-        nu = 0.2 
+        nu = 0.2
 
         self.lambda_ = df.fem.Constant(self.experiment.mesh, E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)))
         self.mu = df.fem.Constant(self.experiment.mesh, E / (2.0 * (1.0 + nu)))
@@ -197,11 +199,11 @@ class LinearElasticity(MaterialProblem):
         
         # Displacement Plot
         with df.io.XDMFFile(self.experiment.mesh.comm, "Displacement.xdmf", "w") as xdmf:
-            xdmf.write_mesh(self.experiment.mesh.comm)
+            xdmf.write_mesh(self.experiment.mesh)
             xdmf.write_function(self.displacement)
 
         #Stress Plot
-        with df.io.XDMFFile(self.experiment.mesh.comm, "Stress.xdmf", "w") as xdmf:
-            xdmf.write_mesh(self.experiment.mesh.comm)
-            xdmf.write_function(self.stress)
+        #with df.io.XDMFFile(self.experiment.mesh.comm, "Stress.xdmf", "w") as xdmf:
+        #    xdmf.write_mesh(self.experiment.mesh.comm)
+        #    xdmf.write_function(self.stress)
 
