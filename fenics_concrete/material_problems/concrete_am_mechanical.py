@@ -205,14 +205,10 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             # computed values
             self.q_pd = df.Function(q_V, name="pseudo density") # active or nonactive
             self.q_E = df.Function(q_V, name="youngs modulus")
-            self.q_sig_old = df.Function(q_VT, name="old stress") # for incremental formulation
-            self.q_eps_old = df.Function(q_VT, name="old strain") # for incremental formulation
             self.u_old = df.Function(self.V, name="old displamcent") # for incremental formulation
             self.u = df.Function(self.V, name="displacement") # for incremental formulation
             self.q_eps = df.Function(q_VT, name="strain")
             self.q_sig = df.Function(q_VT, name="stress")
-            self.q_delta_eps = df.Function(q_VT, name="delta strain")
-            self.q_delta_sig = df.Function(q_VT, name="delta stress")
 
             # Define variational problem
             self.du = df.Function(self.V)  # delta displacement
@@ -231,7 +227,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             # multiplication with activated elements / current Young's modulus
             R_ufl = self.q_E * df.inner(self.x_sigma(self.du), self.eps(v)) * dxm
             R_ufl += - self.q_pd * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
-            R_ufl += self.q_pd * df.inner(self.q_sig_old, self.eps(v)) * dxm
+            R_ufl += self.q_E * df.inner(self.x_sigma(self.u_old), self.eps(v)) * dxm
 
             # quadrature point part
             self.R = R_ufl
@@ -243,8 +239,8 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.dR = dR_ufl
 
             # stress and strain projection methods
-            self.project_sigma = LocalProjector(self.q_E * self.x_sigma(self.du), q_VT, dxm) #full tensor
-            self.project_strain = LocalProjector(self.eps(self.du), q_VT, dxm) #full tensor
+            self.project_sigma = LocalProjector(self.q_E * self.x_sigma(self.u), q_VT, dxm) #full tensor
+            self.project_strain = LocalProjector(self.eps(self.u), q_VT, dxm)  # full tensor
 
             self.assembler = None  # set as default, to check if bc have been added???
 
@@ -338,18 +334,12 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         set_q(self.q_E, E_list)
         set_q(self.q_pd, pd_list)
 
-        # for sensors and visualization
-        self.project_strain(self.q_delta_eps)  # get current strains full tensor
-        self.project_sigma(self.q_delta_sig)  # get current stress full tensor
-
-        # incremental update
-        sig_list = self.q_sig_old.vector().get_local() + self.q_delta_sig.vector().get_local()
-        eps_list = self.q_eps_old.vector().get_local() + self.q_delta_eps.vector().get_local()
-        set_q(self.q_sig, sig_list)
-        set_q(self.q_eps, eps_list)
-
-        print(self.du.vector(), self.u_old.vector())
-        self.u.vector()[:] = self.u_old.vector()[:] + self.du.vector()[:]
+        # displacement update for stress and strain computation (for visualization)
+        self.u.vector()[:] = self.u_old.vector()[:] + self.du.vector()[:] # for total strain computation
+        print(self.u((0.5,0.5)))
+        self.project_strain(self.q_eps)  # get current total strains full tensor (split in old and delta not required)
+        self.project_sigma(self.q_sig)  # get current stress delta full tensor
+        print('check sig and eps', self.q_sig.vector().min(), self.q_eps.vector().min())
 
     def update_values(self):
         # no history field currently
@@ -358,8 +348,8 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
         set_q(self.q_path, path_list)
 
-        # update old stress state
-        self.q_sig_old = self.q_sig
+        # update old displacement state
+        self.u_old.vector()[:]=np.copy(self.u.vector()[:])
 
     def set_timestep(self, dt):
         self.dt = dt
