@@ -96,6 +96,7 @@ class ConcreteAMMechanical(MaterialProblem):
 
         self.V = self.mechanics_problem.V # for reaction force sensor
         self.residual = None # initialize
+        self.df = self.mechanics_problem.df # load increment factor
 
         # setting bcs
         bcs = self.experiment.create_displ_bcs(self.mechanics_problem.V) # fixed boundary bottom
@@ -147,6 +148,7 @@ class ConcreteAMMechanical(MaterialProblem):
 class ConcreteThixElasticModel(df.NonlinearProblem):
     # linear elasticity law with time depenendent stiffness parameter (Youngs modulus) modelling the thixotropy
     # tensor format
+    # incremental formulated u= u_old + du solve for du with given load increment (self.df [default=1.] * f)
 
     def __init__(self, mesh, p, pv_name='mechanics_output', **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
@@ -215,10 +217,11 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             v = df.TestFunction(self.V)
 
             # Volume force
+            self.df = df.Constant(1.0) # load increment factor (default 1.0)
             if self.p.dim == 2:
-                f = df.Constant((0, -self.p.g * self.p.density))
+                f = self.df * df.Constant((0, -self.p.g * self.p.density))
             elif self.p.dim == 3:
-                f = df.Constant((0, 0, -self.p.g * self.p.density))
+                f = self.df * df.Constant((0, 0, -self.p.g * self.p.density))
 
             # define sigma from(u,t) in evalute material or here global E change ? (see damage example Thomas) -> then tangent by hand!
             # # Elasticity parameters without multiplication with E
@@ -227,7 +230,6 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             # multiplication with activated elements / current Young's modulus
             R_ufl = self.q_E * df.inner(self.x_sigma(self.du), self.eps(v)) * dxm
             R_ufl += - self.q_pd * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
-            R_ufl += self.q_E * df.inner(self.x_sigma(self.u_old), self.eps(v)) * dxm
 
             # quadrature point part
             self.R = R_ufl
@@ -336,10 +338,10 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
         # displacement update for stress and strain computation (for visualization)
         self.u.vector()[:] = self.u_old.vector()[:] + self.du.vector()[:] # for total strain computation
-        print(self.u((0.5,0.5)))
+
         self.project_strain(self.q_eps)  # get current total strains full tensor (split in old and delta not required)
         self.project_sigma(self.q_sig)  # get current stress delta full tensor
-        print('check sig and eps', self.q_sig.vector().min(), self.q_eps.vector().min())
+
 
     def update_values(self):
         # no history field currently
@@ -384,7 +386,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
                                 form_compiler_parameters={'quadrature_degree': self.p.degree})
         eps_plot = df.project(self.q_eps, self.visu_space_T,
                               form_compiler_parameters={'quadrature_degree': self.p.degree})
-        print('sigma plot', sigma_plot.vector()[:].max())
+        # print('sigma plot', sigma_plot.vector()[:].max())
         E_plot = df.project(self.q_E, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
         pd_plot = df.project(self.q_pd, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
 
@@ -472,10 +474,11 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
             v = df.TestFunction(self.V)
 
             # Volume force ??? correct?
+            self.df = df.Constant(1.0)  # load increment factor (default 1.0)
             if self.p.dim == 2:
-                f = df.Constant((0, -self.p.g * self.p.density))
+                f = self.df * df.Constant((0, -self.p.g * self.p.density))
             elif self.p.dim == 3:
-                f = df.Constant((0, 0, -self.p.g * self.p.density))
+                f = self.df * df.Constant((0, 0, -self.p.g * self.p.density))
 
             # multiplication with activated elements
             R_ufl = self.q_E * df.inner(self.sigma_1(self.u), self.eps_voigt(v)) * dxm # part with eps
@@ -753,11 +756,12 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
             self.u = df.Function(self.V)  # full displacement
             v = df.TestFunction(self.V)
 
-            # Volume force ??? correct?
+            # Volume force
+            self.df = df.Constant(1.0)  # load increment factor (default 1.0)
             if self.p.dim == 2:
-                f = df.Constant((0, -self.p.g * self.p.density))
+                f = self.df * df.Constant((0, -self.p.g * self.p.density))
             elif self.p.dim == 3:
-                f = df.Constant((0, 0, -self.p.g * self.p.density))
+                f = self.df * df.Constant((0, 0, -self.p.g * self.p.density))
 
             # multiplication with activated elements
             R_ufl = self.q_E * df.inner(self.sigma(self.u), self.eps(v)) * dxm  # part with eps
@@ -1062,10 +1066,11 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
             v = df.TestFunction(self.V)
 
             # Volume force ??? correct?
+            self.df = df.Constant(1.0)  # load increment factor (default 1.0)
             if self.p.dim == 2:
-                f = df.Constant((0, -self.p.g * self.p.density))
+                f = self.df * df.Constant((0, -self.p.g * self.p.density))
             elif self.p.dim == 3:
-                f = df.Constant((0, 0, -self.p.g * self.p.density))
+                f = self.df * df.Constant((0, 0, -self.p.g * self.p.density))
 
             # multiplication with activated elements
             R_ufl = df.inner(self.sigma(self.u), self.eps(v)) * dxm  # part with eps

@@ -1,6 +1,7 @@
 import fenics_concrete
 import dolfin as df
 import os
+import numpy as np
 
 import pytest
 
@@ -46,12 +47,29 @@ def test_displ_thix_3D():
     prop3D = setup_test(parameters,[sensor01,sensor02])
 
     #solve
-    # initialize time
-    t = 0
+    E_o_time=[]
+    # define load increments
+    dfs = np.zeros(int(parameters['time'] / parameters['dt']) + 1)
+    dfs[0] = 1
+    i = 0
+    t = 0 # initialize time
+    #solve
     while t <= prop3D.p.time:  # time
-        # solve temp-hydration-mechanics
+        # set load increment
+        prop3D.experiment.apply_displ_load(dfs[i]*parameters['u_bc'])
+        i += 1
+
+        # solve
         prop3D.solve(t=t)  # solving this
         prop3D.pv_plot(t=t)
+
+        # store Young's modulus
+        if t + parameters['age_0'] <= prop3D.p.t_f:
+            E_o_time.append(prop3D.p.E_0 + prop3D.p.R_E * (t + parameters['age_0']))
+        else:
+            E_o_time.append(
+                prop3D.p.E_0 + prop3D.p.R_E * prop3D.p.t_f + prop3D.p.A_E * (t + parameters['age_0'] - prop3D.p.t_f))
+
         # prepare next timestep
         t += prop3D.p.dt
 
@@ -71,10 +89,13 @@ def test_displ_thix_3D():
     sensor_stress_zz = prop3D.sensors[sensor01.name].data[
         -1][-1]
     # expected stress value
-    age_end = parameters['time'] + parameters['age_0']
-    E_end = prop3D.p.E_0 + prop3D.p.R_E * prop3D.p.t_f + prop3D.p.A_E * (age_end - prop3D.p.t_f)
     assert sensor_stress_zz == pytest.approx(
-        parameters['u_bc'] / 1 * E_end)  # compare computed stress with the E*strain
+        parameters['u_bc'] / 1 * E_o_time[-1])  # compare computed stress with the E*strain
+
+    # check evaluation of stress = Emodul
+    derived_E = np.array(prop3D.sensors[sensor01.name].data)[:, -1] / np.array(prop3D.sensors[sensor02.name].data)[:,
+                                                                      -1]
+    assert derived_E == pytest.approx(E_o_time)
 
 
 def test_displ_thix_2D():
@@ -102,36 +123,54 @@ def test_displ_thix_2D():
 
     prop2D = setup_test(parameters,[sensor01,sensor02])
 
+    E_o_time = []
+    # define load increments
+    dfs = np.zeros(int(parameters['time'] / parameters['dt']) + 1)
+    dfs[0] = 1
+    i = 0
+    t = 0 # initialize time
     #solve
-    # initialize time
-    t = 0
     while t <= prop2D.p.time:  # time
-        # solve temp-hydration-mechanics
+        # set load increment
+        prop2D.experiment.apply_displ_load(dfs[i]*parameters['u_bc'])
+        i += 1
+        # solve
         prop2D.solve(t=t)  # solving this
         prop2D.pv_plot(t=t)
+
+        # store Young's modulus
+        if t+parameters['age_0'] <= prop2D.p.t_f:
+            E_o_time.append(prop2D.p.E_0 + prop2D.p.R_E * (t+parameters['age_0']))
+        else:
+            E_o_time.append(prop2D.p.E_0 + prop2D.p.R_E * prop2D.p.t_f + prop2D.p.A_E * (t+parameters['age_0'] - prop2D.p.t_f))
+
         # prepare next timestep
         t += prop2D.p.dt
 
     # tests
     # get stresses and strains at the end
-    # print('stresses',prop2D.sensors[sensor01.name].data[-1])
-    # print('strains',prop2D.sensors[sensor02.name].data[-1])
+    # print('stresses yy', np.array(prop2D.sensors[sensor01.name].data)[:,-1])
+    # print('strains yy', np.array(prop2D.sensors[sensor02.name].data)[:,-1])
     strain_T = prop2D.sensors[sensor02.name].data[-1]
     strain_yy = strain_T[-1]
     strain_xx = strain_T[0]
+
+    # print('E_o_time',E_o_time)
 
     assert strain_yy == pytest.approx(prop2D.p.u_bc) # L==1!
     assert strain_xx == pytest.approx(-prop2D.p.nu*prop2D.p.u_bc)
 
     sensor_stress_yy = prop2D.sensors[sensor01.name].data[-1][-1] # yy or zz direction depending on problem dimension
     # expected stress value
-    age_end = parameters['time'] + parameters['age_0']
-    E_end = prop2D.p.E_0 + prop2D.p.R_E * prop2D.p.t_f + prop2D.p.A_E * (age_end - prop2D.p.t_f)
     assert sensor_stress_yy == pytest.approx(
-        parameters['u_bc'] / 1 * E_end)  # compare computed stress with the E*strain
+        parameters['u_bc'] / 1 * E_o_time[-1])  # compare computed stress with the E*strain
 
+    # check evaluation of stress = Emodul
+    derived_E = np.array(prop2D.sensors[sensor01.name].data)[:,-1]/np.array(prop2D.sensors[sensor02.name].data)[:,-1]
+    assert derived_E == pytest.approx(E_o_time)
 
-def test_density_thix_2D():
+@pytest.mark.parametrize("R_E", [0,10e4])
+def test_density_thix_2D(R_E):
     '''
         uniaxial tension test with density without change in Young's modulus over time
         checking general implementation
@@ -149,9 +188,9 @@ def test_density_thix_2D():
     parameters['stress_state'] = 'plane_stress'
 
     parameters['E_0'] = 2070000
-    parameters['R_E'] = 10e4 # no change in time!
+    parameters['R_E'] = R_E # if 0 no change in time!
     parameters['A_E'] = 0
-    parameters['t_f'] = 300
+    parameters['t_f'] = 4 * 60 # > time -> will not reached!
 
     parameters['time'] = 2 * 60  # total simulation time in s
     parameters['dt'] = 1 * 60  # 0.5 min step
@@ -161,65 +200,76 @@ def test_density_thix_2D():
     sensor02 = fenics_concrete.sensors.StrainSensor(df.Point(0.5,0.5)) #2.strainsensor middle middle
     sensor03 = fenics_concrete.sensors.ReactionForceSensorBottom()
     sensor04 = fenics_concrete.sensors.StressSensor(df.Point(0.5,0.0))
+    sensor05 = fenics_concrete.sensors.DisplacementSensor(df.Point(0.5,1.0)) # middle top
 
-    prop2D = setup_test(parameters,[sensor01,sensor02,sensor03,sensor04])
+    prop2D = setup_test(parameters,[sensor01,sensor02,sensor03,sensor04,sensor05])
 
     #solve
-    sig_o_time = []
-    eps_o_time = []
     E_o_time = []
     # initialize time
     t = 0
+    dfs = np.zeros(int(parameters['time']/parameters['dt'])+1)
+    dfs[0] = 1
+    i = 0
     while t <= prop2D.p.time:  # time
-        # solve temp-hydration-mechanics
+        # set load increment
+        prop2D.df.assign(dfs[i])
+        i += 1
+        # solve
         prop2D.solve(t=t)  # solving this
         prop2D.pv_plot(t=t)
 
-        # sensor output
-        if t <= prop2D.p.t_f:
+        # store Young's modulus
+        if t + parameters['age_0'] <= prop2D.p.t_f:
+            E_o_time.append(prop2D.p.E_0 + prop2D.p.R_E * (t + parameters['age_0']))
+        else:
             E_o_time.append(
-                prop2D.p.E_0 + prop2D.p.R_E * t)
-        eps_o_time.append(prop2D.sensors[list(prop2D.sensors.keys())[0]].data[-1][-1]) # yy
-        sig_o_time.append(prop2D.sensors[list(prop2D.sensors.keys())[3]].data[-1][-1]) # yy
+                prop2D.p.E_0 + prop2D.p.R_E * prop2D.p.t_f + prop2D.p.A_E * (t + parameters['age_0'] - prop2D.p.t_f))
 
         # prepare next timestep
         t += prop2D.p.dt
 
 
-    print('sig_o_time', sig_o_time)
-    print('eps_o_time', eps_o_time)
-    print('E_o_time', E_o_time)
+    # output over time steps in yy direction
+    # print('E_o_time', E_o_time)
+    # print('sig_o_time', np.array(prop2D.sensors[sensor04.name].data)[:,-1])
+    # print('eps_o_time', np.array(prop2D.sensors[sensor01.name].data)[:,-1])
+    # print('disp_o_time', np.array(prop2D.sensors[sensor05.name].data)[:,-1])
+    # print('force_o_time', prop2D.sensors[sensor03.name].data)
+
     # tests
-    # get stresses and strains at the end usually the sensor names are the sensor class name if same kind then numbered!!
-    # print(prop2D.sensors.keys()) # available Sensor Names
-    # print('strain sensor',prop2D.sensors[list(prop2D.sensors.keys())[0]].data[-1]) # or "StrainSensor" = sensor01.name
-    # print('strain sensor', prop2D.sensors[list(prop2D.sensors.keys())[1]].data[-1]) # or "StrainSensor" != sensor02.name !
-    strain_bottom = prop2D.sensors[list(prop2D.sensors.keys())[0]].data[-1][-1] # yy
-    strain_middle = prop2D.sensors[list(prop2D.sensors.keys())[1]].data[-1][-1] # yy
+    strain_bottom_0 = prop2D.sensors[sensor01.name].data[0][-1] # eps_yy at the start
+    strain_bottom_end = prop2D.sensors[sensor01.name].data[-1][-1] # eps_yy at the end
+    force_bottom = np.sum(prop2D.sensors[sensor03.name].data) # sum of all force values
+    stress_bottom_end = prop2D.sensors[sensor04.name].data[-1][-1] # eps_yy at the end
 
-    # print('reaction force', prop2D.sensors[list(prop2D.sensors.keys())[-1]].data[-1]) # or "ReactionForceSensorBottom" = sensor03.name
-    force_bottom = prop2D.sensors[sensor03.name].data[-1]
+    # print('strain analytic t=0', -parameters['density']*prop2D.p.g/E_o_time[0])
+    # print('dead load', -parameters['density']*prop2D.p.g*1*1)
+    # print('force_bottom', force_bottom)
+    # print('displacement', prop2D.displacement((0.5,0.5)))
 
-    print('strain analytic', -parameters['density']*prop2D.p.g/E_o_time[0], -parameters['density']*prop2D.p.g/E_o_time[-1])
-    print('strain bottom, strain middle', strain_bottom, strain_middle)
-    print('dead load', -parameters['density']*prop2D.p.g*1*1)
-    print('force_bottom', force_bottom)
-    print('displacement', prop2D.displacement((0.5,0.5)))
-
+    # standard
     assert force_bottom == pytest.approx(-parameters['density']*prop2D.p.g*1*1) # dead load of full structure
-    assert strain_middle == pytest.approx(strain_bottom / 2., abs=1e-4) # linear increase of strain over heigth
-    assert strain_bottom == pytest.approx(-parameters['density']*prop2D.p.g/E_o_time[-1], abs=1e-4)
+    assert strain_bottom_0 == pytest.approx(-parameters['density']*prop2D.p.g/E_o_time[0], abs=1e-4)
+
+    # evolution of strain
+    assert strain_bottom_0 == pytest.approx(strain_bottom_end, abs=1e-8) # if load is applied immediately
+
+    # check if stress changes accordingly to change in E_modul (for last two values!)
+    stress_end_prognosis = E_o_time[-1] / E_o_time[-2] * prop2D.sensors[sensor04.name].data[-2][-1]
+    # print('test stress end', stress_end_prognosis)
+    assert stress_bottom_end == pytest.approx(stress_end_prognosis, abs=1e-8)  # if load is applied immediately
 
 
-
-if __name__ == '__main__':
-
-
-    # test_displ_thix_2D()
-
-    # test_displ_thix_3D()
-    #
-    test_density_thix_2D()
+# if __name__ == '__main__':
+#
+#
+#     # test_displ_thix_2D()
+#
+#     # test_displ_thix_3D()
+#     #
+#     # test_density_thix_2D(0)
+#     # test_density_thix_2D(10e4)
 
 
 

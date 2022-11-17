@@ -53,7 +53,7 @@ def setup_test_2D(parameters, mech_prob_string, sensor):
 @pytest.mark.parametrize("visco_case", ['Cmaxwell', 'Ckelvin'])
 @pytest.mark.parametrize("mech_prob_string", ['ConcreteViscoDevElasticModel'])
 @pytest.mark.parametrize("dim", [2,3])
-def test_relaxation(visco_case, mech_prob_string,dim):
+def test_relaxation(visco_case, mech_prob_string, dim):
     '''
         uniaxial tension test displacement control to check relaxation of visco material class
     '''
