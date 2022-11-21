@@ -18,12 +18,13 @@ fenics_concrete/experimental_setups/concrete_multiple_layers.py
 fenics_concrete/experimental_setups/experiment.py
 fenics_concrete/experimental_setups/minimal_cube.py
 fenics_concrete/material_problems/__init__.py
+fenics_concrete/material_problems/concrete_am_mechanical.py
 fenics_concrete/material_problems/concrete_thermo_mechanical.py
-fenics_concrete/material_problems/concrete_thix_mechanical.py
 fenics_concrete/material_problems/linear_elasticity.py
 fenics_concrete/material_problems/material_problem.py
 tests/__init__.py
-tests/test_concretethixmodel.py
+tests/test_concrete_thixmodel.py
+tests/test_concrete_viscomodel.py
 tests/test_cylinder_model.py
 tests/test_experimental_setups.py
 tests/test_hydration_function.py
