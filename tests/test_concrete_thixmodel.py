@@ -148,10 +148,10 @@ def test_displ_thix_2D():
         prop2D.experiment.apply_displ_load(dfs[i] * parameters["u_bc"])
         i += 1
         # solve
-        prop2D.solve(t=t)  # solving this
+        prop2D.solve(t=t)
         prop2D.pv_plot(t=t)
 
-        # store Young's modulus
+        # store Young's modulus for checks
         if t + parameters["age_0"] <= prop2D.p.t_f:
             E_o_time.append(prop2D.p.E_0 + prop2D.p.R_E * (t + parameters["age_0"]))
         else:
@@ -177,13 +177,11 @@ def test_displ_thix_2D():
     assert strain_yy == pytest.approx(prop2D.p.u_bc)  # L==1!
     assert strain_xx == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
 
-    sensor_stress_yy = prop2D.sensors[sensor01.name].data[-1][
-        -1
-    ]  # yy or zz direction depending on problem dimension
-    # expected stress value
-    assert sensor_stress_yy == pytest.approx(
-        parameters["u_bc"] / 1 * E_o_time[-1]
-    )  # compare computed stress with the E*strain
+    # stress in yy or zz direction depending on problem dimension (2/3)
+    sensor_stress_yy = prop2D.sensors[sensor01.name].data[-1][-1]
+
+    # expected stress value compared to computed stress with the E*strain
+    assert sensor_stress_yy == pytest.approx(parameters["u_bc"] / 1 * E_o_time[-1])
 
     # check evaluation of stress = Emodul
     derived_E = (
@@ -220,15 +218,16 @@ def test_density_thix_2D(R_E):
     parameters["dt"] = 1 * 60  # 0.5 min step
 
     # sensor
-    sensor01 = fenics_concrete.sensors.StrainSensor(df.Point(0.5, 0.0))
     # 1.strainsensor middle bottom
+    sensor01 = fenics_concrete.sensors.StrainSensor(df.Point(0.5, 0.0))
     # 2.strainsensor middle middle
     sensor02 = fenics_concrete.sensors.StrainSensor(df.Point(0.5, 0.5))
+    # force sensor
     sensor03 = fenics_concrete.sensors.ReactionForceSensorBottom()
+    # stress sensor middle bottom
     sensor04 = fenics_concrete.sensors.StressSensor(df.Point(0.5, 0.0))
-    sensor05 = fenics_concrete.sensors.DisplacementSensor(
-        df.Point(0.5, 1.0)
-    )  # middle top
+    # displacmenet sensor middle top
+    sensor05 = fenics_concrete.sensors.DisplacementSensor(df.Point(0.5, 1.0))
 
     prop2D = setup_test(parameters, [sensor01, sensor02, sensor03, sensor04, sensor05])
 
@@ -244,10 +243,10 @@ def test_density_thix_2D(R_E):
         prop2D.df.assign(dfs[i])
         i += 1
         # solve
-        prop2D.solve(t=t)  # solving this
+        prop2D.solve(t=t)
         prop2D.pv_plot(t=t)
 
-        # store Young's modulus
+        # store Young's modulus for checks
         if t + parameters["age_0"] <= prop2D.p.t_f:
             E_o_time.append(prop2D.p.E_0 + prop2D.p.R_E * (t + parameters["age_0"]))
         else:
@@ -278,27 +277,22 @@ def test_density_thix_2D(R_E):
     # print('force_bottom', force_bottom)
     # print('displacement', prop2D.displacement((0.5,0.5)))
 
-    # standard
-    assert force_bottom == pytest.approx(
-        -parameters["density"] * prop2D.p.g * 1 * 1
-    )  # dead load of full structure
+    # standard: dead load of full structure and strain
+    assert force_bottom == pytest.approx(-parameters["density"] * prop2D.p.g * 1 * 1)
     assert strain_bottom_0 == pytest.approx(
         -parameters["density"] * prop2D.p.g / E_o_time[0], abs=1e-4
     )
 
-    # evolution of strain
-    assert strain_bottom_0 == pytest.approx(
-        strain_bottom_end, abs=1e-8
-    )  # if load is applied immediately
+    # evolution of strain, if load is applied immediately (otherwise 0 \ne end)
+    assert strain_bottom_0 == pytest.approx(strain_bottom_end, abs=1e-8)
 
     # check if stress changes accordingly to change in E_modul (for last two values!)
     stress_end_prognosis = (
         E_o_time[-1] / E_o_time[-2] * prop2D.sensors[sensor04.name].data[-2][-1]
     )
     # print('test stress end', stress_end_prognosis)
-    assert stress_bottom_end == pytest.approx(
-        stress_end_prognosis, abs=1e-8
-    )  # if load is applied immediately
+    # stress check, if load is applied immediately
+    assert stress_bottom_end == pytest.approx(stress_end_prognosis, abs=1e-8)
 
 
 # if __name__ == '__main__':
