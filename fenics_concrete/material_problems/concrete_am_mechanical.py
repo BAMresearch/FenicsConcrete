@@ -471,6 +471,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
 
             # Define variational problem
             self.u = df.Function(self.V)  # full displacement
+            self.du = df.Function(self.V)  # increment displacement for incremental solution not used here! du = u
             v = df.TestFunction(self.V)
 
             # Volume force ??? correct?
@@ -481,7 +482,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
                 f = self.df * df.Constant((0, 0, -self.p.g * self.p.density))
 
             # multiplication with activated elements
-            R_ufl = self.q_E * df.inner(self.sigma_1(self.u), self.eps_voigt(v)) * dxm # part with eps
+            R_ufl = self.q_E * df.inner(self.sigma_1(self.du), self.eps_voigt(v)) * dxm # part with eps
             R_ufl += - self.q_pd * df.inner(self.sigma_2(), self.eps_voigt(v)) * dxm  # visco part
             R_ufl += - self.q_pd * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
 
@@ -490,7 +491,7 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
 
             # derivative
             # normal form
-            dR_ufl = df.derivative(R_ufl, self.u)
+            dR_ufl = df.derivative(R_ufl, self.du)
             # quadrature part
             self.dR = dR_ufl
 
@@ -589,6 +590,9 @@ class ConcreteViscoElasticModel(df.NonlinearProblem):
         # # project lists onto quadrature spaces
         set_q(self.q_E, E_list)
         set_q(self.q_pd, pd_list)
+
+        # update displacment
+        self.u.vector()[:] = self.du.vector()[:]
 
         # get current strains and stresses
         self.project_strain(self.q_eps)  # get current strains
@@ -754,6 +758,7 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
 
             # Define variational problem
             self.u = df.Function(self.V)  # full displacement
+            self.du = df.Function(self.V)  # increment displacement
             v = df.TestFunction(self.V)
 
             # Volume force
@@ -764,7 +769,7 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
                 f = self.df * df.Constant((0, 0, -self.p.g * self.p.density))
 
             # multiplication with activated elements
-            R_ufl = self.q_E * df.inner(self.sigma(self.u), self.eps(v)) * dxm  # part with eps
+            R_ufl = self.q_E * df.inner(self.sigma(self.du), self.eps(v)) * dxm  # part with eps
             R_ufl += - self.q_pd * df.inner(self.sigma_2(), self.eps(v)) * dxm  # visco part
             R_ufl += - self.q_pd * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
 
@@ -773,7 +778,7 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
 
             # derivative
             # normal form
-            dR_ufl = df.derivative(R_ufl, self.u)
+            dR_ufl = df.derivative(R_ufl, self.du)
             # quadrature part
             self.dR = dR_ufl
 
@@ -895,6 +900,9 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
         # # project lists onto quadrature spaces
         set_q(self.q_E, E_list)
         set_q(self.q_pd, pd_list)
+
+        # update displacment
+        self.u.vector()[:] = self.du.vector()[:]
 
         # get current strains and stresses
         self.project_sig1_ten(self.q_sig1_ten) # get stress component
@@ -1063,6 +1071,7 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
 
             # Define variational problem
             self.u = df.Function(self.V)  # full displacement
+            self.du = df.Function(self.V)  # increment displacement
             v = df.TestFunction(self.V)
 
             # Volume force ??? correct?
@@ -1073,7 +1082,7 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
                 f = self.df * df.Constant((0, 0, -self.p.g * self.p.density))
 
             # multiplication with activated elements
-            R_ufl = df.inner(self.sigma(self.u), self.eps(v)) * dxm  # part with eps
+            R_ufl = df.inner(self.sigma(self.du), self.eps(v)) * dxm  # part with eps
             R_ufl += - self.q_pd * df.inner(self.sigma_2(), self.eps(v)) * dxm  # visco part
             R_ufl += - self.q_pd * df.inner(f, v) * dxm  # add volumetric force, aka gravity (in this case)
 
@@ -1082,7 +1091,7 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
 
             # derivative
             # normal form
-            dR_ufl = df.derivative(R_ufl, self.u)
+            dR_ufl = df.derivative(R_ufl, self.du)
             # quadrature part
             self.dR = dR_ufl
 
@@ -1215,6 +1224,9 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
         set_q(self.q_eta, eta_list)
 
         set_q(self.q_pd, pd_list)
+
+        # update displacment
+        self.u.vector()[:] = self.du.vector()[:]
 
         # get current strains and stresses
         self.project_sig1_ten(self.q_sig1_ten) # get stress component

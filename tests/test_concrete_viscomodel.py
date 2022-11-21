@@ -151,16 +151,16 @@ def test_relaxation(visco_case, mech_prob_string, dim):
 
 #TODO: add creep test requires load boundary condition not yet in the experiment framework
 
-# if __name__ == '__main__':
-#
-#
-#     # test_relaxation('cmaxwell','ConcreteViscoElasticModel', 2) # Aratz variant just for 2D tested [in 3D some problems by epsv update]
-#
-#     # test_relaxation('cmaxwell', 'ConcreteViscoDevElasticModel',2)
-#
-#     # test_relaxation('ckelvin', 'ConcreteViscoDevElasticModel',2)
-#
-#     test_relaxation('ckelvin', 'ConcreteViscoDevThixElasticModel', 2)
+if __name__ == '__main__':
+
+
+    # test_relaxation('cmaxwell','ConcreteViscoElasticModel', 2) # Aratz variant just for 2D tested [in 3D some problems by epsv update]
+
+    test_relaxation('cmaxwell', 'ConcreteViscoDevElasticModel',2)
+
+    test_relaxation('ckelvin', 'ConcreteViscoDevElasticModel',2)
+
+    # test_relaxation('ckelvin', 'ConcreteViscoDevThixElasticModel', 2)
 
 
 
