@@ -19,13 +19,17 @@ def setup_test(parameters, sensor):
         pv_name=file_path + "test_thix",
     )
     if parameters["bc_setting"] == "disp":
-        problem.experiment.apply_displ_load(parameters["u_bc"])
+        problem.experiment.apply_displ_load(parameters["u_bc"])  # full
     for i in range(len(sensor)):
         problem.add_sensor(sensor[i])
     # problem.add_sensor(sensor)
 
     # set time step
     problem.set_timestep(problem.p.dt)  # for time integration scheme
+
+    # all elements same layer
+    path_exp = df.Expression("tt", degree=1, tt=0)  # default!
+    problem.set_initial_path(path_exp)
 
     return problem
 
@@ -57,14 +61,14 @@ def test_displ_thix_3D():
     # solve
     E_o_time = []
     # define load increments
-    dfs = np.zeros(int(parameters["time"] / parameters["dt"]) + 1)
-    dfs[0] = 1
+    dubcs = np.zeros(int(parameters["time"] / parameters["dt"]) + 1)
+    dubcs[0] = 1
     i = 0
     t = 0  # initialize time
     # solve
     while t <= prop3D.p.time:  # time
         # set load increment
-        prop3D.experiment.apply_displ_load(dfs[i] * parameters["u_bc"])
+        prop3D.experiment.apply_displ_load(dubcs[i] * parameters["u_bc"])
         i += 1
 
         # solve
@@ -137,15 +141,15 @@ def test_displ_thix_2D():
     prop2D = setup_test(parameters, [sensor01, sensor02])
 
     E_o_time = []
-    # define load increments
-    dfs = np.zeros(int(parameters["time"] / parameters["dt"]) + 1)
-    dfs[0] = 1
+    # define load increments of bc
+    dubcs = np.zeros(int(parameters["time"] / parameters["dt"]) + 1)
+    dubcs[0] = 1
     i = 0
     t = 0  # initialize time
     # solve
     while t <= prop2D.p.time:  # time
-        # set load increment
-        prop2D.experiment.apply_displ_load(dfs[i] * parameters["u_bc"])
+        # set load increment u_bc (for density automatic!)
+        prop2D.experiment.apply_displ_load(dubcs[i] * parameters["u_bc"])
         i += 1
         # solve
         prop2D.solve(t=t)
@@ -166,13 +170,13 @@ def test_displ_thix_2D():
 
     # tests
     # get stresses and strains at the end
-    # print('stresses yy', np.array(prop2D.sensors[sensor01.name].data)[:,-1])
-    # print('strains yy', np.array(prop2D.sensors[sensor02.name].data)[:,-1])
+    print("stresses yy", np.array(prop2D.sensors[sensor01.name].data)[:, -1])
+    print("strains yy", np.array(prop2D.sensors[sensor02.name].data)[:, -1])
     strain_T = prop2D.sensors[sensor02.name].data[-1]
     strain_yy = strain_T[-1]
     strain_xx = strain_T[0]
 
-    # print('E_o_time',E_o_time)
+    print("E_o_time", E_o_time)
 
     assert strain_yy == pytest.approx(prop2D.p.u_bc)  # L==1!
     assert strain_xx == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
@@ -216,6 +220,7 @@ def test_density_thix_2D(R_E):
 
     parameters["time"] = 2 * 60  # total simulation time in s
     parameters["dt"] = 1 * 60  # 0.5 min step
+    parameters["load_time"] = parameters["dt"]  # load applied in one step
 
     # sensor
     # 1.strainsensor middle bottom
@@ -235,12 +240,9 @@ def test_density_thix_2D(R_E):
     E_o_time = []
     # initialize time
     t = 0
-    dfs = np.zeros(int(parameters["time"] / parameters["dt"]) + 1)
-    dfs[0] = 1
     i = 0
     while t <= prop2D.p.time:  # time
         # set load increment
-        prop2D.df.assign(dfs[i])
         i += 1
         # solve
         prop2D.solve(t=t)
@@ -260,11 +262,11 @@ def test_density_thix_2D(R_E):
         t += prop2D.p.dt
 
     # output over time steps in yy direction
-    # print('E_o_time', E_o_time)
-    # print('sig_o_time', np.array(prop2D.sensors[sensor04.name].data)[:,-1])
-    # print('eps_o_time', np.array(prop2D.sensors[sensor01.name].data)[:,-1])
-    # print('disp_o_time', np.array(prop2D.sensors[sensor05.name].data)[:,-1])
-    # print('force_o_time', prop2D.sensors[sensor03.name].data)
+    print("E_o_time", E_o_time)
+    print("sig_o_time", np.array(prop2D.sensors[sensor04.name].data)[:, -1])
+    print("eps_o_time", np.array(prop2D.sensors[sensor01.name].data)[:, -1])
+    print("disp_o_time", np.array(prop2D.sensors[sensor05.name].data)[:, -1])
+    print("force_o_time", prop2D.sensors[sensor03.name].data)
 
     # tests
     strain_bottom_0 = prop2D.sensors[sensor01.name].data[0][-1]  # eps_yy at the start
@@ -272,10 +274,10 @@ def test_density_thix_2D(R_E):
     force_bottom = np.sum(prop2D.sensors[sensor03.name].data)  # sum of all force values
     stress_bottom_end = prop2D.sensors[sensor04.name].data[-1][-1]  # eps_yy at the end
 
-    # print('strain analytic t=0', -parameters['density']*prop2D.p.g/E_o_time[0])
-    # print('dead load', -parameters['density']*prop2D.p.g*1*1)
-    # print('force_bottom', force_bottom)
-    # print('displacement', prop2D.displacement((0.5,0.5)))
+    print("strain analytic t=0", -parameters["density"] * prop2D.p.g / E_o_time[0])
+    print("dead load", -parameters["density"] * prop2D.p.g * 1 * 1)
+    print("force_bottom", force_bottom)
+    print("displacement", prop2D.displacement((0.5, 0.5)))
 
     # standard: dead load of full structure and strain
     assert force_bottom == pytest.approx(-parameters["density"] * prop2D.p.g * 1 * 1)
@@ -295,12 +297,11 @@ def test_density_thix_2D(R_E):
     assert stress_bottom_end == pytest.approx(stress_end_prognosis, abs=1e-8)
 
 
-# if __name__ == '__main__':
+# if __name__ == "__main__":
+
+# test_displ_thix_2D()
 #
-#
-#     # test_displ_thix_2D()
-#
-#     # test_displ_thix_3D()
-#     #
-#     # test_density_thix_2D(0)
-#     # test_density_thix_2D(10e4)
+# # test_displ_thix_3D()
+# #
+# # test_density_thix_2D(0)
+# # test_density_thix_2D(10e4)

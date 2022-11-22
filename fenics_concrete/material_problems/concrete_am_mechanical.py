@@ -55,6 +55,7 @@ class ConcreteAMMechanical(MaterialProblem):
             default_p["A_E"] = 30  # Structuration rate in Pa / s
             default_p["t_f"] = 300  # Reflocculation time in s
             default_p["age_0"] = 0  # start age of concrete s
+            default_p["load_time"] = 0
             self.p = default_p + self.p
 
             self.mechanics_problem = ConcreteThixElasticModel(
@@ -105,7 +106,6 @@ class ConcreteAMMechanical(MaterialProblem):
 
         self.V = self.mechanics_problem.V  # for reaction force sensor
         self.residual = None  # initialize
-        self.df = self.mechanics_problem.df  # load increment factor
 
         # setting bcs
         bcs = self.experiment.create_displ_bcs(self.mechanics_problem.V)
@@ -155,6 +155,9 @@ class ConcreteAMMechanical(MaterialProblem):
 
     def get_E_fkt(self):
         return np.vectorize(self.mechanics_problem.E_fkt)
+
+    def set_inital_path(self, path):
+        self.mechanics_problem.set_initial_path(path)
 
 
 class ConcreteThixElasticModel(df.NonlinearProblem):
@@ -226,6 +229,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             # computed values
             self.q_pd = df.Function(q_V, name="pseudo density")  # active or nonactive
             self.q_E = df.Function(q_V, name="youngs modulus")
+            self.q_fd = df.Function(q_V, name="load factor")
             self.q_eps = df.Function(q_VT, name="strain")
             self.q_sig = df.Function(q_VT, name="stress")
 
@@ -238,11 +242,10 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             v = df.TestFunction(self.V)
 
             # Volume force
-            self.df = df.Constant(1.0)  # load increment factor (default 1.0)
             if self.p.dim == 2:
-                f = self.df * df.Constant((0, -self.p.g * self.p.density))
+                f = df.Constant((0, -self.p.g * self.p.density))
             elif self.p.dim == 3:
-                f = self.df * df.Constant((0, 0, -self.p.g * self.p.density))
+                f = df.Constant((0, 0, -self.p.g * self.p.density))
 
             # define sigma from(u,t) in evalute material or here global E change ? (see damage example Thomas) -> then tangent by hand!
             # # Elasticity parameters without multiplication with E
@@ -250,8 +253,8 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
             # multiplication with activated elements / current Young's modulus
             R_ufl = self.q_E * df.inner(self.x_sigma(self.du), self.eps(v)) * dxm
-            # add volumetric force, aka gravity (in this case)
-            R_ufl += -self.q_pd * df.inner(f, v) * dxm
+            # add volumetric force, aka gravity (in this case) plus load factor
+            R_ufl += -self.q_fd * df.inner(f, v) * dxm
 
             # quadrature point part
             self.R = R_ufl
@@ -338,12 +341,21 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         return E
 
     def pd_fkt(self, path_time):
-        # pseudo density: decide if layer is active or not (age < 0 nonactive!)
+        # pseudo density: decide if layer is there (active) or not (age < 0 nonactive!)
         # decision based on current path_time value
         l_active = 0  # non-active
         if path_time >= 0 - df.DOLFIN_EPS:
             l_active = 1.0  # active
         return l_active
+
+    def fd_fkt(self, pd, path_time, parameters):
+        # load increment function
+        fd = 0
+        if pd > 0:  # element active compute current loading factor for density
+            if path_time < parameters["load_time"]:
+                fd = self.dt / parameters["load_time"]
+
+        return fd
 
     def evaluate_material(self):
         # get path time; convert quadrature spaces to numpy vector
@@ -357,21 +369,28 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         # print('pseudo density', pd_list.max(), pd_list.min())
 
         # compute current Young's modulus
-        parameters = {}
-        parameters["t_f"] = self.p.t_f
-        parameters["E_0"] = self.p.E_0
-        parameters["R_E"] = self.p.R_E
-        parameters["A_E"] = self.p.A_E
-        parameters["age_0"] = self.p.age_0
-        #
+        param_E = {}
+        param_E["t_f"] = self.p.t_f
+        param_E["E_0"] = self.p.E_0
+        param_E["R_E"] = self.p.R_E
+        param_E["A_E"] = self.p.A_E
+        param_E["age_0"] = self.p.age_0
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
-        E_list = E_fkt_vectorized(pd_list, path_list, parameters)
+        E_list = E_fkt_vectorized(pd_list, path_list, param_E)
         # print('E',E_list.max(),E_list.min())
+
+        # compute loading factors for density load
+        param_fd = {}
+        param_fd["load_time"] = self.p.load_time
+        fd_list_vectorized = np.vectorize(self.fd_fkt)
+        fd_list = fd_list_vectorized(pd_list, path_list, param_fd)
+        # print("fd", fd_list.max(), fd_list.min())
 
         # # project lists onto quadrature spaces
         set_q(self.q_E, E_list)
         set_q(self.q_pd, pd_list)
+        set_q(self.q_fd, fd_list)
 
         # displacement update for stress and strain computation (for visualization)
         self.u.vector()[:] = (

@@ -128,9 +128,8 @@ def test_single_layer_2D_CS():
 
     # set time step
     dt = parameters["dt"]
-    time = parameters[
-        "t_layer"
-    ]  # total simulation time in s: time to build one layer based on Wolfs paper 0.31 min !
+    # total simulation time in s: time to build one layer based on Wolfs paper 0.31 min !
+    time = parameters["t_layer"]
 
     problem.set_timestep(dt)  # for time integration scheme
     # initialize time
