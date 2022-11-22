@@ -28,11 +28,11 @@ def set_test_parameters():
     parameters["density"] = 2070.0  # kg/m³
     # parameters['g'] = 9.81 # in material_problem.py default value
 
-    # material parameters from Wolfs et al 2018
+    # material parameters similar as Wolfs et al 2018
     parameters["nu"] = 0.3  # Poissons Ratio see Wolfs et al 2018
     parameters["E_0"] = 0.078e6  # Youngs Modulus Pa
     parameters["R_E"] = 0.0  # reflocculation rate of E modulus in Pa / s
-    parameters["A_E"] = 0.0012e6 / 60  # structuration rate of E modulus in Pa / s
+    parameters["A_E"] = 100 * 0.0012e6 / 60  # structuration rate of E modulus in Pa / s
     parameters["t_f"] = 0  # reflocculation time in s
     parameters["age_0"] = 0  # s concrete age at print head
 
@@ -70,7 +70,7 @@ def setup_problem(parameters, pv_name):
 
 
 def define_path_time(prob, param, t_diff, t_0=0):
-    # create path as layer wise and overwrite in prob
+    # create path as layer wise at dof points and overwrite in prob
     # one layer by time
     """
     prob: problem
@@ -112,9 +112,12 @@ def define_path_time(prob, param, t_diff, t_0=0):
     return prob
 
 
-def test_single_layer_2D_CS():
-    # crossection like "1m" length
-    # One single layer for a given time
+@pytest.mark.parametrize(
+    "load_time_set",
+    ["dt", "t_layer"],
+)
+def test_single_layer_2D(load_time_set):
+    # One single layer build immediately and lying for a given time
 
     # set parameters
     parameters = set_test_parameters()
@@ -122,122 +125,68 @@ def test_single_layer_2D_CS():
     parameters["age_0"] = 20
     parameters["degree"] = 2
 
+    # incremental loading
+    parameters["load_time"] = parameters[load_time_set]
+
     # set standard problem & sensor
-    pv_name = "test_single_layer_thix"
+    pv_name = "test_single_layer"
     problem = setup_problem(parameters, pv_name)
 
     # set time step
     dt = parameters["dt"]
-    # total simulation time in s: time to build one layer based on Wolfs paper 0.31 min !
-    time = parameters["t_layer"]
+    # total simulation time in s
+    time = 2 * parameters["t_layer"]
 
     problem.set_timestep(dt)  # for time integration scheme
     # initialize time
     t = 0
     while t <= time:  # time
-        # solve temp-hydration-mechanics
+        # solve
         # print('solve for', t)
-        problem.solve(t=t)  # solving this
+        problem.solve(t=t)
         problem.pv_plot(t=t)
         # prepare next timestep
         t += dt
 
     # check results (multi-axial stress state not uniaxial no analytical stress solution)
-    force_bottom = problem.sensors["ReactionForceSensorBottom"].data[-1]
-    force_structure = (
+    force_bottom = problem.sensors["ReactionForceSensorBottom"].data
+    dead_load = (
         parameters["density"]
         * parameters["layer_width"]
         * parameters["layer_height"]
         * problem.p.g
     )
-    # print('force - weigth', force_bottom, force_structure )
-    assert force_bottom == pytest.approx(
-        -force_structure
-    )  # dead load of full structure
+    # dead load of full structure
+    assert sum(force_bottom) == pytest.approx(-dead_load)
 
-    # print('strains', problem.sensors["StrainSensor"].data[:])
-    # print('stresses', problem.sensors["StressSensor"].data[:])
-    stress = np.array(problem.sensors["StressSensor"].data[:])
-    # print('stress',stress)
-    assert np.absolute(np.diff(stress, axis=0)).max() == pytest.approx(
-        0.0
-    )  # stress should be constant over time
+    # check stress/strain relation mirrowing given E evaluation
+    # calculated
+    stress_yy = np.array(problem.sensors["StressSensor"].data)[:, -1]
+    strain_yy = np.array(problem.sensors["StrainSensor"].data)[:, -1]
+    E_end_E_0 = stress_yy[-1] / strain_yy[-1] / (stress_yy[0] / strain_yy[0])
+    # given
+    if problem.p.R_E == 0:
+        E_0 = problem.p.E_0 + problem.p.A_E * (0.0 + parameters["age_0"])
+        E_end = problem.p.E_0 + problem.p.A_E * (time + parameters["age_0"])
 
-    strain = np.array(problem.sensors["StrainSensor"].data[:])
-    dstrain = np.diff(
-        strain, axis=0
-    )  # should be constant since stiffness increases constant in time
-    # print('strain',strain)
-    # print('diff_strain',dstrain)
-    assert np.absolute(np.diff(dstrain, axis=0)).max() == pytest.approx(
-        0.0, abs=1e-8
-    )  # strain increment should be constant (reziproc related to R_E)
+        # print("stress", stress_yy)
+        # print("strain", strain_yy)
+        # print("E_end/E_0", E_end_E_0)
+        # print("E_end/E_0", E_end / E_0)
+
+        assert E_end_E_0 == pytest.approx(E_end / E_0)
 
 
-def test_multiple_layer_2D_CS_static():
-    # serveral layers with different age given
-    # static computation no time loop
+def test_multiple_layers_2D():
+    # several layers dynamically deposited with given path
+    # whole layer activate at once after t_layer next layer...
+    # incremental set up
 
     parameters = set_test_parameters()
+    parameters["load_time"] = parameters["dt"]
 
     # set standard problem & sensor
-    pv_name = "test_multilayer_thix_static"
-    problem = setup_problem(parameters, pv_name)
-
-    # create layers path time for current static time (== t=80 in dynamic case)
-    path = df.Expression("0", degree=0)
-    problem.set_initial_path(path)
-    problem = define_path_time(problem, parameters, parameters["t_layer"])
-
-    # initialize time compute just one time step of current situation (path!)
-    problem.set_timestep(0)
-    t = 0
-    # print('solve for', t)
-    problem.solve(t=t)  # solving this
-    problem.pv_plot(t=t)
-
-    # check global solution eigenvalue = bottom force
-    # print('strain sensor bottom', problem.sensors["StrainSensor"].data[:])
-    # print('stress sensor bottom', problem.sensors["StressSensor"].data[:])
-    force_bottom = problem.sensors["ReactionForceSensorBottom"].data[-1]
-    force_structure = (
-        parameters["layer_number"]
-        * parameters["density"]
-        * parameters["layer_width"]
-        * parameters["layer_height"]
-        * problem.p.g
-    )
-    # print('force - weigth', force_bottom, force_structure)
-    assert force_bottom == pytest.approx(-force_structure)
-
-    # check Young' modulus distribution
-    if parameters["t_f"] == 0:  # changed thixotropy model CHECK will not work!
-        E_bottom_layer = (
-            problem.p.E_0
-            + problem.p.A_E * (parameters["layer_number"] - 1) * parameters["t_layer"]
-        )
-        E_upper_layer = problem.p.E_0
-        assert E_upper_layer == pytest.approx(
-            problem.mechanics_problem.q_E.vector()[:].min()
-        )
-        assert E_bottom_layer == pytest.approx(
-            problem.mechanics_problem.q_E.vector()[:].max()
-        )
-        # TODO: Emodulus sensor?
-
-    return (
-        problem.sensors["StrainSensor"].data[:],
-        problem.sensors["StressSensor"].data[:],
-    )
-
-
-def test_multiple_layer_2D_CS_dynamic():
-    # serveral layers dynamically deposited path given
-
-    parameters = set_test_parameters()
-
-    # set standard problem & sensor
-    pv_name = "test_multilayer_thix_dynamic"
+    pv_name = "test_multilayer_thix"
     problem = setup_problem(parameters, pv_name)
 
     # Layers given by path function
@@ -264,8 +213,8 @@ def test_multiple_layer_2D_CS_dynamic():
         t += dt
 
     # check residual force bottom
-    force_bottom = problem.sensors["ReactionForceSensorBottom"].data[-1]
-    force_structure = (
+    force_bottom = problem.sensors["ReactionForceSensorBottom"].data[:]
+    dead_load = (
         parameters["layer_number"]
         * parameters["density"]
         * parameters["layer_width"]
@@ -273,37 +222,48 @@ def test_multiple_layer_2D_CS_dynamic():
         * problem.p.g
     )
     # print('force - weigth', force_bottom, force_structure)
-    assert force_bottom == pytest.approx(-force_structure)
+    assert sum(force_bottom) == pytest.approx(-dead_load)
 
+    # check E modulus evolution over structure (each layer different E)
+    if problem.p.R_E == 0:
+        E_bottom_layer = problem.p.E_0 + problem.p.A_E * (
+            (parameters["layer_number"] - 1) * parameters["t_layer"]
+            + parameters["age_0"]
+        )
+        E_upper_layer = problem.p.E_0 + problem.p.A_E * parameters["age_0"]
+
+        assert E_upper_layer == pytest.approx(
+            problem.mechanics_problem.q_E.vector()[:].min()
+        )
+        assert E_bottom_layer == pytest.approx(
+            problem.mechanics_problem.q_E.vector()[:].max()
+        )
+        # TODO: Emodulus sensor?
     # check result with static result
-    strain_static, stress_static = test_multiple_layer_2D_CS_static()
-    time_line = np.linspace(0, time, int(time / dt + 1))
-    time_ind = np.where(
-        time_line == (parameters["layer_number"] - 1) * parameters["t_layer"]
-    )[0][0]
-    # print('static',strain_static[-1], stress_static[-1])
-    # print('dynamic',problem.sensors["StrainSensor"].data[time_ind], problem.sensors["StressSensor"].data[time_ind])
-    assert strain_static[-1] == pytest.approx(
-        problem.sensors["StrainSensor"].data[time_ind]
-    )
-    assert stress_static[-1] == pytest.approx(
-        problem.sensors["StressSensor"].data[time_ind]
-    )
+    stress_yy = np.array(problem.sensors["StressSensor"].data)[:, -1]
+    strain_yy = np.array(problem.sensors["StrainSensor"].data)[:, -1]
+    print("stress_yy", stress_yy)
+    print("strain_yy", strain_yy)
+    print("dstrain", np.diff(strain_yy))
 
-    # # strain_yy over time
+    # # # strain_yy over time
     # import matplotlib.pylab as plt
-    # print(np.array(problem.sensors["StrainSensor"].data[:])[:,-1])
+    #
+    # time_line = np.linspace(0, time, int(time / dt) + 1)
     # plt.figure(1)
-    # plt.plot(time_line,np.array(problem.sensors["StrainSensor"].data[:])[:,-1],'*-r')
-    # plt.xlabel('process time')
-    # plt.ylabel('eps_yy bottom middle')
+    # plt.plot(time_line, strain_yy, "*-r")
+    # # plt.plot(time_line, stress_yy, "*-")
+    # plt.xlabel("process time")
+    # plt.ylabel("sensor bottom middle")
     # plt.show()
 
 
-if __name__ == "__main__":
-
-    test_single_layer_2D_CS()
-
-    test_multiple_layer_2D_CS_static()
-
-    test_multiple_layer_2D_CS_dynamic()
+# if __name__ == "__main__":
+#
+#     # # incremental loading:
+#     # # a) load applied immediately: parameters["load_time"] = parameters["dt"]
+#     # test_single_layer_2D("dt")
+#     # # b) load applied with in one layer time parameters["load_time"] = parameters["t_layer"]
+#     # test_single_layer_2D("t_layer")
+#
+#     # test_multiple_layers_2D()
