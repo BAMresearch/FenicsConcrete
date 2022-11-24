@@ -74,33 +74,38 @@ def test_relaxation(visco_case, mech_prob_string, dim):
 
     prop2D = setup_test_2D(parameters, mech_prob_string, [sensor01, sensor02])
 
-    # eps_o_time = []
-    sig_o_time = []
     time = []
+    # define load increments of bc fully applied in one step (alternative as time dependent dolfin Expression)
+    dubcs = np.zeros(int(parameters["time"] / parameters["dt"]) + 1)
+    dubcs[0] = 1
+    i = 0
     # initialize time and solve!
     t = 0
     while t <= prop2D.p.time:  # time
         time.append(t)
-        # solve temp-hydration-mechanics
+        # set load increment u_bc (for density automatic!)
+        prop2D.experiment.apply_displ_load(dubcs[i] * parameters["u_bc"])
+        i += 1
+        # solve
         prop2D.solve(t=t)  # solving this
         prop2D.pv_plot(t=t)
         # prepare next timestep
         t += prop2D.p.dt
 
-        print("stresses at sensor", prop2D.sensors[sensor01.name].data[-1])
-        if prop2D.p.dim == 2:
-            sig_o_time.append(
-                prop2D.sensors[sensor01.name].data[-1][1]
-            )  # sig_yy in case dim=2 and sig_zz in case dim 3
-            # eps_o_time.append(prop2D.sensors[sensor02.name].data[-1][1])  # eps_yy
-        elif prop2D.p.dim == 3:
-            sig_o_time.append(prop2D.sensors[sensor01.name].data[-1][2])  # sig_zz
-            # eps_o_time.append(prop2D.sensors[sensor02.name].data[-1][2])  # eps_zz
+    # get stress over time
+    if prop2D.p.dim == 2:
+        # sig_yy and eps_yy in case dim=2
+        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, 1]
+        # eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:,1]
+    elif prop2D.p.dim == 3:
+        # sig_zz and eps_zz in case dim=3
+        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, 2]
+        # eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:,2]
 
-    # relaxtaion check - first and last value
+    # relaxation check - first and last value
     eps_r = prop2D.p.u_bc  # L==1 -> u_bc = eps_r (prescriped strain)
     #
-    print(prop2D.p.visco_case)
+    # print(prop2D.p.visco_case)
     if prop2D.p.visco_case.lower() == "cmaxwell":
         sig0 = prop2D.p.E_0 * eps_r + prop2D.p.E_1 * eps_r
         sigend = prop2D.p.E_0 * eps_r
@@ -131,35 +136,44 @@ def test_relaxation(visco_case, mech_prob_string, dim):
         assert strain_xx == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
         assert strain_yy == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
 
-    # # plot analytic 1D solution against computed (for relaxation test -> fits if nu=0 and small time steps)
-    # sig_yy = []
-    # tau = prop2D.p.eta / prop2D.p.E_1
-    # if prop2D.p.visco_case.lower() == 'cmaxwell':
-    #     for i in time:
-    #         sig_yy.append(prop2D.p.E_0 * eps_r + prop2D.p.E_1 * eps_r * np.exp(-i / tau))
-    # elif prop2D.p.visco_case.lower() == 'ckelvin':
-    #     for i in time:
-    #         sig_yy.append(prop2D.p.E_0 * eps_r/(prop2D.p.E_1+prop2D.p.E_0) *(prop2D.p.E_1 + prop2D.p.E_0 * np.exp(-i/tau * (prop2D.p.E_0+prop2D.p.E_1)/prop2D.p.E_1)))
-    #
-    # # print('analytic 1D == 2D with nu=0', sig_yy)
-    # # print('stress over time', sig_o_time)
-    #
-    # import matplotlib.pyplot as plt
-    #
-    # plt.plot(time, sig_yy, '*r', label='analytic')
-    # plt.plot(time, sig_o_time, 'og', label='FEM')
-    # plt.legend()
-    # plt.show()
+    ##### plotting #######
+    # plot analytic 1D solution against computed (for relaxation test -> fits if nu=0 and small enough time steps)
+    sig_yy = []
+    tau = prop2D.p.eta / prop2D.p.E_1
+    if prop2D.p.visco_case.lower() == "cmaxwell":
+        for i in time:
+            sig_yy.append(
+                prop2D.p.E_0 * eps_r + prop2D.p.E_1 * eps_r * np.exp(-i / tau)
+            )
+    elif prop2D.p.visco_case.lower() == "ckelvin":
+        for i in time:
+            sig_yy.append(
+                prop2D.p.E_0
+                * eps_r
+                / (prop2D.p.E_1 + prop2D.p.E_0)
+                * (
+                    prop2D.p.E_1
+                    + prop2D.p.E_0
+                    * np.exp(-i / tau * (prop2D.p.E_0 + prop2D.p.E_1) / prop2D.p.E_1)
+                )
+            )
+
+    print("analytic 1D == 2D with nu=0", sig_yy)
+    print("stress over time", sig_o_time)
+
+    import matplotlib.pyplot as plt
+
+    plt.plot(time, sig_yy, "*r", label="analytic")
+    plt.plot(time, sig_o_time, "og", label="FEM")
+    plt.legend()
+    plt.show()
 
 
-# TODO: add creep test requires load boundary condition not yet in the experiment framework
+# if __name__ == "__main__":
 
-if __name__ == "__main__":
-
-    # test_relaxation('cmaxwell','ConcreteViscoElasticModel', 2) # Aratz variant just for 2D tested [in 3D some problems by epsv update]
-
-    test_relaxation("cmaxwell", "ConcreteViscoDevElasticModel", 2)
-
-    test_relaxation("ckelvin", "ConcreteViscoDevElasticModel", 2)
-
-    # test_relaxation('ckelvin', 'ConcreteViscoDevThixElasticModel', 2)
+#
+#     # test_relaxation("cmaxwell", "ConcreteViscoDevElasticModel", 2)
+#
+#     test_relaxation("ckelvin", "ConcreteViscoDevElasticModel", 2)
+#
+#     # test_relaxation('ckelvin', 'ConcreteViscoDevThixElasticModel', 2)
