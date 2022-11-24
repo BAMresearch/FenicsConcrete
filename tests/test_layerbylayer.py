@@ -13,9 +13,9 @@ import pytest
 import fenics_concrete
 
 
-def set_test_parameters():
-    # define global parameters used in all layer tests:
-
+def set_test_parameters(case=""):
+    # define global parameters for layer tests
+    #
     parameters = fenics_concrete.Parameters()  # using the current default values
 
     parameters["dim"] = 2
@@ -28,16 +28,43 @@ def set_test_parameters():
     parameters["density"] = 2070.0  # kg/m³
     # parameters['g'] = 9.81 # in material_problem.py default value
 
-    # material parameters similar as Wolfs et al 2018
-    parameters["nu"] = 0.3  # Poissons Ratio see Wolfs et al 2018
-    parameters["E_0"] = 0.078e6  # Youngs Modulus Pa
-    parameters["R_E"] = 0.0  # reflocculation rate of E modulus in Pa / s
-    parameters["A_E"] = 100 * 0.0012e6 / 60  # structuration rate of E modulus in Pa / s
-    parameters["t_f"] = 0  # reflocculation time in s
-    parameters["age_0"] = 0  # s concrete age at print head
-
     parameters["t_layer"] = 20  # s time to build one layer # Wolf paper 0.31 min!
     parameters["dt"] = 5  # time step
+
+    # 1. with linear elastic thixotropy model:
+    if case.lower() == "thix":
+
+        # material parameters similar as Wolfs et al 2018
+        parameters["nu"] = 0.3  # Poissons Ratio
+        parameters["E_0"] = 0.078e6  # Youngs Modulus Pa
+        parameters["R_E"] = 0.0  # reflocculation rate of E modulus in Pa / s
+        parameters["A_E"] = (
+            100 * 0.0012e6 / 60
+        )  # structuration rate of E modulus in Pa / s
+        parameters["t_f"] = 0  # reflocculation time in s
+        parameters["age_0"] = 0  # s concrete age at print head
+
+        parameters["mech_prob_string"] = "ConcreteThixElasticModel"
+
+    # 2. with linear elastic thixotropy model:
+    elif case.lower() == "viscothix":
+
+        # material parameters similar as Esposito et al 2021
+
+        # viscoelastic parameters
+        parameters["E_0"] = 0.078e6  # Youngs Modulus Pa
+        parameters["E_1"] = 20e3
+        parameters["eta"] = 2e3  # relaxation time: tau = eta/E_1
+        parameters["nu"] = 0.3
+
+        # thixotropy parameter for (E_0, E_1, eta)
+        parameters["R_i"] = {"E_0": 0.0, "E_1": 0.0, "eta": 0.0}
+        parameters["A_i"] = {"E_0": 100 * 0.0012 / 60, "E_1": 0.0, "eta": 0.0}
+        parameters["t_f"] = {"E_0": 0.0, "E_1": 0.0, "eta": 0.0}
+        parameters["age_0"] = 0.0
+
+        parameters["mech_prob_string"] = "ConcreteViscoDevThixElasticModel"
+        parameters["visco_case"] = "CMaxwell"
 
     return parameters
 
@@ -49,7 +76,7 @@ def setup_problem(parameters, pv_name):
     problem = fenics_concrete.ConcreteAMMechanical(
         experiment,
         parameters,
-        mech_prob_string="ConcreteThixElasticModel",
+        mech_prob_string=parameters["mech_prob_string"],
         pv_name=file_path + pv_name,
     )
 
@@ -116,11 +143,12 @@ def define_path_time(prob, param, t_diff, t_0=0):
     "load_time_set",
     ["dt", "t_layer"],
 )
-def test_single_layer_2D(load_time_set):
+@pytest.mark.parametrize("mcase", ["thix"])
+def test_single_layer_2D(load_time_set, mcase):
     # One single layer build immediately and lying for a given time
 
     # set parameters
-    parameters = set_test_parameters()
+    parameters = set_test_parameters(case=mcase)
     parameters["layer_number"] = 1
     parameters["age_0"] = 20
     parameters["degree"] = 2
@@ -165,24 +193,38 @@ def test_single_layer_2D(load_time_set):
     strain_yy = np.array(problem.sensors["StrainSensor"].data)[:, -1]
     E_end_E_0 = stress_yy[-1] / strain_yy[-1] / (stress_yy[0] / strain_yy[0])
     # given
-    if problem.p.R_E == 0:
-        E_0 = problem.p.E_0 + problem.p.A_E * (0.0 + parameters["age_0"])
-        E_end = problem.p.E_0 + problem.p.A_E * (time + parameters["age_0"])
+    if mcase.lower() == "thix":
+        if problem.p.R_E == 0:
+            E_0 = problem.p.E_0 + problem.p.A_E * (0.0 + parameters["age_0"])
+            E_end = problem.p.E_0 + problem.p.A_E * (time + parameters["age_0"])
 
-        # print("stress", stress_yy)
-        # print("strain", strain_yy)
-        # print("E_end/E_0", E_end_E_0)
-        # print("E_end/E_0", E_end / E_0)
+            # print("stress", stress_yy)
+            # print("strain", strain_yy)
+            # print("E_end/E_0", E_end_E_0)
+            # print("E_end/E_0", E_end / E_0)
 
-        assert E_end_E_0 == pytest.approx(E_end / E_0)
+            assert E_end_E_0 == pytest.approx(E_end / E_0)
+
+    elif mcase.lower() == "viscothix":
+        if problem.p.R_i["E_0"] == 0:
+            E_0 = problem.p.E_0 + problem.p.A_i["E_0"] * (0.0 + parameters["age_0"])
+            E_end = problem.p.E_0 + problem.p.A_i["E_0"] * (time + parameters["age_0"])
+
+            print("stress", stress_yy)
+            print("strain", strain_yy)
+            print("E_end/E_0", E_end_E_0)
+            print("E_end/E_0", E_end / E_0)
+
+            assert E_end_E_0 == pytest.approx(E_end / E_0)
 
 
-def test_multiple_layers_2D():
+@pytest.mark.parametrize("mcase", ["thix"])
+def test_multiple_layers_2D(mcase):
     # several layers dynamically deposited with given path
     # whole layer activate at once after t_layer next layer...
     # incremental set up
 
-    parameters = set_test_parameters()
+    parameters = set_test_parameters(case=mcase)
     parameters["load_time"] = parameters["dt"]
 
     # set standard problem & sensor
@@ -246,24 +288,28 @@ def test_multiple_layers_2D():
     print("strain_yy", strain_yy)
     print("dstrain", np.diff(strain_yy))
 
-    # # # strain_yy over time
-    # import matplotlib.pylab as plt
-    #
-    # time_line = np.linspace(0, time, int(time / dt) + 1)
-    # plt.figure(1)
-    # plt.plot(time_line, strain_yy, "*-r")
-    # # plt.plot(time_line, stress_yy, "*-")
-    # plt.xlabel("process time")
-    # plt.ylabel("sensor bottom middle")
-    # plt.show()
+    # # strain_yy over time
+    import matplotlib.pylab as plt
+
+    time_line = np.linspace(0, time, int(time / dt) + 1)
+    plt.figure(1)
+    plt.plot(time_line, strain_yy, "*-r")
+    # plt.plot(time_line, stress_yy, "*-")
+    plt.xlabel("process time")
+    plt.ylabel("sensor bottom middle")
+    plt.show()
 
 
-# if __name__ == "__main__":
-#
-#     # # incremental loading:
-#     # # a) load applied immediately: parameters["load_time"] = parameters["dt"]
-#     # test_single_layer_2D("dt")
-#     # # b) load applied with in one layer time parameters["load_time"] = parameters["t_layer"]
-#     # test_single_layer_2D("t_layer")
-#
-#     # test_multiple_layers_2D()
+if __name__ == "__main__":
+
+    # # incremental loading:
+    # # a) load applied immediately: parameters["load_time"] = parameters["dt"]
+    # test_single_layer_2D("dt","thix")
+    # # b) load applied with in one layer time parameters["load_time"] = parameters["t_layer"]
+    # test_single_layer_2D("t_layer","thix")
+
+    # test_multiple_layers_2D("thix")
+
+    # test_multiple_layers_2D("viscothix") # not working yet
+
+    test_single_layer_2D("dt", "viscothix")
