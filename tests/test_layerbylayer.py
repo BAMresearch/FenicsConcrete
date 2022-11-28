@@ -53,18 +53,19 @@ def set_test_parameters(case=""):
 
         # viscoelastic parameters
         parameters["E_0"] = 0.078e6  # Youngs Modulus Pa
-        parameters["E_1"] = 20e3
-        parameters["eta"] = 2e3  # relaxation time: tau = eta/E_1
+        parameters["E_1"] = 0.01e1
+        parameters["eta"] = 0.01e1  # relaxation time: tau = eta/E_1
         parameters["nu"] = 0.3
 
         # thixotropy parameter for (E_0, E_1, eta)
         parameters["R_i"] = {"E_0": 0.0, "E_1": 0.0, "eta": 0.0}
-        parameters["A_i"] = {"E_0": 100 * 0.0012 / 60, "E_1": 0.0, "eta": 0.0}
+        parameters["A_i"] = {"E_0": 100 * 0.0012e6 / 60, "E_1": 0.0, "eta": 0.0}
         parameters["t_f"] = {"E_0": 0.0, "E_1": 0.0, "eta": 0.0}
         parameters["age_0"] = 0.0
 
         parameters["mech_prob_string"] = "ConcreteViscoDevThixElasticModel"
-        parameters["visco_case"] = "CMaxwell"
+        # parameters["visco_case"] = "CMaxwell"
+        parameters["visco_case"] = "CKelvin"
 
     return parameters
 
@@ -198,10 +199,10 @@ def test_single_layer_2D(load_time_set, mcase):
             E_0 = problem.p.E_0 + problem.p.A_E * (0.0 + parameters["age_0"])
             E_end = problem.p.E_0 + problem.p.A_E * (time + parameters["age_0"])
 
-            # print("stress", stress_yy)
-            # print("strain", strain_yy)
-            # print("E_end/E_0", E_end_E_0)
-            # print("E_end/E_0", E_end / E_0)
+            print("stress", stress_yy)
+            print("strain", strain_yy)
+            print("E_end/E_0", E_end_E_0)
+            print("E_end/E_0", E_end / E_0)
 
             assert E_end_E_0 == pytest.approx(E_end / E_0)
 
@@ -267,7 +268,7 @@ def test_multiple_layers_2D(mcase):
     assert sum(force_bottom) == pytest.approx(-dead_load)
 
     # check E modulus evolution over structure (each layer different E)
-    if problem.p.R_E == 0:
+    if mcase.lower() == "thix" and problem.p.R_E == 0:
         E_bottom_layer = problem.p.E_0 + problem.p.A_E * (
             (parameters["layer_number"] - 1) * parameters["t_layer"]
             + parameters["age_0"]
@@ -281,7 +282,7 @@ def test_multiple_layers_2D(mcase):
             problem.mechanics_problem.q_E.vector()[:].max()
         )
         # TODO: Emodulus sensor?
-    # check result with static result
+
     stress_yy = np.array(problem.sensors["StressSensor"].data)[:, -1]
     strain_yy = np.array(problem.sensors["StrainSensor"].data)[:, -1]
     print("stress_yy", stress_yy)
@@ -304,12 +305,20 @@ if __name__ == "__main__":
 
     # # incremental loading:
     # # a) load applied immediately: parameters["load_time"] = parameters["dt"]
-    # test_single_layer_2D("dt","thix")
+    # test_single_layer_2D("dt", "thix")
     # # b) load applied with in one layer time parameters["load_time"] = parameters["t_layer"]
     # test_single_layer_2D("t_layer","thix")
 
     # test_multiple_layers_2D("thix")
 
-    # test_multiple_layers_2D("viscothix") # not working yet
+    # test_multiple_layers_2D("viscothix")
 
     test_single_layer_2D("dt", "viscothix")
+
+
+# -198.39663347 -215.20990749 -232.02318151 -248.83645554 -265.64972956
+#  -282.46300358 -299.2762776  -316.08955163 -332.90282565]
+# strain [-0.00124944 -0.00124944 -0.00124944 -0.00124944 -0.00124944 -0.00124944
+#  -0.00124944 -0.00124944 -0.00124944]
+# E_end/E_0 1.6779661016949166
+# E_end/E_0 1.6779661016949152
