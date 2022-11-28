@@ -3,8 +3,7 @@ import warnings
 import dolfin as df
 import numpy as np
 import scipy.optimize
-from ffc.quadrature.deprecation import \
-    QuadratureRepresentationDeprecationWarning
+from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
 
 from fenics_concrete import experimental_setups
 from fenics_concrete.helpers import LocalProjector, Parameters, set_q
@@ -1225,12 +1224,13 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
                 0.5 * E1_list / (1.0 + self.p.nu)
             )  # list of E1 at each quadrature point
             factor = 1 + self.dt * 2.0 * mu_E1 / eta_list  # at each quadrature point
+            print(len(mu_E1), len(factor), len(self.new_epsv))
             self.new_epsv = (
                 1.0
-                / np.repeat(factor, self.p.degree**2)
+                / np.repeat(factor, self.p.dim**2)
                 * (
                     epsv_list
-                    + self.dt / np.repeat(eta_list, self.p.degree**2) * sig1_list
+                    + self.dt / np.repeat(eta_list, self.p.dim**2) * sig1_list
                 )
             )  # reshaped material parameters per eps entry!!
         elif self.p.visco_case.lower() == "ckelvin":
@@ -1239,12 +1239,14 @@ class ConcreteViscoDevThixElasticModel(df.NonlinearProblem):
             factor = (
                 1 + self.dt * 2.0 * mu_E0 / eta_list + self.dt * 2.0 * mu_E1 / eta_list
             )
+            print(len(mu_E1), len(factor), len(self.new_epsv))
+            print(self.p.degree, self.p.dim)
             self.new_epsv = (
                 1.0
-                / np.repeat(factor, self.p.degree**2)
+                / np.repeat(factor, self.p.dim**2)
                 * (
                     epsv_list
-                    + self.dt / np.repeat(eta_list, self.p.degree**2) * sig1_list
+                    + self.dt / np.repeat(eta_list, self.p.dim**2) * sig1_list
                 )
             )
         else:

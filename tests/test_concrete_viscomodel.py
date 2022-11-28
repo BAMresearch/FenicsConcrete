@@ -238,19 +238,14 @@ def test_relaxation(visco_case, mech_prob_string, dim, mtype):
     # plt.show()
 
 
-if __name__ == "__main__":
-
-    # test_relaxation("cmaxwell", "ConcreteViscoDevElasticModel", 2, "pure_visco")
-
-    # test_relaxation("ckelvin", "ConcreteViscoDevElasticModel", 2, "pure_visco")
-    # # both equivalent
-    # test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 2, "pure_visco")
-
-    # test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 2, "visco_thixo")
-
-    test_relaxation(
-        "ckelvin", "ConcreteViscoDevElasticModel", 3, "pure_visco"
-    )  # working
-    test_relaxation(
-        "ckelvin", "ConcreteViscoDevThixElasticModel", 3, "pure_visco"
-    )  # not working
+# if __name__ == "__main__":
+#
+#     # test_relaxation("cmaxwell", "ConcreteViscoDevElasticModel", 2, "pure_visco")
+#
+#     # test_relaxation("ckelvin", "ConcreteViscoDevElasticModel", 2, "pure_visco")
+#     # # both equivalent
+#     # test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 2, "pure_visco")
+#
+#     # test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 2, "visco_thixo")
+#
+#     test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 3, "pure_visco")
