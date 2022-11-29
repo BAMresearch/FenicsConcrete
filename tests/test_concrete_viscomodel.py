@@ -90,12 +90,9 @@ def setup_test_2D(parameters, mech_prob_string, sensor, mtype):
     parameters["mesh_density"] = 2
     parameters["log_level"] = "INFO"
 
-    parameters["density"] = 0.0
-    parameters["u_bc"] = 0.002  # == strain because unit-square/cube (H=1)!!
-    parameters["bc_setting"] = "disp"
-
     parameters["time"] = 1.5  # total simulation time in s
     parameters["dt"] = 0.01  # step (should be < tau=eta/E_1)
+    parameters["load_time"] = parameters["dt"]
 
     # material
     parameters = material_parameters(parameters, mtype=mtype)
@@ -136,6 +133,9 @@ def test_relaxation(visco_case, mech_prob_string, dim, mtype):
     # changing parameters:
     parameters["dim"] = dim
     parameters["visco_case"] = visco_case
+    parameters["density"] = 0.0
+    parameters["u_bc"] = 0.002  # == strain because unit-square/cube (H=1)!!
+    parameters["bc_setting"] = "disp"
 
     # sensor
     sensor01 = fenics_concrete.sensors.StressSensor(df.Point(1.0, 1.0))
@@ -238,14 +238,125 @@ def test_relaxation(visco_case, mech_prob_string, dim, mtype):
     # plt.show()
 
 
-# if __name__ == "__main__":
-#
-#     # test_relaxation("cmaxwell", "ConcreteViscoDevElasticModel", 2, "pure_visco")
-#
-#     # test_relaxation("ckelvin", "ConcreteViscoDevElasticModel", 2, "pure_visco")
-#     # # both equivalent
-#     # test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 2, "pure_visco")
-#
-#     # test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 2, "visco_thixo")
-#
-#     test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 3, "pure_visco")
+@pytest.mark.parametrize("visco_case", ["Cmaxwell", "Ckelvin"])
+@pytest.mark.parametrize("mech_prob_string", ["ConcreteViscoDevThixElasticModel"])
+@pytest.mark.parametrize("dim", [2, 3])
+@pytest.mark.parametrize("mtype", ["pure_visco", "visco_thixo"])
+def test_creep(visco_case, mech_prob_string, dim, mtype):
+    """
+    uniaxial tension test with density load as stress control to check creep of visco(-thix) material class
+    """
+    parameters = fenics_concrete.Parameters()  # using the current default values
+
+    # changing parameters:
+    parameters["dim"] = dim
+    parameters["visco_case"] = visco_case
+    parameters["density"] = 2070  # load controlled
+    parameters["u_bc"] = 0.0
+    parameters["bc_setting"] = "density"
+
+    # sensor
+    sensor01 = fenics_concrete.sensors.StressSensor(df.Point(1.0, 1.0))
+    sensor02 = fenics_concrete.sensors.StrainSensor(df.Point(1.0, 1.0))
+
+    prop2D = setup_test_2D(parameters, mech_prob_string, [sensor01, sensor02], mtype)
+
+    time = []
+    # initialize time and solve!
+    t = 0
+    while t <= prop2D.p.time:  # time
+        time.append(t)
+        # solve
+        prop2D.solve(t=t)  # solving this
+        prop2D.pv_plot(t=t)
+        # prepare next timestep
+        t += prop2D.p.dt
+
+    # get stress over time
+    if prop2D.p.dim == 2:
+        # sig_yy and eps_yy in case dim=2
+        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, 1]
+        eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, 1]
+    elif prop2D.p.dim == 3:
+        # sig_zz and eps_zz in case dim=3
+        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, 2]
+        eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, 2]
+
+    # relaxation check - first and last value
+    sig_c = prop2D.p.density
+    #
+    print(prop2D.p.visco_case)
+    # in case of thix model material parameters are changing over time!
+    E_0_end, E_1_end, tau_end = time_parameters(time[-1], parameters)
+    if prop2D.p.visco_case.lower() == "cmaxwell":
+        eps0 = sig_c / prop2D.p.E_0 * (1 - prop2D.p.E_1 / (prop2D.p.E_0 + prop2D.p.E_1))
+        epsend = sig_c / E_0_end
+    elif prop2D.p.visco_case.lower() == "ckelvin":
+        eps0 = sig_c / prop2D.p.E_0
+        epsend = sig_c / E_0_end + sig_c / E_1_end
+    else:
+        raise ValueError("visco case not defined")
+
+    print("theory", eps0, epsend)
+    print("computed", eps_o_time[0], eps_o_time[-1])
+    # assert (sig_o_time[0] - sig0) / sig0 < 1e-8
+    # assert (sig_o_time[-1] - sigend) / sigend < 1e-4
+
+    # get stresses and strains at the end
+    print("stresses", prop2D.sensors[sensor01.name].data[-1])
+    print("strains", prop2D.sensors[sensor02.name].data[-1])
+    # if prop2D.p.dim == 2:
+    #     strain_xx = prop2D.sensors[sensor02.name].data[-1][0]
+    #     strain_yy = prop2D.sensors[sensor02.name].data[-1][1]
+    #     assert strain_yy == pytest.approx(prop2D.p.u_bc)  # L==1!
+    #     assert strain_xx == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
+    # elif prop2D.p.dim == 3:
+    #     strain_xx = prop2D.sensors[sensor02.name].data[-1][0]
+    #     strain_yy = prop2D.sensors[sensor02.name].data[-1][1]
+    #     strain_zz = prop2D.sensors[sensor02.name].data[-1][2]
+    #     assert strain_zz == pytest.approx(prop2D.p.u_bc)  # L==1!
+    #     assert strain_xx == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
+    #     assert strain_yy == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
+
+    # analytic 1D solution (for creep test -> fits if nu=0 and small enough time steps)
+    eps_yy = []
+    if prop2D.p.visco_case.lower() == "cmaxwell":
+        for i in time:
+            # compute current parameters
+            E_0, E_1, tau = time_parameters(i, parameters)
+            eps_yy.append(
+                sig_c
+                / E_0
+                * (1 - E_1 / (E_0 + E_1) * np.exp(-i / tau * E_0 / (E_0 + E_1)))
+            )
+    elif prop2D.p.visco_case.lower() == "ckelvin":
+        for i in time:
+            # compute current parameters
+            E_0, E_1, tau = time_parameters(i, parameters)
+            eps_yy.append(sig_c / E_0 + sig_c / E_1(1 - np.exp(-i / tau)))
+
+    print("analytic 1D == 2D with nu=0", eps_yy)
+    print("stress over time", eps_o_time)
+
+    ##### plotting #######
+
+    import matplotlib.pyplot as plt
+
+    plt.plot(time, eps_yy, "*r", label="analytic")
+    plt.plot(time, eps_o_time, "og", label="FEM")
+    plt.legend()
+    plt.show()
+
+
+if __name__ == "__main__":
+    #
+    #     # test_relaxation("cmaxwell", "ConcreteViscoDevElasticModel", 2, "pure_visco")
+    #
+    #     # test_relaxation("ckelvin", "ConcreteViscoDevElasticModel", 2, "pure_visco")
+    #     # # both equivalent
+    #     # test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 2, "pure_visco")
+    #
+    #     # test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 2, "visco_thixo")
+    #
+    #     test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 3, "pure_visco")
+    test_creep("cmaxwell", "ConcreteViscoDevElasticModel", 2, "pure_visco")
