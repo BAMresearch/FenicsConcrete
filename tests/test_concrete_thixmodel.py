@@ -297,11 +297,11 @@ def test_density_thix_2D(R_E):
     assert stress_bottom_end == pytest.approx(stress_end_prognosis, abs=1e-8)
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
 
-# test_displ_thix_2D()
-#
-# # test_displ_thix_3D()
-# #
-# # test_density_thix_2D(0)
-# # test_density_thix_2D(10e4)
+    # test_displ_thix_2D()
+
+    # test_displ_thix_3D()
+    #
+    test_density_thix_2D(0)
+    test_density_thix_2D(10e4)

@@ -3,8 +3,7 @@ import warnings
 import dolfin as df
 import numpy as np
 import scipy.optimize
-from ffc.quadrature.deprecation import \
-    QuadratureRepresentationDeprecationWarning
+from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
 
 from fenics_concrete import experimental_setups
 from fenics_concrete.helpers import LocalProjector, Parameters, set_q
@@ -65,18 +64,6 @@ class ConcreteAMMechanical(MaterialProblem):
             self.p = default_p + self.p
 
             self.mechanics_problem = ConcreteThixElasticModel(
-                self.experiment.mesh, self.p, pv_name=self.pv_name
-            )
-
-        elif self.mech_prob_string.lower() == "concreteviscoelasticmodel":
-            ### default parameters required for visco elastic model
-            default_p["E_0"] = 40000  # Youngs Modulus Pa linear elastic
-            default_p["E_1"] = 20000  # Youngs Modulus Pa visco element
-            default_p["eta"] = 1000  # Damping coeff
-            default_p["load_time"] = 1  # load applied in 1 s
-            self.p = default_p + self.p
-
-            self.mechanics_problem = ConcreteViscoElasticModel(
                 self.experiment.mesh, self.p, pv_name=self.pv_name
             )
 
