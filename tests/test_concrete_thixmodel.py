@@ -201,7 +201,8 @@ def test_displ_thix_2D():
 
 
 @pytest.mark.parametrize("R_E", [0, 10e4])
-def test_density_thix_2D(R_E):
+@pytest.mark.parametrize("factor", [1, 2])
+def test_density_thix_2D(R_E, factor):
     """
     uniaxial tension test with density without change in Young's modulus over time
     checking general implementation
@@ -221,11 +222,13 @@ def test_density_thix_2D(R_E):
     parameters["E_0"] = 2070000
     parameters["R_E"] = R_E  # if 0 no change in time!
     parameters["A_E"] = 0
-    parameters["t_f"] = 4 * 60  # > time -> will not reached!
+    parameters["t_f"] = 5 * 60  # > time -> will not reached!
 
-    parameters["time"] = 2 * 60  # total simulation time in s
+    parameters["time"] = 4 * 60  # total simulation time in s
     parameters["dt"] = 1 * 60  # 0.5 min step
-    parameters["load_time"] = parameters["dt"]  # load applied in one step
+    parameters["load_time"] = (
+        factor * parameters["dt"]
+    )  # load applied in factor x time step
 
     # sensor
     # 1.strainsensor middle bottom
@@ -267,46 +270,59 @@ def test_density_thix_2D(R_E):
         t += prop2D.p.dt
 
     # output over time steps in yy direction
+    sig_o_time = np.array(prop2D.sensors[sensor04.name].data)[:, -1]
+    eps_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, -1]
+    disp_o_time = np.array(prop2D.sensors[sensor05.name].data)[:, -1]
+    force_o_time = prop2D.sensors[sensor03.name].data
     # print("E_o_time", E_o_time)
-    # print("sig_o_time", np.array(prop2D.sensors[sensor04.name].data)[:, -1])
-    # print("eps_o_time", np.array(prop2D.sensors[sensor01.name].data)[:, -1])
-    # print("disp_o_time", np.array(prop2D.sensors[sensor05.name].data)[:, -1])
-    # print("force_o_time", prop2D.sensors[sensor03.name].data)
+    # print("sig_o_time", sig_o_time)
+    # print("eps_o_time", eps_o_time)
+    # print("disp_o_time", disp_o_time)
+    # print("force_o_time", force_o_time)
 
     # tests
-    strain_bottom_0 = prop2D.sensors[sensor01.name].data[0][-1]  # eps_yy at the start
-    strain_bottom_end = prop2D.sensors[sensor01.name].data[-1][-1]  # eps_yy at the end
-    force_bottom = np.sum(prop2D.sensors[sensor03.name].data)  # sum of all force values
-    stress_bottom_end = prop2D.sensors[sensor04.name].data[-1][-1]  # eps_yy at the end
-
-    # print("strain analytic t=0", -parameters["density"] * prop2D.p.g / E_o_time[0])
+    # print("force_bottom", np.sum(prop2D.sensors[sensor03.name].data))
     # print("dead load", -parameters["density"] * prop2D.p.g * 1 * 1)
-    # print("force_bottom", force_bottom)
-    # print("displacement", prop2D.displacement((0.5, 0.5)))
+    #
+    # print(
+    #     "strain analytic t=0",
+    #     -1.0 / factor * parameters["density"] * prop2D.p.g / E_o_time[0],
+    # )
+    # print(
+    #     "e ratio computed",
+    #     sig_o_time[0] / eps_o_time[0],
+    #     np.diff(sig_o_time) / np.diff(eps_o_time),
+    # )
+    # print("E ratio given", E_o_time[0] / E_o_time[1])
+    # print("sig diff", np.diff(sig_o_time), sum(np.diff(sig_o_time)))
 
     # standard: dead load of full structure and strain
+    force_bottom = np.sum(prop2D.sensors[sensor03.name].data)  # sum of all force values
     assert force_bottom == pytest.approx(-parameters["density"] * prop2D.p.g * 1 * 1)
-    assert strain_bottom_0 == pytest.approx(
-        -parameters["density"] * prop2D.p.g / E_o_time[0], abs=1e-4
+
+    # strain at first time step
+    assert eps_o_time[0] == pytest.approx(
+        -1.0 / factor * parameters["density"] * prop2D.p.g / E_o_time[0], abs=1e-4
     )
 
-    # evolution of strain, if load is applied immediately (otherwise 0 \ne end)
-    assert strain_bottom_0 == pytest.approx(strain_bottom_end, abs=1e-8)
+    # check if stress changes accordingly to change in E_modul, if loading
+    if factor > 1:  # if load in more steps applied
+        # ratio sig/eps t=0 to sig/eps t=dt
+        E_ratio_computed = (sig_o_time[0] / eps_o_time[0]) / (
+            np.diff(sig_o_time)[0] / np.diff(eps_o_time)[0]
+        )
+        assert E_ratio_computed == pytest.approx(E_o_time[0] / E_o_time[1])
+    else:
+        # check that there are no changes in the stress
+        assert sum(np.diff(sig_o_time)) == pytest.approx(0, abs=1e-8)
 
-    # check if stress changes accordingly to change in E_modul (for last two values!)
-    stress_end_prognosis = (
-        E_o_time[-1] / E_o_time[-2] * prop2D.sensors[sensor04.name].data[-2][-1]
-    )
-    # print('test stress end', stress_end_prognosis)
-    # stress check, if load is applied immediately
-    assert stress_bottom_end == pytest.approx(stress_end_prognosis, abs=1e-8)
 
-
-if __name__ == "__main__":
-
-    # test_displ_thix_2D()
-
-    # test_displ_thix_3D()
-    #
-    test_density_thix_2D(0)
-    test_density_thix_2D(10e4)
+# if __name__ == "__main__":
+#
+#     # test_displ_thix_2D()
+#
+#     # test_displ_thix_3D()
+#     #
+#     # test_density_thix_2D(0)
+#     test_density_thix_2D(10e4, 1)
+#     test_density_thix_2D(10e4, 3)
