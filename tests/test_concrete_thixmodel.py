@@ -57,7 +57,7 @@ def test_displ_thix_3D():
     sensor01 = fenics_concrete.sensors.StressSensor(df.Point(0.5, 0.5, 1))
     sensor02 = fenics_concrete.sensors.StrainSensor(df.Point(0.5, 0.5, 1))
 
-    prop3D = setup_test(parameters, [sensor01, sensor02])
+    prob3D = setup_test(parameters, [sensor01, sensor02])
 
     # solve
     E_o_time = []
@@ -68,43 +68,43 @@ def test_displ_thix_3D():
     i = 0
     t = 0  # initialize time
     # solve
-    while t <= prop3D.p.time:  # time
+    while t <= prob3D.p.time:  # time
         # set load increment
-        prop3D.experiment.apply_displ_load(dubcs[i] * parameters["u_bc"])
+        prob3D.experiment.apply_displ_load(dubcs[i] * parameters["u_bc"])
         i += 1
 
         # solve
-        prop3D.solve(t=t)  # solving this
-        prop3D.pv_plot(t=t)
+        prob3D.solve(t=t)  # solving this
+        prob3D.pv_plot(t=t)
 
         # store Young's modulus
-        if t + parameters["age_0"] <= prop3D.p.t_f:
-            E_o_time.append(prop3D.p.E_0 + prop3D.p.R_E * (t + parameters["age_0"]))
+        if t + parameters["age_0"] <= prob3D.p.t_f:
+            E_o_time.append(prob3D.p.E_0 + prob3D.p.R_E * (t + parameters["age_0"]))
         else:
             E_o_time.append(
-                prop3D.p.E_0
-                + prop3D.p.R_E * prop3D.p.t_f
-                + prop3D.p.A_E * (t + parameters["age_0"] - prop3D.p.t_f)
+                prob3D.p.E_0
+                + prob3D.p.R_E * prob3D.p.t_f
+                + prob3D.p.A_E * (t + parameters["age_0"] - prob3D.p.t_f)
             )
 
         # prepare next timestep
-        t += prop3D.p.dt
+        t += prob3D.p.dt
 
     # tests
     # get stresses and strains over time in zz
-    sig_o_time = np.array(prop3D.sensors[sensor01.name].data)[:, -1]
-    eps_o_time = np.array(prop3D.sensors[sensor02.name].data)[:, -1]
+    sig_o_time = np.array(prob3D.sensors[sensor01.name].data)[:, -1]
+    eps_o_time = np.array(prob3D.sensors[sensor02.name].data)[:, -1]
     # strain perpendicular to loading direction [xx and yy]
-    epsxx_o_time = np.array(prop3D.sensors[sensor02.name].data)[:, 0]
-    epsyy_o_time = np.array(prop3D.sensors[sensor02.name].data)[:, 4]
+    epsxx_o_time = np.array(prob3D.sensors[sensor02.name].data)[:, 0]
+    epsyy_o_time = np.array(prob3D.sensors[sensor02.name].data)[:, 4]
 
     # check strain at first and second loading
-    assert eps_o_time[0] == pytest.approx(prop3D.p.u_bc)  # L==1!
-    assert eps_o_time[-1] == pytest.approx(2 * prop3D.p.u_bc)  # L==1!
-    assert epsxx_o_time[0] == pytest.approx(-prop3D.p.nu * prop3D.p.u_bc)
-    assert epsxx_o_time[-1] == pytest.approx(-prop3D.p.nu * 2 * prop3D.p.u_bc)
-    assert epsyy_o_time[0] == pytest.approx(-prop3D.p.nu * prop3D.p.u_bc)
-    assert epsyy_o_time[-1] == pytest.approx(-prop3D.p.nu * 2 * prop3D.p.u_bc)
+    assert eps_o_time[0] == pytest.approx(prob3D.p.u_bc)  # L==1!
+    assert eps_o_time[-1] == pytest.approx(2 * prob3D.p.u_bc)  # L==1!
+    assert epsxx_o_time[0] == pytest.approx(-prob3D.p.nu * prob3D.p.u_bc)
+    assert epsxx_o_time[-1] == pytest.approx(-prob3D.p.nu * 2 * prob3D.p.u_bc)
+    assert epsyy_o_time[0] == pytest.approx(-prob3D.p.nu * prob3D.p.u_bc)
+    assert epsyy_o_time[-1] == pytest.approx(-prob3D.p.nu * 2 * prob3D.p.u_bc)
 
     # expected stress value compare to computed stress [check E modul evaluation]
     assert sig_o_time[0] == pytest.approx(parameters["u_bc"] / 1 * E_o_time[0])
@@ -141,7 +141,7 @@ def test_displ_thix_2D():
     sensor01 = fenics_concrete.sensors.StressSensor(df.Point(0.5, 1))
     sensor02 = fenics_concrete.sensors.StrainSensor(df.Point(0.5, 1))
 
-    prop2D = setup_test(parameters, [sensor01, sensor02])
+    prob2D = setup_test(parameters, [sensor01, sensor02])
 
     E_o_time = []
     # define load increments of bc
@@ -151,43 +151,43 @@ def test_displ_thix_2D():
     i = 0
     t = 0  # initialize time
     # solve
-    while t <= prop2D.p.time:  # time
+    while t <= prob2D.p.time:  # time
         # set load increment u_bc (for density automatic!)
-        prop2D.experiment.apply_displ_load(dubcs[i] * parameters["u_bc"])
+        prob2D.experiment.apply_displ_load(dubcs[i] * parameters["u_bc"])
         i += 1
         # solve
-        prop2D.solve(t=t)
-        prop2D.pv_plot(t=t)
+        prob2D.solve(t=t)
+        prob2D.pv_plot(t=t)
 
         # store Young's modulus for checks
-        if t + parameters["age_0"] <= prop2D.p.t_f:
-            E_o_time.append(prop2D.p.E_0 + prop2D.p.R_E * (t + parameters["age_0"]))
+        if t + parameters["age_0"] <= prob2D.p.t_f:
+            E_o_time.append(prob2D.p.E_0 + prob2D.p.R_E * (t + parameters["age_0"]))
         else:
             E_o_time.append(
-                prop2D.p.E_0
-                + prop2D.p.R_E * prop2D.p.t_f
-                + prop2D.p.A_E * (t + parameters["age_0"] - prop2D.p.t_f)
+                prob2D.p.E_0
+                + prob2D.p.R_E * prob2D.p.t_f
+                + prob2D.p.A_E * (t + parameters["age_0"] - prob2D.p.t_f)
             )
 
         # prepare next timestep
-        t += prop2D.p.dt
+        t += prob2D.p.dt
 
     # tests
     # get stresses and strains over time in yy
-    sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, -1]
-    eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, -1]
+    sig_o_time = np.array(prob2D.sensors[sensor01.name].data)[:, -1]
+    eps_o_time = np.array(prob2D.sensors[sensor02.name].data)[:, -1]
     # strain perpendicular to loading direction [xx]
-    epsxx_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, 0]
+    epsxx_o_time = np.array(prob2D.sensors[sensor02.name].data)[:, 0]
 
     # print("stresses yy", sig_o_time)
     # print("strains yy", eps_o_time)
     # print("E_o_time", E_o_time)
 
     # check strain at first and second loading
-    assert eps_o_time[0] == pytest.approx(prop2D.p.u_bc)  # L==1!
-    assert eps_o_time[-1] == pytest.approx(2 * prop2D.p.u_bc)
-    assert epsxx_o_time[0] == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
-    assert epsxx_o_time[-1] == pytest.approx(-prop2D.p.nu * 2 * prop2D.p.u_bc)
+    assert eps_o_time[0] == pytest.approx(prob2D.p.u_bc)  # L==1!
+    assert eps_o_time[-1] == pytest.approx(2 * prob2D.p.u_bc)
+    assert epsxx_o_time[0] == pytest.approx(-prob2D.p.nu * prob2D.p.u_bc)
+    assert epsxx_o_time[-1] == pytest.approx(-prob2D.p.nu * 2 * prob2D.p.u_bc)
 
     # expected stress value compared to computed stress [check E modul evaluation]
     assert sig_o_time[0] == pytest.approx(parameters["u_bc"] / 1 * E_o_time[0])
@@ -242,38 +242,35 @@ def test_density_thix_2D(R_E, factor):
     # displacmenet sensor middle top
     sensor05 = fenics_concrete.sensors.DisplacementSensor(df.Point(0.5, 1.0))
 
-    prop2D = setup_test(parameters, [sensor01, sensor02, sensor03, sensor04, sensor05])
+    prob2D = setup_test(parameters, [sensor01, sensor02, sensor03, sensor04, sensor05])
 
     # solve
     E_o_time = []
     # initialize time
     t = 0
-    i = 0
-    while t <= prop2D.p.time:  # time
-        # set load increment
-        i += 1
+    while t <= prob2D.p.time:  # time
         # solve
-        prop2D.solve(t=t)
-        prop2D.pv_plot(t=t)
+        prob2D.solve(t=t)
+        prob2D.pv_plot(t=t)
 
         # store Young's modulus for checks
-        if t + parameters["age_0"] <= prop2D.p.t_f:
-            E_o_time.append(prop2D.p.E_0 + prop2D.p.R_E * (t + parameters["age_0"]))
+        if t + parameters["age_0"] <= prob2D.p.t_f:
+            E_o_time.append(prob2D.p.E_0 + prob2D.p.R_E * (t + parameters["age_0"]))
         else:
             E_o_time.append(
-                prop2D.p.E_0
-                + prop2D.p.R_E * prop2D.p.t_f
-                + prop2D.p.A_E * (t + parameters["age_0"] - prop2D.p.t_f)
+                prob2D.p.E_0
+                + prob2D.p.R_E * prob2D.p.t_f
+                + prob2D.p.A_E * (t + parameters["age_0"] - prob2D.p.t_f)
             )
 
         # prepare next timestep
-        t += prop2D.p.dt
+        t += prob2D.p.dt
 
     # output over time steps in yy direction
-    sig_o_time = np.array(prop2D.sensors[sensor04.name].data)[:, -1]
-    eps_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, -1]
-    disp_o_time = np.array(prop2D.sensors[sensor05.name].data)[:, -1]
-    force_o_time = prop2D.sensors[sensor03.name].data
+    sig_o_time = np.array(prob2D.sensors[sensor04.name].data)[:, -1]
+    eps_o_time = np.array(prob2D.sensors[sensor01.name].data)[:, -1]
+    disp_o_time = np.array(prob2D.sensors[sensor05.name].data)[:, -1]
+    force_o_time = prob2D.sensors[sensor03.name].data
     # print("E_o_time", E_o_time)
     # print("sig_o_time", sig_o_time)
     # print("eps_o_time", eps_o_time)
@@ -281,12 +278,12 @@ def test_density_thix_2D(R_E, factor):
     # print("force_o_time", force_o_time)
 
     # tests
-    # print("force_bottom", np.sum(prop2D.sensors[sensor03.name].data))
-    # print("dead load", -parameters["density"] * prop2D.p.g * 1 * 1)
+    # print("force_bottom", np.sum(prob2D.sensors[sensor03.name].data))
+    # print("dead load", -parameters["density"] * prob2D.p.g * 1 * 1)
     #
     # print(
     #     "strain analytic t=0",
-    #     -1.0 / factor * parameters["density"] * prop2D.p.g / E_o_time[0],
+    #     -1.0 / factor * parameters["density"] * prob2D.p.g / E_o_time[0],
     # )
     # print(
     #     "e ratio computed",
@@ -297,12 +294,12 @@ def test_density_thix_2D(R_E, factor):
     # print("sig diff", np.diff(sig_o_time), sum(np.diff(sig_o_time)))
 
     # standard: dead load of full structure and strain
-    force_bottom = np.sum(prop2D.sensors[sensor03.name].data)  # sum of all force values
-    assert force_bottom == pytest.approx(-parameters["density"] * prop2D.p.g * 1 * 1)
+    force_bottom = np.sum(prob2D.sensors[sensor03.name].data)  # sum of all force values
+    assert force_bottom == pytest.approx(-parameters["density"] * prob2D.p.g * 1 * 1)
 
     # strain at first time step
     assert eps_o_time[0] == pytest.approx(
-        -1.0 / factor * parameters["density"] * prop2D.p.g / E_o_time[0], abs=1e-4
+        -1.0 / factor * parameters["density"] * prob2D.p.g / E_o_time[0], abs=1e-4
     )
 
     # check if stress changes accordingly to change in E_modul, if loading

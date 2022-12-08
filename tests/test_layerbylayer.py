@@ -303,22 +303,14 @@ def test_multiple_layers_2D(mcase):
 
 if __name__ == "__main__":
 
-    # # incremental loading:
-    # # a) load applied immediately: parameters["load_time"] = parameters["dt"]
-    # test_single_layer_2D("dt", "thix")
-    # # b) load applied with in one layer time parameters["load_time"] = parameters["t_layer"]
-    # test_single_layer_2D("t_layer","thix")
+    # incremental loading:
+    # a) load applied immediately: parameters["load_time"] = parameters["dt"]
+    test_single_layer_2D("dt", "thix")
+    # b) load applied with in one layer time parameters["load_time"] = parameters["t_layer"]
+    test_single_layer_2D("t_layer", "thix")
 
     # test_multiple_layers_2D("thix")
 
     # test_multiple_layers_2D("viscothix")
 
-    test_single_layer_2D("dt", "viscothix")
-
-
-# -198.39663347 -215.20990749 -232.02318151 -248.83645554 -265.64972956
-#  -282.46300358 -299.2762776  -316.08955163 -332.90282565]
-# strain [-0.00124944 -0.00124944 -0.00124944 -0.00124944 -0.00124944 -0.00124944
-#  -0.00124944 -0.00124944 -0.00124944]
-# E_end/E_0 1.6779661016949166
-# E_end/E_0 1.6779661016949152
+    # test_single_layer_2D("dt", "viscothix")
