@@ -37,6 +37,7 @@ def setup_test(parameters, sensor):
 def test_displ_thix_3D():
     """
     uniaxial tension test displacement control to check thixotropy material class
+    sample is pulled twice first at time step 0 and second in the middle of the time; each step by u_bc
     """
     parameters = fenics_concrete.Parameters()  # using the current default values
 
@@ -63,6 +64,7 @@ def test_displ_thix_3D():
     # define load increments
     dubcs = np.zeros(int(parameters["time"] / parameters["dt"]) + 1)
     dubcs[0] = 1
+    dubcs[int(len(dubcs) / 2)] = 1  # second loading
     i = 0
     t = 0  # initialize time
     # solve
@@ -89,35 +91,36 @@ def test_displ_thix_3D():
         t += prop3D.p.dt
 
     # tests
-    # get stresses and strains at the end
-    # print('stresses',prop3D.sensors[sensor01.name].data[-1])
-    # print('strains',prop3D.sensors[sensor02.name].data[-1])
-    strain_T = prop3D.sensors[sensor02.name].data[-1]
-    strain_zz = strain_T[-1]
-    strain_xx = strain_T[0]
-    strain_yy = strain_T[4]
+    # get stresses and strains over time in zz
+    sig_o_time = np.array(prop3D.sensors[sensor01.name].data)[:, -1]
+    eps_o_time = np.array(prop3D.sensors[sensor02.name].data)[:, -1]
+    # strain perpendicular to loading direction [xx and yy]
+    epsxx_o_time = np.array(prop3D.sensors[sensor02.name].data)[:, 0]
+    epsyy_o_time = np.array(prop3D.sensors[sensor02.name].data)[:, 4]
 
-    assert strain_zz == pytest.approx(prop3D.p.u_bc)  # L==1!
-    assert strain_xx == pytest.approx(-prop3D.p.nu * prop3D.p.u_bc)
-    assert strain_yy == pytest.approx(-prop3D.p.nu * prop3D.p.u_bc)
+    # check strain at first and second loading
+    assert eps_o_time[0] == pytest.approx(prop3D.p.u_bc)  # L==1!
+    assert eps_o_time[-1] == pytest.approx(2 * prop3D.p.u_bc)  # L==1!
+    assert epsxx_o_time[0] == pytest.approx(-prop3D.p.nu * prop3D.p.u_bc)
+    assert epsxx_o_time[-1] == pytest.approx(-prop3D.p.nu * 2 * prop3D.p.u_bc)
+    assert epsyy_o_time[0] == pytest.approx(-prop3D.p.nu * prop3D.p.u_bc)
+    assert epsyy_o_time[-1] == pytest.approx(-prop3D.p.nu * 2 * prop3D.p.u_bc)
 
-    sensor_stress_zz = prop3D.sensors[sensor01.name].data[-1][-1]
-    # expected stress value
-    assert sensor_stress_zz == pytest.approx(
-        parameters["u_bc"] / 1 * E_o_time[-1]
-    )  # compare computed stress with the E*strain
+    # expected stress value compare to computed stress [check E modul evaluation]
+    assert sig_o_time[0] == pytest.approx(parameters["u_bc"] / 1 * E_o_time[0])
+    assert sig_o_time[-1] == pytest.approx(
+        sum(E_o_time * dubcs * parameters["u_bc"] / 1)
+    )  # E(0)*u_bc + E(2.loading)*u_bc
 
-    # check evaluation of stress = Emodul
-    derived_E = (
-        np.array(prop3D.sensors[sensor01.name].data)[:, -1]
-        / np.array(prop3D.sensors[sensor02.name].data)[:, -1]
-    )
-    assert derived_E == pytest.approx(E_o_time)
+    # check if between loading step nothing changes
+    assert len(np.where(np.diff(sig_o_time) > 1e-6)[0]) == pytest.approx(1)
+    assert len(np.where(np.diff(eps_o_time) > 1e-6)[0]) == pytest.approx(1)
 
 
 def test_displ_thix_2D():
     """
     uniaxial tension test displacement control to check thixotropy material class
+    sample is pulled twice first at time step 0 and second in the middle of the time; each step by u_bc
     """
     parameters = fenics_concrete.Parameters()  # using the current default values
 
@@ -143,7 +146,8 @@ def test_displ_thix_2D():
     E_o_time = []
     # define load increments of bc
     dubcs = np.zeros(int(parameters["time"] / parameters["dt"]) + 1)
-    dubcs[0] = 1
+    dubcs[0] = 1  # first loading
+    dubcs[int(len(dubcs) / 2)] = 1  # second loading
     i = 0
     t = 0  # initialize time
     # solve
@@ -169,30 +173,31 @@ def test_displ_thix_2D():
         t += prop2D.p.dt
 
     # tests
-    # get stresses and strains at the end
-    print("stresses yy", np.array(prop2D.sensors[sensor01.name].data)[:, -1])
-    print("strains yy", np.array(prop2D.sensors[sensor02.name].data)[:, -1])
-    strain_T = prop2D.sensors[sensor02.name].data[-1]
-    strain_yy = strain_T[-1]
-    strain_xx = strain_T[0]
+    # get stresses and strains over time in yy
+    sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, -1]
+    eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, -1]
+    # strain perpendicular to loading direction [xx]
+    epsxx_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, 0]
 
-    print("E_o_time", E_o_time)
+    # print("stresses yy", sig_o_time)
+    # print("strains yy", eps_o_time)
+    # print("E_o_time", E_o_time)
 
-    assert strain_yy == pytest.approx(prop2D.p.u_bc)  # L==1!
-    assert strain_xx == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
+    # check strain at first and second loading
+    assert eps_o_time[0] == pytest.approx(prop2D.p.u_bc)  # L==1!
+    assert eps_o_time[-1] == pytest.approx(2 * prop2D.p.u_bc)
+    assert epsxx_o_time[0] == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
+    assert epsxx_o_time[-1] == pytest.approx(-prop2D.p.nu * 2 * prop2D.p.u_bc)
 
-    # stress in yy or zz direction depending on problem dimension (2/3)
-    sensor_stress_yy = prop2D.sensors[sensor01.name].data[-1][-1]
+    # expected stress value compared to computed stress [check E modul evaluation]
+    assert sig_o_time[0] == pytest.approx(parameters["u_bc"] / 1 * E_o_time[0])
+    assert sig_o_time[-1] == pytest.approx(
+        sum(E_o_time * dubcs * parameters["u_bc"] / 1)
+    )  # E(0)*u_bc + E(2.loading)*u_bc
 
-    # expected stress value compared to computed stress with the E*strain
-    assert sensor_stress_yy == pytest.approx(parameters["u_bc"] / 1 * E_o_time[-1])
-
-    # check evaluation of stress = Emodul
-    derived_E = (
-        np.array(prop2D.sensors[sensor01.name].data)[:, -1]
-        / np.array(prop2D.sensors[sensor02.name].data)[:, -1]
-    )
-    assert derived_E == pytest.approx(E_o_time)
+    # check if between loading step nothing changes
+    assert len(np.where(np.diff(sig_o_time) > 1e-6)[0]) == pytest.approx(1)
+    assert len(np.where(np.diff(eps_o_time) > 1e-6)[0]) == pytest.approx(1)
 
 
 @pytest.mark.parametrize("R_E", [0, 10e4])
@@ -262,11 +267,11 @@ def test_density_thix_2D(R_E):
         t += prop2D.p.dt
 
     # output over time steps in yy direction
-    print("E_o_time", E_o_time)
-    print("sig_o_time", np.array(prop2D.sensors[sensor04.name].data)[:, -1])
-    print("eps_o_time", np.array(prop2D.sensors[sensor01.name].data)[:, -1])
-    print("disp_o_time", np.array(prop2D.sensors[sensor05.name].data)[:, -1])
-    print("force_o_time", prop2D.sensors[sensor03.name].data)
+    # print("E_o_time", E_o_time)
+    # print("sig_o_time", np.array(prop2D.sensors[sensor04.name].data)[:, -1])
+    # print("eps_o_time", np.array(prop2D.sensors[sensor01.name].data)[:, -1])
+    # print("disp_o_time", np.array(prop2D.sensors[sensor05.name].data)[:, -1])
+    # print("force_o_time", prop2D.sensors[sensor03.name].data)
 
     # tests
     strain_bottom_0 = prop2D.sensors[sensor01.name].data[0][-1]  # eps_yy at the start
@@ -274,10 +279,10 @@ def test_density_thix_2D(R_E):
     force_bottom = np.sum(prop2D.sensors[sensor03.name].data)  # sum of all force values
     stress_bottom_end = prop2D.sensors[sensor04.name].data[-1][-1]  # eps_yy at the end
 
-    print("strain analytic t=0", -parameters["density"] * prop2D.p.g / E_o_time[0])
-    print("dead load", -parameters["density"] * prop2D.p.g * 1 * 1)
-    print("force_bottom", force_bottom)
-    print("displacement", prop2D.displacement((0.5, 0.5)))
+    # print("strain analytic t=0", -parameters["density"] * prop2D.p.g / E_o_time[0])
+    # print("dead load", -parameters["density"] * prop2D.p.g * 1 * 1)
+    # print("force_bottom", force_bottom)
+    # print("displacement", prop2D.displacement((0.5, 0.5)))
 
     # standard: dead load of full structure and strain
     assert force_bottom == pytest.approx(-parameters["density"] * prop2D.p.g * 1 * 1)

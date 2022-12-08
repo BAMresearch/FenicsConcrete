@@ -3,7 +3,8 @@ import warnings
 import dolfin as df
 import numpy as np
 import scipy.optimize
-from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
+from ffc.quadrature.deprecation import \
+    QuadratureRepresentationDeprecationWarning
 
 from fenics_concrete import experimental_setups
 from fenics_concrete.helpers import LocalProjector, Parameters, set_q
@@ -158,8 +159,8 @@ class ConcreteAMMechanical(MaterialProblem):
 
 class ConcreteThixElasticModel(df.NonlinearProblem):
     # linear elasticity law with time depenendent stiffness parameter (Youngs modulus) modelling the thixotropy
-    # tensor format
-    # incremental formulated u= u_old + du solve for du with given load increment (self.df [default=1.] * f)
+    # tensor format!!
+    # incremental formulated u= u_old + du solve for du with given load increment (using function q_fd)
 
     def __init__(self, mesh, p, pv_name="mechanics_output", **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
@@ -228,6 +229,8 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.q_fd = df.Function(q_V, name="load factor")  # for density
             self.q_eps = df.Function(q_VT, name="strain")
             self.q_sig = df.Function(q_VT, name="stress")
+            self.q_dsig = df.Function(q_VT, name="delta stress")
+            self.q_sig_old = df.Function(q_VT, name="old stress")
 
             # for incremental formulation
             self.u_old = df.Function(self.V, name="old displacement")
@@ -262,8 +265,8 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.dR = dR_ufl
 
             # stress and strain projection methods here as full tensors
-            self.project_sigma = LocalProjector(
-                self.q_E * self.x_sigma(self.u), q_VT, dxm
+            self.project_delta_sigma = LocalProjector(
+                self.q_E * self.x_sigma(self.du), q_VT, dxm
             )
             self.project_strain = LocalProjector(self.eps(self.u), q_VT, dxm)
 
@@ -284,41 +287,8 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
     def eps(self, v):
         return df.sym(df.grad(v))
 
-    def sigma_voigt(self, s):
-        # 1D option
-        print("s.ufl_shape", s.ufl_shape)
-        if s.ufl_shape == (1, 1):
-            stress_vector = None
-        # 2D option
-        elif s.ufl_shape == (2, 2):
-            stress_vector = df.as_vector((s[0, 0], s[1, 1], s[0, 1]))
-        # 3D option
-        elif s.ufl_shape == (3, 3):
-            stress_vector = df.as_vector(
-                (s[0, 0], s[1, 1], s[2, 2], s[0, 1], s[1, 2], s[0, 2])
-            )
-        else:
-            raise ("Problem with stress tensor shape for voigt notation")
-
-        return stress_vector
-
-    def eps_voigt(self, e):
-        eT = self.eps(e)
-        # 1D option
-        if eT.ufl_shape == (1, 1):
-            strain_vector = None
-        # 2D option
-        elif eT.ufl_shape == (2, 2):
-            strain_vector = df.as_vector((eT[0, 0], eT[1, 1], 2 * eT[0, 1]))
-        # 3D option
-        elif eT.ufl_shape == (3, 3):
-            strain_vector = df.as_vector(
-                (eT[0, 0], eT[1, 1], eT[2, 2], 2 * eT[0, 1], 2 * eT[1, 2], 2 * eT[0, 2])
-            )
-
-        return strain_vector
-
     def E_fkt(self, pd, path_time, parameters):
+        # age dependent Young's modulus function here bilinear approach based on Kruger et al.
 
         if pd > 0:  # element active, compute current Young's modulus
             age = parameters["age_0"] + path_time  # age concrete
@@ -345,7 +315,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         return l_active
 
     def fd_fkt(self, pd, path_time, parameters):
-        # load increment function
+        # load increment function: load linearly applied in "load_time" time interval
         fd = 0
         if pd > 0:  # element active compute current loading factor for density
             if path_time < parameters["load_time"]:
@@ -364,7 +334,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         )  # current pseudo density 1 if path_time >=0 else 0
         # print('pseudo density', pd_list.max(), pd_list.min())
 
-        # compute current Young's modulus
+        # compute current Young's modulus #TODO: maybe at n-1/2 instead
         param_E = {}
         param_E["t_f"] = self.p.t_f
         param_E["E_0"] = self.p.E_0
@@ -393,7 +363,8 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         self.u.vector()[:] = self.u_old.vector()[:] + self.du.vector()[:]
         # get current total strains full tensor (split in old and delta not required)
         self.project_strain(self.q_eps)
-        self.project_sigma(self.q_sig)  # get current stress delta full tensor
+        self.project_delta_sigma(self.q_dsig)  # get current stress delta full tensor
+        self.q_sig.vector()[:] = self.q_sig_old.vector()[:] + self.q_dsig.vector()[:]
 
     def update_values(self):
         # no history field currently
@@ -404,6 +375,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
         # update old displacement state
         self.u_old.vector()[:] = np.copy(self.u.vector()[:])
+        self.q_sig_old.vector()[:] = np.copy(self.q_sig.vector()[:])
 
     def set_timestep(self, dt):
         self.dt = dt
