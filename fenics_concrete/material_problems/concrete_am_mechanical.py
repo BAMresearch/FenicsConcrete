@@ -3,8 +3,7 @@ import warnings
 import dolfin as df
 import numpy as np
 import scipy.optimize
-from ffc.quadrature.deprecation import \
-    QuadratureRepresentationDeprecationWarning
+from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
 
 from fenics_concrete import experimental_setups
 from fenics_concrete.helpers import LocalProjector, Parameters, set_q
@@ -309,17 +308,23 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
     def pd_fkt(self, path_time):
         # pseudo density: decide if layer is there (active) or not (age < 0 nonactive!)
         # decision based on current path_time value
-        l_active = 0  # non-active
-        if path_time >= 0 - df.DOLFIN_EPS:
-            l_active = 1.0  # active
+        # working on list object directly (no vectorizing necessary):
+        l_active = np.zeros_like(path_time)  # 0: non-active
+
+        activ_idx = np.where(path_time >= 0 - df.DOLFIN_EPS)[0]
+        l_active[activ_idx] = 1.0  # active
+
         return l_active
 
-    def fd_fkt(self, pd, path_time, parameters):
+    def fd_fkt(self, pd, path_time):
         # load increment function: load linearly applied in "load_time" time interval
-        fd = 0
-        if pd > 0:  # element active compute current loading factor for density
-            if path_time < parameters["load_time"]:
-                fd = self.dt / parameters["load_time"]
+        # working on list object directly
+        fd = np.zeros_like(pd)
+
+        active_idx = np.where(pd > 0)[0]
+        load_idx = np.where(path_time[active_idx] < self.p.load_time)
+        for _ in load_idx:
+            fd[active_idx[load_idx]] = self.dt / self.p.load_time
 
         return fd
 
@@ -327,12 +332,11 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         # get path time; convert quadrature spaces to numpy vector
         path_list = self.q_path.vector().get_local()
         # print('check', path_list)
-        # vectorize the function for speed up
-        pd_fkt_vectorized = np.vectorize(self.pd_fkt)
-        pd_list = pd_fkt_vectorized(
-            path_list
-        )  # current pseudo density 1 if path_time >=0 else 0
+        # current pseudo density 1 if path_time >=0 else 0
+        pd_list = self.pd_fkt(path_list)
         # print('pseudo density', pd_list.max(), pd_list.min())
+        # project lists onto quadrature spaces
+        set_q(self.q_pd, pd_list)
 
         # compute current Young's modulus #TODO: maybe at n-1/2 instead
         param_E = {}
@@ -341,21 +345,17 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
         param_E["R_E"] = self.p.R_E
         param_E["A_E"] = self.p.A_E
         param_E["age_0"] = self.p.age_0
-        # vectorize the function for speed up
+        # vectorize the function for evaluate for each list entry directly TODO: Think about defining directly on list object instead of np.vectorize
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(pd_list, path_list, param_E)
-        # print('E',E_list.max(),E_list.min())
+        # print("E", E_list.max(), E_list.min())
+        # project lists onto quadrature spaces
+        set_q(self.q_E, E_list)
 
         # compute loading factors for density load
-        param_fd = {}
-        param_fd["load_time"] = self.p.load_time
-        fd_list_vectorized = np.vectorize(self.fd_fkt)
-        fd_list = fd_list_vectorized(pd_list, path_list, param_fd)
+        fd_list = self.fd_fkt(pd_list, path_list)
         # print("fd", fd_list.max(), fd_list.min())
-
-        # # project lists onto quadrature spaces
-        set_q(self.q_E, E_list)
-        set_q(self.q_pd, pd_list)
+        # project lists onto quadrature spaces
         set_q(self.q_fd, fd_list)
 
         # displacement update for stress and strain computation (for visualization)

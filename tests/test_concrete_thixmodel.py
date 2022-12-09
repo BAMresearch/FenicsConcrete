@@ -201,7 +201,7 @@ def test_displ_thix_2D():
 
 
 @pytest.mark.parametrize("R_E", [0, 10e4])
-@pytest.mark.parametrize("factor", [1, 2])
+@pytest.mark.parametrize("factor", [1, 3])
 def test_density_thix_2D(R_E, factor):
     """
     uniaxial tension test with density without change in Young's modulus over time
@@ -309,17 +309,21 @@ def test_density_thix_2D(R_E, factor):
             np.diff(sig_o_time)[0] / np.diff(eps_o_time)[0]
         )
         assert E_ratio_computed == pytest.approx(E_o_time[0] / E_o_time[1])
+        # same delta sig in both steps
+        if factor > 2:  # otherwise np.diff not long enough!
+            assert np.diff(sig_o_time)[0] == pytest.approx(np.diff(sig_o_time)[1])
     else:
         # check that there are no changes in the stress
         assert sum(np.diff(sig_o_time)) == pytest.approx(0, abs=1e-8)
+        assert sum(np.diff(eps_o_time)) == pytest.approx(0, abs=1e-8)
 
 
-# if __name__ == "__main__":
-#
-#     # test_displ_thix_2D()
-#
-#     # test_displ_thix_3D()
-#     #
-#     # test_density_thix_2D(0)
-#     test_density_thix_2D(10e4, 1)
-#     test_density_thix_2D(10e4, 3)
+if __name__ == "__main__":
+
+    # test_displ_thix_2D()
+    #
+    # test_displ_thix_3D()
+    #
+    # test_density_thix_2D(0)
+    # test_density_thix_2D(10e4, 1)
+    test_density_thix_2D(10e4, 3)
