@@ -161,15 +161,15 @@ def test_relaxation(visco_case, mech_prob_string, dim, mtype):
         # prepare next timestep
         t += prop2D.p.dt
 
-    # get stress over time
+    # get stress over time (Tensor format)
     if prop2D.p.dim == 2:
         # sig_yy and eps_yy in case dim=2
-        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, 1]
-        # eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:,1]
+        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, -1]
+        # eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, -1]
     elif prop2D.p.dim == 3:
         # sig_zz and eps_zz in case dim=3
-        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, 2]
-        # eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:,2]
+        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, -1]
+        # eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, -1]
 
     # relaxation check - first and last value
     eps_r = prop2D.p.u_bc  # L==1 -> u_bc = eps_r (prescriped strain)
@@ -191,18 +191,18 @@ def test_relaxation(visco_case, mech_prob_string, dim, mtype):
     assert (sig_o_time[0] - sig0) / sig0 < 1e-8
     assert (sig_o_time[-1] - sigend) / sigend < 1e-4
 
-    # get stresses and strains at the end
-    # print('stresses',prop2D.sensors[sensor01.name].data[-1])
-    # print('strains',prop2D.sensors[sensor02.name].data[-1])
+    # get stresses and strain tensors at the end
+    print("stresses", prop2D.sensors[sensor01.name].data[-1])
+    print("strains", prop2D.sensors[sensor02.name].data[-1])
     if prop2D.p.dim == 2:
         strain_xx = prop2D.sensors[sensor02.name].data[-1][0]
-        strain_yy = prop2D.sensors[sensor02.name].data[-1][1]
+        strain_yy = prop2D.sensors[sensor02.name].data[-1][-1]
         assert strain_yy == pytest.approx(prop2D.p.u_bc)  # L==1!
         assert strain_xx == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
     elif prop2D.p.dim == 3:
         strain_xx = prop2D.sensors[sensor02.name].data[-1][0]
-        strain_yy = prop2D.sensors[sensor02.name].data[-1][1]
-        strain_zz = prop2D.sensors[sensor02.name].data[-1][2]
+        strain_yy = prop2D.sensors[sensor02.name].data[-1][4]
+        strain_zz = prop2D.sensors[sensor02.name].data[-1][-1]
         assert strain_zz == pytest.approx(prop2D.p.u_bc)  # L==1!
         assert strain_xx == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
         assert strain_yy == pytest.approx(-prop2D.p.nu * prop2D.p.u_bc)
@@ -274,12 +274,12 @@ def test_creep(visco_case, mech_prob_string, dim, mtype):
     # get stress over time
     if prop2D.p.dim == 2:
         # sig_yy and eps_yy in case dim=2
-        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, 1]
-        eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, 1]
+        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, -1]
+        eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, -1]
     elif prop2D.p.dim == 3:
         # sig_zz and eps_zz in case dim=3
-        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, 2]
-        eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, 2]
+        sig_o_time = np.array(prop2D.sensors[sensor01.name].data)[:, -1]
+        eps_o_time = np.array(prop2D.sensors[sensor02.name].data)[:, -1]
 
     # relaxation check - first and last value
     sig_c = prop2D.p.density * prop2D.p.g
@@ -349,14 +349,16 @@ def test_creep(visco_case, mech_prob_string, dim, mtype):
 
 
 if __name__ == "__main__":
-    #
-    #     # test_relaxation("cmaxwell", "ConcreteViscoDevElasticModel", 2, "pure_visco")
-    #
+
+    # test_relaxation("cmaxwell", "ConcreteViscoDevElasticModel", 2, "pure_visco")
     # test_relaxation("ckelvin", "ConcreteViscoDevElasticModel", 2, "pure_visco")
+
+    test_creep("cmaxwell", "ConcreteViscoDevElasticModel", 2, "pure_visco")
+    test_creep("ckelvin", "ConcreteViscoDevElasticModel", 2, "pure_visco")
+
     #     # # both equivalent
     #     # test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 2, "pure_visco")
     #
     #     # test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 2, "visco_thixo")
     #
     #     test_relaxation("ckelvin", "ConcreteViscoDevThixElasticModel", 3, "pure_visco")
-    test_creep("cmaxwell", "ConcreteViscoDevElasticModel", 2, "pure_visco")

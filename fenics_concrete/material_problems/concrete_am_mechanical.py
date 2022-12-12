@@ -159,7 +159,7 @@ class ConcreteAMMechanical(MaterialProblem):
 class ConcreteThixElasticModel(df.NonlinearProblem):
     # linear elasticity law with time depenendent stiffness parameter (Youngs modulus) modelling the thixotropy
     # tensor format!!
-    # incremental formulated u= u_old + du solve for du with given load increment (using function q_fd)
+    # incremental formulated u = u_old + du solve for du with given load increment df (using function q_fd) and material evaluation for dsigma/depsilon
 
     def __init__(self, mesh, p, pv_name="mechanics_output", **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
@@ -226,12 +226,13 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             self.q_pd = df.Function(q_V, name="pseudo density")  # active or nonactive
             self.q_E = df.Function(q_V, name="youngs modulus")
             self.q_fd = df.Function(q_V, name="load factor")  # for density
+
             self.q_eps = df.Function(q_VT, name="strain")
+
             self.q_sig = df.Function(q_VT, name="stress")
             self.q_dsig = df.Function(q_VT, name="delta stress")
             self.q_sig_old = df.Function(q_VT, name="old stress")
 
-            # for incremental formulation
             self.u_old = df.Function(self.V, name="old displacement")
             self.u = df.Function(self.V, name="displacement")
 
@@ -263,7 +264,7 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
             # quadrature part
             self.dR = dR_ufl
 
-            # stress and strain projection methods here as full tensors
+            # delta stress and strain projection methods here as full tensors
             self.project_delta_sigma = LocalProjector(
                 self.q_E * self.x_sigma(self.du), q_VT, dxm
             )
@@ -408,12 +409,12 @@ class ConcreteThixElasticModel(df.NonlinearProblem):
 
         sigma_plot = df.project(
             self.q_sig,
-            self.visu_space_T,
+            self.visu_space_sig,
             form_compiler_parameters={"quadrature_degree": self.p.degree},
         )
         eps_plot = df.project(
             self.q_eps,
-            self.visu_space_T,
+            self.visu_space_eps,
             form_compiler_parameters={"quadrature_degree": self.p.degree},
         )
         # print('sigma plot', sigma_plot.vector()[:].max())
@@ -451,9 +452,9 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
     #                                                   ------damper(eta)------
     # with deviatoric assumptions for 3D generalization:
     # Deviatoric assumption: vol part of visco strain == 0 damper just working on deviatoric part!
-    # in tensor format!!
+    # TENSOR FORMAT for visualizstion VOIGT notation is used!!
     # time integration: BACKWARD EULER
-    # incremental u= uold + du -> solve for du with given load increment dF
+    # incremental u= uold + du -> solve for du with given load increment dF (using function q_fd) and material evaluation for dsigma/depsilon
 
     def __init__(self, mesh, p, pv_name="mechanics_output", **kwargs):
         df.NonlinearProblem.__init__(self)  # apparently required to initialize things
@@ -491,8 +492,8 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
                 )
 
             # interface to problem for sensor output! here VOIGT format is used for e_eps/q_sig
-            self.visu_space_eps = self.visu_space_V
-            self.visu_space_sig = self.visu_space_V
+            self.visu_space_eps = self.visu_space_T
+            self.visu_space_sig = self.visu_space_T
 
             metadata = {
                 "quadrature_degree": self.p.degree,
@@ -523,8 +524,6 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
             q_V = df.FunctionSpace(mesh, quadrature_element)
             # full tensor
             q_VT = df.FunctionSpace(mesh, quadrature_vector_element)
-            # voigt notation
-            q_VTV = df.FunctionSpace(mesh, quadrature_vector_element01)
 
             # quadrature functions
             # to initialize values (otherwise initialized by 0)
@@ -534,15 +533,22 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
             self.q_pd = df.Function(q_V, name="pseudo density")  # active or nonactive
             self.q_E = df.Function(q_V, name="youngs modulus")  # not age-depend
             self.q_fd = df.Function(q_V, name="load factor")  # for density
-            self.q_epsv = df.Function(q_VT, name="visco strain")  # full tensor
-            self.q_sig1_ten = df.Function(q_VT, name="tensor strain")  # full tensor
-            # for visualization issues
-            self.q_eps = df.Function(q_VTV, name="total strain")  # voigt notation
-            self.q_sig = df.Function(q_VTV, name="total stress")  # voigt notation
 
-            # for incremental formulation
+            self.q_eps = df.Function(q_VT, name="total strain")
+
+            self.q_sig = df.Function(q_VT, name="stress")
+            self.q_dsig = df.Function(q_VT, name="delta stress")
+            self.q_sig_old = df.Function(q_VT, name="old stress")
+
             self.u_old = df.Function(self.V, name="old displacement")
             self.u = df.Function(self.V, name="displacement")
+
+            # visco things
+            self.q_epsv = df.Function(q_VT, name="visco strain")  # full tensor
+            self.q_epsv_old = df.Function(q_VT, name="old visco strain")  # full tensor
+            self.q_depsv = df.Function(q_VT, name="delta visco strain")  # full tensor
+
+            self.q_sig1_ten = df.Function(q_VT, name="delta stress 1")  # full tensor
 
             # Define variational problem
             self.du = df.Function(self.V)  # current delta displacement
@@ -571,12 +577,13 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
             # quadrature part
             self.dR = dR_ufl
 
-            # stress and strain projection methods working on full u (u_old + du)
-            self.project_sigma = LocalProjector(
-                self.sigma_voigt(self.sigma(self.u) - self.sigma_2()), q_VTV, dxm
+            # strain projection method working on full u (u_old + du)
+            self.project_strain = LocalProjector(self.eps(self.u), q_VT, dxm)
+            # delta stress projection method working on deta u
+            self.project_delta_sigma = LocalProjector(
+                self.sigma(self.du) - self.sigma_2(), q_VT, dxm
             )
-            self.project_strain = LocalProjector(self.eps_voigt(self.u), q_VTV, dxm)
-            # stress component for visco strain computation
+            # partly stress component for u^n+1 used for visco strain computation
             self.project_sig1_ten = LocalProjector(self.sigma_1(self.u), q_VT, dxm)
 
             self.assembler = None  # set as default, to check if bc have been added???
@@ -626,13 +633,13 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
 
         return sig1
 
-    def sigma_2(self):  # related to epsv
+    def sigma_2(self):  # stress increment related to epsv
         if self.p.visco_case.lower() == "cmaxwell":
             mu_E1 = self.p.E_1 / (2.0 * (1.0 + self.p.nu))
-            sig2 = 2 * mu_E1 * self.q_epsv
+            sig2 = 2 * mu_E1 * self.q_depsv
         elif self.p.visco_case.lower() == "ckelvin":
             mu_E0 = self.p.E_0 / (2.0 * (1.0 + self.p.nu))
-            sig2 = 2 * mu_E0 * self.q_epsv
+            sig2 = 2 * mu_E0 * self.q_depsv
         else:
             sig = None
             raise ValueError("case not defined")
@@ -640,33 +647,6 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
 
     def eps(self, v):
         return df.sym(df.grad(v))
-
-    def eps_voigt(self, e):
-        eT = self.eps(e)
-        # 2D option
-        if eT.ufl_shape == (2, 2):
-            strain_vector = df.as_vector((eT[0, 0], eT[1, 1], 2 * eT[0, 1]))
-        # 3D option
-        elif eT.ufl_shape == (3, 3):
-            strain_vector = df.as_vector(
-                (eT[0, 0], eT[1, 1], eT[2, 2], 2 * eT[0, 1], 2 * eT[1, 2], 2 * eT[0, 2])
-            )
-
-        return strain_vector
-
-    def sigma_voigt(self, s):
-        # 2D option
-        if s.ufl_shape == (2, 2):
-            stress_vector = df.as_vector((s[0, 0], s[1, 1], s[0, 1]))
-        # 3D option
-        elif s.ufl_shape == (3, 3):
-            stress_vector = df.as_vector(
-                (s[0, 0], s[1, 1], s[2, 2], s[0, 1], s[1, 2], s[0, 2])
-            )
-        else:
-            raise ("Problem with stress tensor shape for voigt notation")
-
-        return stress_vector
 
     def E_fkt(self, pd, path_time, parameters):
 
@@ -679,19 +659,25 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
         return E
 
     def pd_fkt(self, path_time):
-        # pseudo denisty: decide if layer is active or not (age < 0 nonactive!)
+        # pseudo density: decide if layer is there (active) or not (age < 0 nonactive!)
         # decision based on current path_time value
-        l_active = 0  # non-active
-        if path_time >= 0 - df.DOLFIN_EPS:
-            l_active = 1.0  # active
+        # working on list object directly (no vectorizing necessary):
+        l_active = np.zeros_like(path_time)  # 0: non-active
+
+        activ_idx = np.where(path_time >= 0 - df.DOLFIN_EPS)[0]
+        l_active[activ_idx] = 1.0  # active
+
         return l_active
 
-    def fd_fkt(self, pd, path_time, parameters):
-        # load increment function
-        fd = 0
-        if pd > 0:  # element active compute current loading factor for density
-            if path_time < parameters["load_time"]:
-                fd = self.dt / parameters["load_time"]
+    def fd_fkt(self, pd, path_time):
+        # load increment function: load linearly applied in "load_time" time interval
+        # working on list object directly
+        fd = np.zeros_like(pd)
+
+        active_idx = np.where(pd > 0)[0]
+        load_idx = np.where(path_time[active_idx] < self.p.load_time)
+        for _ in load_idx:
+            fd[active_idx[load_idx]] = self.dt / self.p.load_time
 
         return fd
 
@@ -699,11 +685,11 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
         # get path time; convert quadrature spaces to numpy vector
         path_list = self.q_path.vector().get_local()
         # print('check', path_list)
-        # vectorize the function for speed up
-        pd_fkt_vectorized = np.vectorize(self.pd_fkt)
         # current pseudo density 1 if path_time >=0 else 0
-        pd_list = pd_fkt_vectorized(path_list)
+        pd_list = self.pd_fkt(path_list)
         # print('pseudo density', pd_list.max(), pd_list.min())
+        # project lists onto quadrature spaces
+        set_q(self.q_pd, pd_list)
 
         # compute current Young's modulus
         parameters = {}
@@ -713,39 +699,43 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(pd_list, path_list, parameters)
         # print('E',E_list.max(),E_list.min())
+        # project lists onto quadrature spaces
+        set_q(self.q_E, E_list)
 
         # compute loading factors for density load
-        param_fd = {}
-        param_fd["load_time"] = self.p.load_time
-        fd_list_vectorized = np.vectorize(self.fd_fkt)
-        fd_list = fd_list_vectorized(pd_list, path_list, param_fd)
+        fd_list = self.fd_fkt(pd_list, path_list)
         # print("fd", fd_list.max(), fd_list.min())
-
-        # # project lists onto quadrature spaces
-        set_q(self.q_E, E_list)
-        set_q(self.q_pd, pd_list)
+        # project lists onto quadrature spaces
         set_q(self.q_fd, fd_list)
 
         # displacement update for stress and strain computation
         self.u.vector()[:] = self.u_old.vector()[:] + self.du.vector()[:]
         # self.u.vector()[:] = self.du.vector()[:] # if not incremental
+        # get current total strain and delta sigma
+        self.project_strain(self.q_eps)
+        self.project_delta_sigma(self.q_dsig)
+        # compute new stress
+        self.q_sig.vector()[:] = self.q_sig_old.vector()[:] + self.q_dsig.vector()[:]
 
-        # get current strains and stresses
-        self.project_sig1_ten(self.q_sig1_ten)  # get stress component
+        # compute visco strains
+        self.project_sig1_ten(self.q_sig1_ten)  # get stress component at u^n+1
 
         # old visco strains (= deviatoric part)
-        epsv_list = self.q_epsv.vector().get_local()
+        epsv_old_list = self.q_epsv_old.vector().get_local()
         sig1_list = self.q_sig1_ten.vector().get_local()
 
         # compute visco strain from old epsv
-        self.new_epsv = np.zeros_like(epsv_list)
+        self.new_epsv = np.zeros_like(epsv_old_list)
+        self.delta_epsv = np.zeros_like(epsv_old_list)
 
         if self.p.visco_case.lower() == "cmaxwell":
             mu_E1 = 0.5 * self.p.E_1 / (1.0 + self.p.nu)
             factor = 1 + self.dt * 2.0 * mu_E1 / self.p.eta
             self.new_epsv = (
-                1.0 / factor * (epsv_list + self.dt / self.p.eta * sig1_list)
+                1.0 / factor * (epsv_old_list + self.dt / self.p.eta * sig1_list)
             )
+            self.delta_epsv = self.new_epsv - epsv_old_list
+
         elif self.p.visco_case.lower() == "ckelvin":
             mu_E1 = 0.5 * self.p.E_1 / (1.0 + self.p.nu)
             mu_E0 = 0.5 * self.p.E_0 / (1.0 + self.p.nu)
@@ -755,14 +745,14 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
                 + self.dt * 2.0 * mu_E1 / self.p.eta
             )
             self.new_epsv = (
-                1.0 / factor * (epsv_list + self.dt / self.p.eta * sig1_list)
+                1.0 / factor * (epsv_old_list + self.dt / self.p.eta * sig1_list)
             )
+            self.delta_epsv = self.new_epsv - epsv_old_list
+
         else:
             raise ValueError("visco case not defined")
 
-        # for sensors and visualization
-        self.project_strain(self.q_eps)  # get current strains voigt notation
-        self.project_sigma(self.q_sig)  # get current stress voigt notation
+        set_q(self.q_epsv, self.new_epsv)
 
     def update_values(self):
         # update process time and path variable
@@ -771,11 +761,13 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
 
         set_q(self.q_path, path_list)
 
-        # update visco strain
-        set_q(self.q_epsv, self.new_epsv)
+        # update delta visco strain
+        set_q(self.q_depsv, self.delta_epsv)
 
         # update old displacement state
         self.u_old.vector()[:] = np.copy(self.u.vector()[:])
+        self.q_sig_old.vector()[:] = np.copy(self.q_sig.vector()[:])
+        self.q_epsv_old.vector()[:] = np.copy(self.q_epsv.vector()[:])
 
     def set_timestep(self, dt):
         self.dt = dt
@@ -808,12 +800,12 @@ class ConcreteViscoDevElasticModel(df.NonlinearProblem):
 
         sigma_plot = df.project(
             self.q_sig,
-            self.visu_space_V,
+            self.visu_space_sig,
             form_compiler_parameters={"quadrature_degree": self.p.degree},
         )
         eps_plot = df.project(
             self.q_eps,
-            self.visu_space_V,
+            self.visu_space_eps,
             form_compiler_parameters={"quadrature_degree": self.p.degree},
         )
         E_plot = df.project(
