@@ -26,8 +26,8 @@ class MaterialProblem():
         # TODO: where to put these?, what about units???
         self.p['zero_C'] = 273.15
         self.p['igc'] = 8.3145  # ideal gas constant [JK −1 mol −1 ]
-        self.p['g'] = 9.81  # graviational acceleration in m/s²
-        self.p['rho'] = 1
+        #self.p['g'] = 9.81  # graviational acceleration in m/s²
+        #self.p['rho'] = 1
 
         # other "globel" paramters...
         self.p['log_level'] = 'INFO'

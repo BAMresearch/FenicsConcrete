@@ -51,6 +51,9 @@ class concreteSlabExperiment(Experiment):
         if self.p.dim == 2:
             #displ_bcs.append(df.fem.DirichletBC(V, df.Constant((0, 0)), self.boundary_left()))
             displ_bcs.append(df.fem.dirichletbc(np.array([0, 0], dtype=ScalarType), df.fem.locate_dofs_geometrical(V, clamped_boundary), V))
+            #valbc = df.fem.Constant(self.mesh, ScalarType(0))
+            #boundary_facets = df.mesh.locate_entities_boundary(self.mesh, self.p.dim -1, clamped_boundary)
+            #displ_bcs.append(df.fem.dirichletbc(valbc, df.fem.locate_dofs_topological(V.sub(0), self.p.dim -1, boundary_facets), V.sub(0)))
             
         elif self.p.dim == 3:
             #displ_bcs.append(df.fem.DirichletBC(V, df.Constant((0, 0, 0)),  self.boundary_left()))
@@ -59,7 +62,7 @@ class concreteSlabExperiment(Experiment):
         return displ_bcs
 
     def create_neumann_boundary(self):
-        boundaries = [(1, lambda x: np.isclose(x[0], 1))]
+        boundaries = [(1, lambda x: np.isclose(x[0], self.p.length))]
 
         facet_indices, facet_markers = [], []
         fdim = self.mesh.topology.dim - 1

@@ -40,23 +40,36 @@ def simple_setup(p, sensor):
     return problem.sensors
 import math
 p = fenicsX_concrete.Parameters()  # using the current default values
+p['problem'] = 'cantilever_beam' #'cantilever_beam' #
 
-p['E'] = 100
-p['nu'] = 0.2
-p['length'] = 1
-p['breadth'] = 0.2
-p['num_elements_length'] = 20
-p['num_elements_breadth'] = 10
+# N/m², m, kg, sec, N
+#p['rho'] = 7750
+#p['g'] = 9.81
+#p['E'] = 210e9
+#p['length'] = 1
+#p['breadth'] = 0.2
+#p['load'] = 100
+
+# MPa, mm, kg, sec, N
+#p['rho'] = 7750e-9 #kg/mm³
+#p['g'] = 9.81#e3 #mm/s² for units to be consistent g must be given in m/s².
+#p['E'] = 210e3 #N/mm² or MPa
+#p['length'] = 1000
+#p['breadth'] = 200
+#p['load'] = 100e-6 #N/mm²
+
+p['nu'] = 0.28
+p['num_elements_length'] = 30
+p['num_elements_breadth'] = 20
 p['dim'] = 2
-#displacement = -3
 
+#Defining sensor positions
 sensor = []
 sensor_pos_x = []
 number_of_sensors = 20
 for i in range(number_of_sensors):
-    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1/20*(i+1), 0.1, 0]])))
-    sensor_pos_x.append(1/20*(i+1))
-    #sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1, 0.02*(i+1),  0]])))
+    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[p['length']/20*(i+1), 0.5*p['breadth'], 0]])))
+    sensor_pos_x.append(p['length']/20*(i+1))
 
 # Synthetic data generation
 solution = simple_setup(p, sensor)

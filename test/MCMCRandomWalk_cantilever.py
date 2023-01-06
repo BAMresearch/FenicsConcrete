@@ -6,7 +6,7 @@ import numpy as np
 import fenicsX_concrete
 from scipy import optimize
 import math
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 
 #Original target density plot ---------------------------------------------------------------------------------------------------------------
 
@@ -19,7 +19,23 @@ def collect_sensor_solutions(model_solution, total_sensors):
         counter += 1
     return disp_model
 
-# Synthetic data generation
+#Forward Model--------------------------------------------------------------------------------------------------------------------------------
+
+def forward_model_run(param1, param2, ndim):
+    
+    problem.lambda_.value = math.exp(param1) * 0.01 * math.exp(param2) / ((1.0 + 0.01 * math.exp(param2)) * (1.0 - 2.0 * 0.01 * math.exp(param2)))
+    problem.mu.value = math.exp(param1) / (2.0 * (1.0 + 0.01 * math.exp(param2)))
+    problem.solve() 
+
+    model_data = collect_sensor_solutions(problem.sensors, number_of_sensors)
+    problem.clean_sensor_data()
+    if ndim == 1:
+        return model_data[:,1]
+    if ndim == 2:
+        return model_data
+
+
+# Synthetic data generation -------------------------------------------------------------------------------------------------------------------
 para = fenicsX_concrete.Parameters()  # using the current default values
 para['length'] = 1
 para['breadth'] = 0.2
@@ -33,8 +49,8 @@ problem = fenicsX_concrete.LinearElasticity(experiment, para)      # Specifies t
 
 sensor = []
 for i in range(20):
-    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1/20*(i+1), 0.1, 0]])))
-    #sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1/20*(i+1), 0.05, 0]])))
+    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1/20*(i+1), 0.15, 0]])))
+    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1/20*(i+1), 0.05, 0]])))
     #sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[1, 0.02*(i+1),  0]])))
 
 number_of_sensors = len(sensor)
@@ -49,58 +65,62 @@ displacement_data = collect_sensor_solutions(problem.sensors, number_of_sensors)
 #Clean the sensor data for the next simulation run
 problem.clean_sensor_data()
 
-max_disp_value = np.amax(np.absolute(displacement_data[:,1]))
-sigma_error = 0.1*max_disp_value
+max_disp_value_ver= np.amax(np.absolute(displacement_data[:,1]))
+max_disp_value_hor= np.amax(np.absolute(displacement_data[:,0]))
+
+sigma_error_hor = 0.1*max_disp_value_hor
+sigma_error_ver = 0.1*max_disp_value_ver
+#sigma_prior = 0.1*max_disp_value
 
 np.random.seed(42) 
-distortion = np.random.normal(0, sigma_error, (number_of_sensors,2))
+distortion_hor = np.random.normal(0, sigma_error_hor, (number_of_sensors))
+distortion_ver = np.random.normal(0, sigma_error_ver, (number_of_sensors))
 
-observed_data = displacement_data + distortion
+displacement_measured_hor = displacement_data[:,0] + distortion_hor
+displacement_measured_ver = displacement_data[:,1] + distortion_ver
 
+displacement_measured = np.stack((displacement_measured_hor, displacement_measured_ver), axis = -1).flatten()
+#observed_data = displacement_measured.flatten()
 
-prior_variance = np.array([[math.log(10)**2,0],[0,math.log(0.05*100)**2]])
-param_mean = np.array([math.log(95),math.log(0.2*100)])
+# Probabilistic Inverse Problem Setup
+prior_variance = np.array([[math.log(10)**2,0],[0,math.log(0.15*100)**2]])
+param_mean = np.array([math.log(95),math.log(0.15*100)])
 #prior_variance = np.array([[20**2,0],[0,0.1**2]])
 #param_mean = np.array([95,0.2])
-measurement_err_stddev = 0.2
+int_vec1 = np.stack((np.repeat(0.017**2,number_of_sensors), np.repeat(0.27**2,number_of_sensors)), axis = -1).flatten() #0.023, 0.36
+measurement_err_covar = np.diag(int_vec1)
+measurement_err_detcov = np.prod(int_vec1)
 
-
-def log_target_density(param_vector, stddev_measurement_error=measurement_err_stddev, obs_data=observed_data[:,1], _param_mean=param_mean, var_prior=prior_variance):
+def log_target_density(param_vector, obs_data=displacement_measured, _measurement_err_covar= measurement_err_covar, _measurement_err_detcov=measurement_err_detcov,  _param_mean=param_mean, var_prior=prior_variance):
     
     #Simulation run
     #problem.lambda_.value = param_vector[0] * param_vector[1] / ((1.0 + param_vector[1]) * (1.0 - 2.0 * param_vector[1]))
     #problem.mu.value = param_vector[0] / (2.0 * (1.0 + param_vector[1]))
-    
-    #print(math.exp(param_vector[0]), math.exp(param_vector[1]))
-    problem.lambda_.value = math.exp(param_vector[0]) * 0.01 * math.exp(param_vector[1]) / ((1.0 + 0.01 * math.exp(param_vector[1])) * (1.0 - 2.0 * 0.01 * math.exp(param_vector[1])))
-    problem.mu.value = math.exp(param_vector[0]) / (2.0 * (1.0 + 0.01 * math.exp(param_vector[1])))
 
     #problem.lambda_.value = math.exp(param_vector[0])  * math.exp(param_vector[1]) / ((1.0 + math.exp(param_vector[1])) * (1.0 - 2.0 * math.exp(param_vector[1])))
     #problem.mu.value = math.exp(param_vector[0]) / (2.0 * (1.0 +  math.exp(param_vector[1])))
-
-    problem.solve() 
-    model_data = collect_sensor_solutions(problem.sensors, number_of_sensors)
-    displacement_data_vertical = model_data[:,1]
-    problem.clean_sensor_data()
     
+    ndim =  2
+    sim_output = forward_model_run(param_vector[0], param_vector[1], ndim)
+    delta_disp_data = obs_data - sim_output.flatten()
+
     #Evaluation of target density
-    num_obs = displacement_data_vertical.shape[0]
+    num_obs = delta_disp_data.shape[0]
     num_param =  var_prior.shape[0]
-    delta_disp_data= obs_data - displacement_data_vertical
     delta_param = param_vector - _param_mean
 
     #pdf_likelihood = 2*math.pi**(-0.5*num_obs)*(stddev_measurement_error**-num_obs)*math.exp(-np.dot(delta_disp_data,delta_disp_data)/(2*stddev_measurement_error**2)) 
     #pdf_prior = 2*math.pi**(-0.5*num_param)*np.linalg.det(var_prior)**(-0.5)*np.exp(-np.dot(delta_param, np.linalg.solve(prior_variance, delta_param)))
 
-    pdf_likelihood = -num_obs*math.log(stddev_measurement_error) - 0.5*(np.dot(delta_disp_data,delta_disp_data)/stddev_measurement_error**2) 
+    #pdf_likelihood = -num_obs*math.log(measurement_err_detcov) - 0.5*(np.dot(delta_disp_data,delta_disp_data)/stddev_measurement_error**2) 
+    pdf_likelihood = -0.5*math.log(_measurement_err_detcov) - 0.5*(np.dot(delta_disp_data,np.linalg.solve(_measurement_err_covar,delta_disp_data)))
     #print(math.exp(pdf_likelihood))
     #if math.isnan(pdf_likelihood):
     #    pdf_likelihood = 0
-    pdf_prior = 0#-0.5*math.log(np.prod(np.diagonal(var_prior))) - 0.5*(np.dot(delta_param, np.linalg.solve(var_prior, delta_param)))
+    pdf_prior = -0.5*math.log(np.prod(np.diagonal(var_prior))) - 0.5*(np.dot(delta_param, np.linalg.solve(var_prior, delta_param)))
 
-    #del displacement_data_vertical
-    #print(2)
     return pdf_likelihood + pdf_prior
+
 #Metropolis Hastings Implementation ----------------------------------------------------------------------------------------------------
 
 def metropolis_hastings(startVector, nsamples, ndim, sigma):
@@ -124,13 +144,10 @@ def metropolis_hastings(startVector, nsamples, ndim, sigma):
 
     return MH_chain, acception_count
 
-#num_samples = 5000
-#sigma = 0.35
-#Metropolis_chain, accepted_proposals = metropolis_hastings(np.array([3,5]), num_samples, 2, sigma)
-E_start = np.random.uniform(math.log(50),math.log(150),size=1)
+E_start = np.random.uniform(math.log(85),math.log(105),size=1)
 nu_start = np.random.uniform(math.log(0.2*100),math.log(0.4*100),size=1)
 num_samples_burnin = 7500
-sigma =     math.sqrt(0.045)#0.37
+sigma =     0.67 #math.sqrt(0.)#0.37 #0.045
 Metropolis_chain, accepted_proposals = metropolis_hastings(np.array([E_start[0],nu_start[0]]), num_samples_burnin, 2, sigma)
 print(accepted_proposals)
 num_samples = 10000
@@ -181,9 +198,7 @@ def autocovariance(chain, nsamples, ndim):
         #autocov[j-1,1] = np.divide(np.sum(np.multiply((chain[:nsamples-gap] -mean),(chain[gap::1] - mean)), axis=0),((nsamples-j)*variance))
     return autocov
 
-import matplotlib.pyplot as plt 
-
-
+import matplotlib.pyplot as plt
 ergo_mean_x1 , ergo_mean_x2 = ergodic_mean(Metropolis_chain)
 fig, (ax1,ax2) = plt.subplots(1,2)
 ax1.plot(np.arange(1,num_samples+1, 1, dtype=None),ergo_mean_x1)

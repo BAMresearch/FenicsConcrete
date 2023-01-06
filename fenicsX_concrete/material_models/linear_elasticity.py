@@ -109,24 +109,33 @@ class LinearElasticity(MaterialProblem):
         self.u_trial = ufl.TrialFunction(self.experiment.V)
         self.v = ufl.TestFunction(self.experiment.V)
         
-        if self.p.dim == 2:
-            #f = df.Constant((0, 0))
-            f = df.fem.Constant(self.experiment.mesh, ScalarType((0, -self.p.rho*self.p.g))) 
-        elif self.p.dim == 3:
-            #f = df.Constant((0, 0, 0))
-            f = df.fem.Constant(self.experiment.mesh, ScalarType((0, 0, -self.p.rho*self.p.g))) 
+        #self.T = df.fem.Constant(self.experiment.mesh, ScalarType((10, 0)))
+
+        # Selects the problem which you want to solve
+        if self.p.problem == 'tensile_test':
+            self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load, 0)))
+            ds = self.experiment.create_neumann_boundary()
+            self.L =  ufl.dot(self.T, self.v) * ds(1) 
+
+        elif self.p.problem == 'cantilever_beam':
+            if self.p.dim == 2:
+                #f = df.Constant((0, 0))
+                f = df.fem.Constant(self.experiment.mesh, ScalarType((0, -self.p.rho*self.p.g))) 
+            elif self.p.dim == 3:
+                #f = df.Constant((0, 0, 0))
+                f = df.fem.Constant(self.experiment.mesh, ScalarType((0, 0, -self.p.rho*self.p.g))) 
+            else:
+                raise Exception(f'wrong dimension {self.p.dim} for problem setup')
+                
+            self.L =  ufl.dot(f, self.v) * ufl.dx
         else:
-            raise Exception(f'wrong dimension {self.p.dim} for problem setup')
-        
-        self.T = df.fem.Constant(self.experiment.mesh, ScalarType((10, 0)))
-        ds = self.experiment.create_neumann_boundary()
-        self.L =  ufl.dot(self.T, self.v) * ds(1) #+ ufl.dot(f, self.v) * ufl.dx
+            exit()
 
         #self.E = df.fem.Constant(self.experiment.mesh, 100.)
         #self.nu = df.fem.Constant(self.experiment.mesh, 0.2)
         
-        E = 100
-        nu = 0.2
+        E = self.p.E 
+        nu = self.p.nu 
 
         self.lambda_ = df.fem.Constant(self.experiment.mesh, E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)))
         self.mu = df.fem.Constant(self.experiment.mesh, E / (2.0 * (1.0 + nu)))
