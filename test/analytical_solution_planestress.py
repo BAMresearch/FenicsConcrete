@@ -16,11 +16,11 @@ def strain_and_displacement_calculator(_sigma_xx, _E, _nu, _length=1000, _breadt
 
 #measured_data = np.array([strain_xx+np.random.normal(0, 0.001), strain_yy+np.random.normal(0, 0.001)])
 
-E = 10e3 #in MPa
-nu = 0.2
+E = 210e9 #in GPa
+nu = 0.28
 
-length = 1000 #in mm
-breadth = 1000
+length = 1 #in mm
+breadth = 1
 thickness = 1
 force = 5e3 #in Newtons
 
@@ -31,8 +31,8 @@ measured_data_strain, measured_data_disp = strain_and_displacement_calculator(si
 fig_strain, ax_strain = plt.subplots(subplot_kw={"projection": "3d"})
 fig_disp, ax_disp = plt.subplots(subplot_kw={"projection": "3d"})
 
-E_buildup = np.linspace(5e3,20e3,100)
-nu_buildup = np.linspace(0.01,0.55,20)
+E_buildup = np.linspace(205e9,215e9,100)
+nu_buildup = np.linspace(0.01,0.5,20)
 E_buildup, nu_buildup= np.meshgrid(E_buildup, nu_buildup)
 cost_func_val_strain = np.zeros((E_buildup.shape[0],E_buildup.shape[1]))
 cost_func_val_disp = np.zeros((E_buildup.shape[0],E_buildup.shape[1]))

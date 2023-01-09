@@ -59,7 +59,7 @@ sensor = []
 
 for i in range(10):
     for j in range(11):
-        sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[para['length']/10*(i+1), 0.2, 0]]))) #1/20
+        sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[para['length']/10*(i+1), para['breadth'], 0]]))) #1/20
         sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[para['length']/10*(i+1), 0, 0]])))
 
 number_of_sensors = len(sensor)
@@ -83,8 +83,8 @@ max_disp_value_hor= np.amax(np.absolute(displacement_data[:,0]))
 #sigma_prior = 0.1*max_disp_value
 
 np.random.seed(42) 
-distortion_hor = np.random.normal(0, 1e-8, (number_of_sensors)) #0.05
-distortion_ver = np.random.normal(0, 1e-8, (number_of_sensors)) #0.05
+distortion_hor = np.random.normal(0, 1e-9, (number_of_sensors)) #0.05
+distortion_ver = np.random.normal(0, 1e-9, (number_of_sensors)) #0.05
 
 displacement_measured_hor = displacement_data[:,0] + distortion_hor
 displacement_measured_ver = displacement_data[:,1] + distortion_ver
@@ -94,8 +94,6 @@ displacement_measured = np.stack((displacement_measured_hor, displacement_measur
 def forward_model_run(param1, param2, ndim):
     problem.lambda_.value = param1 * param2 / ((1.0 + param2) * (1.0 - 2.0 * param2))
     problem.mu.value = param1 / (2.0 * (1.0 + param2))
-    #problem.lambda_ = param_vector[0] * param_vector[1] / ((1.0 + param_vector[1]) * (1.0 - 2.0 * param_vector[1]))
-    #problem.mu = param_vector[0] / (2.0 * (1.0 + param_vector[1]))
 
     #print(help(problem.weak_form_problem.A))
     #print(problem.weak_form_problem.A.getValues(range(8),range(8)))
@@ -119,9 +117,21 @@ def cost_func_deterministic(optimised_parameters, measured_data, regularisation_
 
     delta = sim_output - measured_data
 
+    #delta_x_max = np.amax(delta[:,0])
+    #delta_x_min = np.amin(delta[:,0])
+    #delta_scaled_x = (delta[:,0] - delta_x_min)/(delta_x_max-delta_x_min)
+#
+    #delta_y_max = np.amax(delta[:,1])
+    #delta_y_min = np.amin(delta[:,1])
+    #delta_scaled_y=  (delta[:,1] - delta_y_min)/(delta_y_max-delta_y_min)
+#
+    #delta_scaled = np.stack((delta_scaled_x, delta_scaled_y), axis = -1)
+
     parameters_vector = np.array([optimised_parameters[0], optimised_parameters[1]])
     
     #normed_vector = parameters_vector/np.linalg.norm(parameters_vector) #parameters_vector #
+    
+    normed_vector = np.array([optimised_parameters[0]/500e9, optimised_parameters[1]/0.5])
     #normed_vector = np.array([optimised_parameters[0]/100, (optimised_parameters[1]-0.2)/0.2])
     #normed_vector = np.array([optimised_parameters[0]/100, (optimised_parameters[1])/0.5])
 
@@ -141,9 +151,13 @@ def cost_func_deterministic(optimised_parameters, measured_data, regularisation_
     #cost_function_value = np.dot(norm_vec_delta, norm_vec_delta) + regularisation_constant*np.dot(normed_vector,normed_vector)
     #print(parameters_vector, cost_function_value) 
 
+    #print(normed_vector)
     delta_disp = delta.flatten()
-    cost_function_value = np.dot(delta_disp, delta_disp) + 0 #regularisation_constant*np.dot(normed_vector,normed_vector)
-
+    #print(np.dot(delta[:,0], delta[:,0]), np.dot(delta[:,1], delta[:,1]), np.dot(delta_disp, delta_disp))
+    cost_function_value = np.dot(delta_disp, delta_disp) #+ 0.001*np.dot(normed_vector,normed_vector)
+    #print(cost_function_value, np.dot(delta[:,1],delta[:,1]))
+    #delta_disp_scaled = delta_scaled.flatten()
+    #cost_function_value = np.dot(delta_disp_scaled, delta_disp_scaled)
     return cost_function_value
 
 
@@ -154,9 +168,9 @@ def cost_function_plot():
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
     #counter=0
     #E_buildup = np.linspace(50,200,100)
-    E_values = np.linspace(175e9,225e9,100)
+    E_values = np.linspace(185e9,225e9,30)
     #E_values = np.linspace(150e3,250e3,100)
-    nu_values = np.linspace(0,0.45,15)
+    nu_values = np.linspace(0.01,0.45,15)
     E_buildup, nu_buildup = np.meshgrid(E_values, nu_values)
     cost_func_val = np.zeros((E_buildup.shape[0],E_buildup.shape[1]))
     for i in range(E_buildup.shape[0]):
@@ -168,6 +182,9 @@ def cost_function_plot():
                            linewidth=0, antialiased=False)
  
     # Add a color bar which maps values to colors.
+    ax.set_xlabel('E')
+    ax.set_ylabel('nu')
+    ax.set_zlabel('Cost function value')
     fig.colorbar(surf, shrink=0.5, aspect=5)
     plt.show()
     #surf2stl.write('unique1.stl', E_buildup, nu_buildup, cost_func_val)
@@ -266,9 +283,9 @@ def cost_func_probablisitic(optimised_parameters, measured_data, std_dev_error, 
 
 
 #Deterministic
-result = optimize.minimize(cost_func_deterministic, np.array([80, 0.25]), args=(displacement_measured,),  method='powell') #Newton-CG
+##result = optimize.minimize(cost_func_deterministic, np.array([80, 0.25]), args=(displacement_measured,),  method='powell') #Newton-CG
 #result = optimize.minimize(cost_func_and_jac, (80, 0.15), args=(displacement_measured), jac=True, hess=hessian_function, method='Newton-CG') #Newton-CG
-print(result)
+##print(result)
 
 #Constrained Optimisation
 #from scipy.optimize import Bounds
@@ -285,5 +302,3 @@ sigma_prior[0,0] = 2.5**2
 sigma_prior[1,1] = 0.075**2
 result = optimize.minimize(cost_func_probablisitic, np.array([95, 0.18]), args=(displacement_measured, sigma_error, sigma_prior),  method='powell')
 print(result) """
-
-#Constrained Optimisation

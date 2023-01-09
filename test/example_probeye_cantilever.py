@@ -122,14 +122,15 @@ ProbeyeProblem = InverseProblem("My Problem")
 ProbeyeProblem.add_parameter(name = "E", 
                             tex=r"$YoungsModulus$", 
                             info="Young's Modulus",
-                            domain="[0, +oo)",
-                            prior = Normal(mean=202*10**9, std=25*10**9)) # Uniform(low=50.0, high=150) mean=85.0, std=15
+                            #domain="[0, +oo)",
+                            prior = LogNormal(mean=float(np.log(200*10**9))-0.5*0.1**2, std=0.1)) # Normal(mean=200*10**9, std=25*10**9)
+
 
 ProbeyeProblem.add_parameter(name = "nu", 
                             tex=r"$PoissonsRatio$", 
                             info="Poisson's Ratio",
-                            domain="(0, 0.5)",
-                            prior = Uniform(low=0.01, high=0.45)) #Uniform(low=0.01, high=0.45) Normal(mean=0.15, std=0.1)math.log(0.15), std=2.3 Uniform(low=0, high=0.45)(mean=0.15, std=0.1)
+                            #domain="(0, 0.5)",
+                            prior = LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15)) #Uniform(low=0.01, high=0.5)
 
 #ProbeyeProblem.add_parameter(name = "sigma model",
 #                            #domain="(0, +oo)",
@@ -180,7 +181,7 @@ ProbeyeProblem.add_likelihood_model(
 )
 
 emcee_solver = EmceeSolver(ProbeyeProblem)
-inference_data = emcee_solver.run(n_steps=2000, n_initial_steps=1000,n_walkers=20)
+inference_data = emcee_solver.run(n_steps=225, n_initial_steps=50,n_walkers=20)
 
 true_values = {"E": para['E'], "nu": para['nu']} 
 
