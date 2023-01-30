@@ -43,13 +43,15 @@ p = fenicsX_concrete.Parameters()  # using the current default values
 p['problem'] = 'cantilever_beam' #'cantilever_beam' #
 
 # N/m², m, kg, sec, N
-#p['rho'] = 7750
-#p['g'] = 9.81
-#p['E'] = 210e9
-#p['length'] = 1
-#p['breadth'] = 0.2
-#p['load'] = 100
-
+p['rho'] = 7750
+p['g'] = 9.81
+p['E'] = 210e9
+p['length'] = 1
+p['breadth'] = 0.2
+#p['load'] = 1000#-10e8
+#p['k_x'] = 1e15
+#p['k_y'] = 1e13
+p['k_spring'] = 1e11
 # MPa, mm, kg, sec, N
 #p['rho'] = 7750e-9 #kg/mm³
 #p['g'] = 9.81#e3 #mm/s² for units to be consistent g must be given in m/s².

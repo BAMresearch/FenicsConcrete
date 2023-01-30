@@ -7,7 +7,7 @@ import numpy as np
 #import matplotlib.pyplot as plt
 from probeye.definition.inverse_problem import InverseProblem
 from probeye.definition.forward_model import ForwardModelBase
-from probeye.definition.distribution import Normal, Uniform, LogNormal
+from probeye.definition.distribution import Normal, Uniform, LogNormal, MultivariateNormal
 from probeye.definition.sensor import Sensor
 from probeye.definition.likelihood_model import GaussianLikelihoodModel
 
@@ -42,6 +42,9 @@ para['E'] = 210e9
 para['length'] = 1
 para['breadth'] = 0.2
 para['load'] = 100
+para['k_x'] = 1e14
+para['k_y'] = 1e12
+
 
 # MPa, mm, kg, sec, N
 #para['rho'] = 7750e-9 #kg/mm³
@@ -64,6 +67,9 @@ for i in range(10): #20
     sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[para['length']/10*(i+1), 0.2, 0]]))) #1/20
     sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[para['length']/10*(i+1), 0, 0]])))
 
+for i in range(9): #20
+    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[0, para['breadth']/9*i, 0]]))) #1/20
+
 number_of_sensors = len(sensor)
 
 for i in range(len(sensor)):
@@ -76,35 +82,51 @@ displacement_data = collect_sensor_solutions(problem.sensors, number_of_sensors)
 #Clean the sensor data for the next simulation run
 problem.clean_sensor_data()
 
-max_disp_value_ver = np.amax(np.absolute(displacement_data[:,1]))
-max_disp_value_hor = np.amax(np.absolute(displacement_data[:,0]))
 
-min_disp_value_ver = np.amin(np.absolute(displacement_data[:,1]))
-min_disp_value_hor = np.amin(np.absolute(displacement_data[:,0]))
+def max_min_calculator(vec):
+    return np.amax(np.absolute(vec)), np.amin(np.absolute(vec))
 
-sigma_error_hor = 0.1*max_disp_value_hor
-sigma_error_ver = 0.1*max_disp_value_ver
+max_disp_hor_rest, min_disp_hor_rest = max_min_calculator(displacement_data[:20,0])
+max_disp_ver_rest , min_disp_ver_rest = max_min_calculator(displacement_data[:20,1])
 
-np.random.seed(42) 
-distortion_hor = np.random.normal(0, 1e-4, (number_of_sensors)) #0.005
-distortion_ver = np.random.normal(0, 1e-4, (number_of_sensors)) 
+max_disp_hor_clamp, min_disp_hor_clamp = max_min_calculator(displacement_data[20:,0])
+max_disp_ver_clamp , min_disp_ver_clamp = max_min_calculator(displacement_data[20:,1])
 
-displacement_measured_hor = displacement_data[:,0] + distortion_hor
-displacement_measured_ver = displacement_data[:,1] + distortion_ver
 
-displacement_measured = np.stack((displacement_measured_hor, displacement_measured_ver), axis = -1)#.flatten()
-
-#max_disp_value = np.amax(np.absolute(displacement_data[:,1]))
-#sigma_error = 0.1*max_disp_value
+#max_disp_value_ver = np.amax(np.absolute(displacement_data[:,1]))
+#max_disp_value_hor = np.amax(np.absolute(displacement_data[:,0]))
+#
+#min_disp_value_ver = np.amin(np.absolute(displacement_data[:,1]))
+#min_disp_value_hor = np.amin(np.absolute(displacement_data[:,0]))
+#
+#sigma_error_hor = 0.1*max_disp_value_hor
+#sigma_error_ver = 0.1*max_disp_value_ver
 
 #np.random.seed(42) 
-#distortion = np.random.normal(0, sigma_error, (number_of_sensors,2))
+#distortion_hor = np.random.normal(0, 1e-11, (number_of_sensors)) #0.005
+#distortion_ver = np.random.normal(0, 1e-11, (number_of_sensors)) 
+#
+#displacement_measured_hor = displacement_data[:,0] #+ distortion_hor
+#displacement_measured_ver = displacement_data[:,1] #+ distortion_ver
+#displacement_measured = np.stack((displacement_measured_hor, displacement_measured_ver), axis = -1)#.flatten()
 
-#observed_data = displacement_data + distortion
+distortion_hor_rest = np.random.normal(0, 1e-9, (20))
+distortion_ver_rest = np.random.normal(0, 1e-9, (20))
+distortion_hor_clamp = np.random.normal(0, 1e-11, (9))
+distortion_ver_clamp = np.random.normal(0, 1e-10, (9))
 
-def forward_model_run(param1, param2, ndim=2):
+displacement_hor_x_rest = displacement_data[:20,0]+distortion_hor_rest
+displacement_ver_x_rest = displacement_data[:20,1]+distortion_ver_rest
+
+displacement_hor_x_clamp = displacement_data[20:,0]+distortion_hor_clamp
+displacement_ver_x_clamp = displacement_data[20:,1]+distortion_ver_clamp
+
+
+def forward_model_run(param1, param2, param3, param4, ndim=2):
     problem.lambda_.value = param1 * param2 / ((1.0 + param2) * (1.0 - 2.0 * param2))
     problem.mu.value = param1 / (2.0 * (1.0 + param2))
+    problem.k_x.value = param3
+    problem.k_y.value = param4 #para['k_y']
     problem.solve() 
     #mt("MCMC run")
     model_data = collect_sensor_solutions(problem.sensors, number_of_sensors)
@@ -113,6 +135,12 @@ def forward_model_run(param1, param2, ndim=2):
         return model_data[:,1]
     if ndim == 2:
         return model_data
+
+
+mean_vec = np.concatenate((1e-9*np.ones(40), 1e-11*np.ones(9),1e-10*np.ones(9)), axis = -1)
+subcovmat=np.concatenate((1e-16*np.ones(40), 1e-20*np.ones(9),1e-18*np.ones(9)), axis = -1)
+cov_mat = np.diag(subcovmat)
+
 
 
 #ForwardModelBase, Sensor objects, interface and response are mandatory.
@@ -132,11 +160,17 @@ ProbeyeProblem.add_parameter(name = "nu",
                             #domain="(0, 0.5)",
                             prior = LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15)) #Uniform(low=0.01, high=0.5)
 
-#ProbeyeProblem.add_parameter(name = "sigma model",
-#                            #domain="(0, +oo)",
-#                            tex=r"$\sigma model$",
-#                            info="Standard deviation, of zero-mean Gaussian noise model",
-#                            prior=Uniform(low=0.0, high=0.8))
+ProbeyeProblem.add_parameter(name = "k_x",                     
+                            tex=r"$SpringStiffnessX$",
+                            info="Spring Stiffness in horizontal direction",
+                            #domain="(0, +oo)",
+                            prior=Uniform(low=1e12, high=1e15))
+
+ProbeyeProblem.add_parameter(name = "k_y",                     
+                            tex=r"$SpringStiffnessY$",
+                            info="Spring Stiffness in vertical direction",
+                            #domain="(0, +oo)",
+                            prior=Uniform(low=1e11, high=1e13))
 
 ProbeyeProblem.add_parameter(name = "sigma_model",
                             #domain="(0, +oo)",
@@ -144,46 +178,55 @@ ProbeyeProblem.add_parameter(name = "sigma_model",
                             info="Standard deviation, of zero-mean Gaussian noise model",
                             value=0.0)
 
-ProbeyeProblem.add_parameter(name = "sigma_meas",
+ProbeyeProblem.add_parameter(name = "sigma",
+                            dim=58,
                             #domain="(0, +oo)",
-                            tex=r"$\sigma meas$",
+                            tex=r"$\sigma_{msd}$",
                             info="Measurement error",
-                            prior= Normal(mean=1e-4, std=1e-5)) #0.004
+                            prior= MultivariateNormal(mean=mean_vec, cov=cov_mat)) #0.004
 
 ProbeyeProblem.add_experiment(name="Test1",
                             sensor_data={
-                                "hor_disp": displacement_measured[:,0],
-                                "ver_disp": displacement_measured[:,1],
+                                "hor_disp_rest": displacement_hor_x_rest,
+                                "ver_disp_rest": displacement_ver_x_rest,
+                                "hor_disp_clamp": displacement_hor_x_clamp,
+                                "ver_disp_clamp": displacement_ver_x_clamp,                                
                                 "dummy": np.zeros((10,))
                             })
 
-class FwdModel(ForwardModelBase):
+class FwdModel1(ForwardModelBase):
     def interface(self):
-        self.parameters = ["E", "nu"]   #E and nu must have been already defined beforehand using add_parameter. # three attributes are must here.
-        self.input_sensors = Sensor("dummy") #sensor provides a way for forward model to interact with experimental data.
-        self.output_sensors = [Sensor("hor_disp", std_model="sigma_model"),
-                                Sensor("ver_disp", std_model="sigma_model")]
+        self.parameters = ["E", "nu", "k_x", "k_y"]   #E and nu must have been already defined beforehand using add_parameter. # three attributes are must here.
+        self.input_sensors = [Sensor("dummy")] #sensor provides a way for forward model to interact with experimental data.
+        self.output_sensors = [Sensor("hor_disp_rest", std_model="sigma_model"),
+                               Sensor("ver_disp_rest", std_model="sigma_model"),
+                               Sensor("hor_disp_clamp", std_model="sigma_model"),
+                               Sensor("ver_disp_clamp", std_model="sigma_model")]
 
     def response(self, inp: dict) -> dict:    #forward model evaluation
         #x = inp["x"] Don't need it as weight is already given in equations
         m = inp["E"]
         b = inp["nu"]
-        displacement_results = forward_model_run(m, b)
-        return {"hor_disp" : displacement_results[:,0],
-                "ver_disp": displacement_results[:,1]}
+        t = inp["k_x"]
+        u = inp["k_y"]
+        displacement_results = forward_model_run(m, b, t, u)
+        return {"hor_disp_rest" : displacement_results[:20,0],
+                "ver_disp_rest": displacement_results[:20,1],
+                "hor_disp_clamp": displacement_results[20:,0],
+                "ver_disp_clamp": displacement_results[20:,1]}
 
-ProbeyeProblem.add_forward_model(FwdModel("CantileverModel"), experiments=["Test1"])
+ProbeyeProblem.add_forward_model(FwdModel1("CantileverModel1"), experiments=["Test1"]) #
+
 
 ProbeyeProblem.add_likelihood_model(
     GaussianLikelihoodModel(experiment_name="Test1",
     model_error="additive",
-    measurement_error="sigma_meas")
+    measurement_error="sigma")
 )
 
 emcee_solver = EmceeSolver(ProbeyeProblem)
-inference_data = emcee_solver.run(n_steps=400, n_initial_steps=50,n_walkers=20)
-
-true_values = {"E": para['E'], "nu": para['nu']} 
+inference_data = emcee_solver.run(n_steps=2200, n_initial_steps=100,n_walkers=150)
+true_values = {"E": para['E'], "nu": para['nu'], "k_x":para['k_x'], "k_y":para['k_y']} 
 
 # this is an overview plot that allows to visualize correlations
 pair_plot_array = create_pair_plot(

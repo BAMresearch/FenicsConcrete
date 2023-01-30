@@ -93,7 +93,6 @@ class MaterialProblem():
         raise NotImplementedError()
 
     def add_sensor(self, sensor):
-
         self.sensors[sensor.name] = sensor
 
     def clean_sensor_data(self):
@@ -101,5 +100,11 @@ class MaterialProblem():
             sensor_object.data.clear()
         #for i in range(len(self.sensors)):
         #    self.sensors[i].data.clear()
+
+    def delete_sensor(self):
+        del self.sensors
+        self.sensors = Sensors()
+
+
 
         

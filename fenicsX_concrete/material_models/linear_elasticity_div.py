@@ -140,80 +140,20 @@ class LinearElasticity(MaterialProblem):
         self.lambda_ = df.fem.Constant(self.experiment.mesh, E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)))
         self.mu = df.fem.Constant(self.experiment.mesh, E / (2.0 * (1.0 + nu)))
 
-        K_torsion = self.p.K_torsion
-        self.K_torsion = df.fem.Constant(self.experiment.mesh, K_torsion)
-        
-        moment_arm = df.fem.Function(self.experiment.V_scalar)
-
-        import numpy as np
-        def moment_arm_(x):
-            a=np.unique(x[1])
-            length_x = x[1].shape[0]
-            moment_arm_array = np.zeros(length_x)
-            transformed_coordinates_vector = np.absolute(x[1]) - 0.5*self.p.breadth
-            b=np.unique(x[1])
-            for i in range(length_x):
-                if transformed_coordinates_vector[i]!=0:
-                    moment_arm_array[i] = 1/transformed_coordinates_vector[i]**2
-            return moment_arm_array
-    
-        moment_arm.interpolate(moment_arm_)
-        #moment_arm.interpolate(lambda x: print(type(x),x))
-        #moment_arm.interpolate(lambda x: print(type(x[1])))#1/x[1]**2)
-        
-        
-        #comparr = 0.5*self.p.breadth*np.ones(2400)
-        #moment_arm.interpolate(lambda x : 1/(self.p.breadth-x[1])**2 if x[1]>=0.5*self.p.breadth else 1/x[1]**2)
-        #moment_arm.interpolate(lambda x : 1/(x[1])**2 if x[1]>=comparr else x[1])
-        spring_stiffness = ufl.as_matrix([[self.K_torsion*moment_arm, 0], [0, 0]])
-        self.spring_stress = ufl.dot(spring_stiffness,self.u_trial)
-
-        def clamped_boundary_in_y(x):
-            return np.isclose(x[0], 0)
-        
-        def clamped_neutral_axis(x):          
-            return np.logical_and(np.isclose(x[0], 0), np.isclose(x[1],0.1))
-            #return np.isclose(x[0], 0)
-
-        fdim =  0
-        #bc = df.fem.dirichletbc(ScalarType(0), df.fem.locate_dofs_topological(self.experiment.V.sub(1), fdim, boundary_facets), self.experiment.V.sub(1))
-
-        #Way1
-        #boundary_facets = df.mesh.locate_entities_boundary(self.experiment.mesh, fdim, clamped_neutral_axis)
-        #sub0 = df.fem.locate_dofs_topological(self.experiment.V.sub(0), fdim, boundary_facets)
-        #sub1 = df.fem.locate_dofs_topological(self.experiment.V.sub(1), fdim, boundary_facets)
-        #sub = df.fem.locate_dofs_topological(self.experiment.V, fdim, boundary_facets)
-#
-        #bc1 = df.fem.dirichletbc(ScalarType(0), sub0, self.experiment.V.sub(0))
-        #bc2 = df.fem.dirichletbc(ScalarType(0), sub1, self.experiment.V.sub(1))
-
-
-        #Way2
-        #dofs_geo = df.fem.locate_dofs_geometrical(self.experiment.V, clamped_neutral_axis)
-        #bc1 = df.fem.dirichletbc(ScalarType(0), dofs_geo, self.experiment.V.sub(0))
-        #bc2 = df.fem.dirichletbc(ScalarType(0), dofs_geo, self.experiment.V.sub(1))
-
-        #Way3
-        #dofs_geo = df.fem.locate_dofs_geometrical(self.experiment.V, clamped_neutral_axis)
-        #bc2 = df.fem.dirichletbc(ScalarType(0), dofs_geo, self.experiment.V.sub(0))
-
-        bc1_facets = df.mesh.locate_entities_boundary(self.experiment.mesh, 0, clamped_neutral_axis)
-        bc1_dofs_sub1 = df.fem.locate_dofs_topological(self.experiment.V.sub(1), 0, bc1_facets)
-        bc1 = df.fem.dirichletbc(ScalarType(0), bc1_dofs_sub1, self.experiment.V.sub(1))
-
-        bc2_facets = df.mesh.locate_entities_boundary(self.experiment.mesh, 0, clamped_neutral_axis)
-        bc2_dofs_sub0 = df.fem.locate_dofs_topological(self.experiment.V.sub(0), 0, bc2_facets)
-        bc2 = df.fem.dirichletbc(ScalarType(0), bc2_dofs_sub0, self.experiment.V.sub(0))
-
+        k_x = self.p.k_x
+        k_y = self.p.k_y
+        self.k_x = df.fem.Constant(self.experiment.mesh, k_x)
+        self.k_y = df.fem.Constant(self.experiment.mesh, k_y)
 
         ds = self.experiment.create_neumann_boundary()      
-
-
+        spring_stiffness = ufl.as_matrix([[self.k_x, 0], [0, self.k_y]])
+        self.spring_stress = ufl.dot(spring_stiffness,self.u_trial)
+        
         #ufl.Identity(self.u_trial.geometric_dimension())
 
         self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx + ufl.dot(self.spring_stress, self.v) * ds(2) 
         #self.experiment.bcs,
-        self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=[bc1, bc2], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 
     
     # Stress computation for linear elastic problem 

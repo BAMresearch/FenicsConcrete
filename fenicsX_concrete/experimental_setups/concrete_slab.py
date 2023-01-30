@@ -37,6 +37,7 @@ class concreteSlabExperiment(Experiment):
 
         # define function space ets.
         self.V = df.fem.VectorFunctionSpace(self.mesh, ("Lagrange", self.p.degree)) # 2 for quadratic elements
+        self.V_scalar = df.fem.FunctionSpace(self.mesh, ("Lagrange", self.p.degree))
 
         # boundary conditions only after function space
         self.bcs = self.create_displ_bcs(self.V)
@@ -62,7 +63,8 @@ class concreteSlabExperiment(Experiment):
         return displ_bcs
 
     def create_neumann_boundary(self):
-        boundaries = [(1, lambda x: np.isclose(x[0], self.p.length))]
+        boundaries = [(1, lambda x: np.isclose(x[0], self.p.length)),
+        (2, lambda x: np.isclose(x[0], 0))]
 
         facet_indices, facet_markers = [], []
         fdim = self.mesh.topology.dim - 1
