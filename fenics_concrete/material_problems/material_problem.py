@@ -12,12 +12,14 @@ import sys
 import warnings
 from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
 
+from vmap4fenics import VMAP4Fenics
+
 df.parameters["form_compiler"]["representation"] = "quadrature"
 warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
 
 class MaterialProblem():
-    def __init__(self, experiment, parameters=None, pv_name='pv_output_full'):
+    def __init__(self, experiment, parameters = None, pv_name= 'pv_output_full', vmapoutput = False):
         self.experiment = experiment
         # setting up paramters
         self.p = Parameters()
@@ -45,6 +47,13 @@ class MaterialProblem():
         self.degree_of_hydration = None
         self.q_degree_of_hydration = None
 
+        if vmapoutput:
+            self.wrapper = VMAP4Fenics.VMAP4Fenics(filename = pv_name, output_path = pv_name)
+            self.wrapper.write_metadata()
+            self.wrapper.write_unitsystem()
+            self.wrapper.write_coordinatesystem()
+        else:
+            self.wrapper = None
         # setup the material object to access the function
         self.setup()
 
@@ -83,17 +92,11 @@ class MaterialProblem():
         else:
             raise Exception(f'unknown log level {log_level}')
 
-    def set_material(self = 'unknown', name = 'unknown', material_id = 'unknown', type = None, description = None, state = None,
-                    idealization = None, physics = None, solution = None):
-        self.name = name
-        self.material_id = material_id
-        self.material_optional = {}
-        self.material_optional['type'] = type
-        self.material_optional['description'] = description
-        self.material_optional['state'] = state
-        self.material_optional['idealization'] = idealization
-        self.material_optional['physics'] = physics
-        self.material_optional['solution'] = solution
+    def set_material(self, name = 'unknown', material_id = 'unknown', type = None, description = None, state = None,
+                    idealization = None, physics = None, solution = None, parameters = None):
+        self.wrapper.set_material(material_name = name, material_id = material_id, material_type = type, material_description = description, 
+					material_state = state, material_idealization = idealization, physics = physics, 
+					solution = solution, paramters = parameters)
 
     def setup(self):
         # initialization of this specific problem

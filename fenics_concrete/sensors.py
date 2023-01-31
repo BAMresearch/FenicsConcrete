@@ -41,10 +41,6 @@ class Sensor:
     def name(self):
         return self.__class__.__name__
 
-    @property
-    def datatlist(self):
-        raise NotImplementedError()
-
     def data_max(self, value):
         if value > self.max:
             self.max = value
@@ -63,7 +59,7 @@ class DisplacementSensor(Sensor):
         self.data = []
         self.time = []
 
-    def measure(self, problem, t=1.0):
+    def measure(self, problem, wrapper = None, t=1.0):
         """
         Arguments:
             problem : FEM problem object
@@ -71,8 +67,10 @@ class DisplacementSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get displacements
-        self.data.append(problem.displacement(self.where))
+        measured = problem.displacement(self.where)
+        self.data.append(measured)
         self.time.append(t)
+        if wrapper: wrapper.set_variable(self.__class__.__name__, measured, self.LOCATION)
 
 
 class TemperatureSensor(Sensor):
@@ -195,18 +193,16 @@ class ReactionForceSensorBottom(Sensor):
 
     def __init__(self):
         self.data = []
-        self.dataoffset = []
         self.time = []
         self.LOCATION = 'GLOBAL'
 
-    def measure(self, problem, t = 1.0, new_measurement_series = False):
+    def measure(self, problem, wrapper = None, t = 1.0):
         """
         Arguments:
             problem : FEM problem object
             t : float, optional
                 time of measurement for time dependent problems
         """
-        if new_measurement_series: self.dataoffset.append(len(self.data))
         # boundary condition
         bottom_surface = problem.experiment.boundary_bottom()
 
@@ -219,8 +215,10 @@ class ReactionForceSensorBottom(Sensor):
         bc_z.apply(v_reac.vector())
         computed_force = (-df.assemble(df.action(problem.residual, v_reac)))
 
-        self.data.append(computed_force)
+        measured = computed_force
+        self.data.append(measured)
         self.time.append(t)
+        if wrapper: wrapper.set_variable(self.__class__.__name__, measured, self.LOCATION)
 
 
 class StressSensor(Sensor):
@@ -234,22 +232,22 @@ class StressSensor(Sensor):
         """
         self.where = where
         self.data = []
-        self.dataoffset = []
         self.time = []
         self.LOCATION = 'NODE'
 
-    def measure(self, problem, t=1.0, new_measurement_series = False):
+    def measure(self, problem, wrapper = None, t=1.0):
         """
         Arguments:
             problem : FEM problem object
             t : float, optional
                 time of measurement for time dependent problems
         """
-        if new_measurement_series: self.dataoffset.append(len(self.data))
         # get stress
         stress = df.project(problem.stress, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
-        self.data.append(stress(self.where))
+        measured = stress(self.where)
+        self.data.append(measured)
         self.time.append(t)
+        if wrapper: wrapper.set_variable(self.__class__.__name__, measured, self.LOCATION)
 
 class StrainSensor(Sensor):
     """A sensor that measure the strain tensor in at a point"""
