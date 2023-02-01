@@ -134,6 +134,7 @@ class DOHSensor(Sensor):
             where : Point
                 location where the value is measured
         """
+        super().__init__()
         self.where = where
 
     def measuredata(self, problem, t=1.0):
