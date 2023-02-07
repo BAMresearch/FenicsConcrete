@@ -134,12 +134,14 @@ class LinearElasticity(MaterialProblem):
         #self.E = df.fem.Constant(self.experiment.mesh, 100.)
         #self.nu = df.fem.Constant(self.experiment.mesh, 0.2)
         
+        #Constant E and nu fields
         E = self.p.E 
         nu = self.p.nu 
         
         self.lambda_ = df.fem.Constant(self.experiment.mesh, E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)))
         self.mu = df.fem.Constant(self.experiment.mesh, E / (2.0 * (1.0 + nu)))
 
+        #Random E and nu fields
         k_x = self.p.k_x
         k_y = self.p.k_y
         self.k_x = df.fem.Constant(self.experiment.mesh, k_x)

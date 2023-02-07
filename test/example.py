@@ -49,9 +49,10 @@ p['E'] = 210e9
 p['length'] = 1
 p['breadth'] = 0.2
 #p['load'] = 1000#-10e8
-#p['k_x'] = 1e15
-#p['k_y'] = 1e13
-p['k_spring'] = 1e11
+p['k_x'] = 1e15
+p['k_y'] = 1e13
+p['K_torsion'] = 1e11
+
 # MPa, mm, kg, sec, N
 #p['rho'] = 7750e-9 #kg/mm³
 #p['g'] = 9.81#e3 #mm/s² for units to be consistent g must be given in m/s².
@@ -64,7 +65,7 @@ p['nu'] = 0.28
 p['num_elements_length'] = 30
 p['num_elements_breadth'] = 20
 p['dim'] = 2
-
+p['uncertainties'] = [1]
 #Defining sensor positions
 sensor = []
 sensor_pos_x = []

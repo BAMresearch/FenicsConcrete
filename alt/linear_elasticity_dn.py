@@ -223,7 +223,7 @@ class LinearElasticity(MaterialProblem):
             xdmf.write_mesh(self.experiment.mesh)
             xdmf.write_function(self.displacement)
 
-         # Youngs Modulus Plot
+        # Youngs Modulus Plot
         with df.io.XDMFFile(self.experiment.mesh.comm, "Youngs_Modulus.xdmf", "w") as xdmf:
             xdmf.write_mesh(self.experiment.mesh)
             xdmf.write_function(self.p.E.field)
