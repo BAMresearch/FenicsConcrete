@@ -15,8 +15,8 @@ on:
   schedule:
     - cron: '3 15 * * *'
 
-env:
-  CACHE_NUMBER: 2  # increase to reset cache manually
+#env:
+#  CACHE_NUMBER: 2  # increase to reset cache manually
 
 jobs:
   testing_tests:
@@ -34,22 +34,23 @@ jobs:
             use-mamba: true
             python-version: 3.9
 
-      - name: Set cache date
-        run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+#      - name: Set cache date
+#        run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
 
-      - uses: actions/cache@v2
-        with:
-          path: "/usr/share/miniconda3/envs/fenics_concrete"
-          key: conda-${{ hashFiles('environment.yml') }}-${{ env.DATE }}-${{ env.CACHE_NUMBER }}
-        id: cache
+#      - uses: actions/cache@v2
+#        with:
+#          path: "/usr/share/miniconda3/envs/fenics_concrete"
+#          key: conda-${{ hashFiles('environment.yml') }}-${{ env.DATE }}-${{ env.CACHE_NUMBER }}
+#        id: cache
 
       - name: Update environment
         run: mamba env update -n FenicsConcrete -f environment.yml
-        if: steps.cache.outputs.cache-hit != 'true'
+#        if: steps.cache.outputs.cache-hit != 'true'
       
       - name: Run tests
         shell: bash -l {0}
         run: |
+#          cd $GITHUB_WORKSPACE/tests/
           pytest
       
       
