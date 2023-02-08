@@ -70,6 +70,7 @@ class ConcreteThermoMechanical(MaterialProblem):
         default_p['a_fc'] = 1.2
         default_p['ft_inf'] = 467000
         default_p['a_ft'] = 1.0
+        default_p['evolution_ft'] = True
 
         self.p = default_p + self.p
 
@@ -780,7 +781,11 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         parameters['X_inf'] = self.p.ft_inf
         parameters['a_X'] = self.p.a_ft
 
-        ft_list = self.general_hydration_fkt(alpha_list, parameters)
+        if self.p.evolution_ft == True:
+            ft_list = self.general_hydration_fkt(alpha_list, parameters)
+        else:
+            # no evolution....
+            ft_list = np.full_like(alpha_list, self.p.ft_inf)
 
         # now do the yield function thing!!!
         # I need stresses!!!
