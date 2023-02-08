@@ -702,6 +702,61 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
 
         return np.asarray(yield_vals)
 
+
+    def yield_surface(self, stresses, ft, fc):
+        # function for approximated yield surface
+        # first approximation, could be changed if we have numbers/information
+        fc2 = fc
+        # pass voigt notation and compute the principal stress
+        p_stresses = self.principal_stress(stresses)
+
+        # get the principle tensile stresses
+        t_stresses = np.where(p_stresses < 0, 0, p_stresses)
+
+        # get dimension of problem, ie. length of list with principal stresses
+        n = p_stresses.shape[1]
+        # check case
+        if n == 1:
+            # rankine for the tensile region
+            rk_yield_vals = t_stresses[:, 0] - ft[:]
+
+            # invariants for drucker prager yield surface
+            I1 = stresses[:, 0]
+            I2 = np.zeros_like(I1)
+        # 2D problem
+        elif n == 2:
+
+            # rankine for the tensile region
+            rk_yield_vals = (t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2) ** 0.5 - ft[:]
+
+            # invariants for drucker prager yield surface
+            I1 = stresses[:, 0] + stresses[:, 1]
+            I2 = ((stresses[:, 0] + stresses[:, 1]) ** 2 - ((stresses[:, 0]) ** 2 + (stresses[:, 1]) ** 2)) / 2
+
+        # 3D problem
+        elif n == 3:
+            # rankine for the tensile region
+            rk_yield_vals = (t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2 + t_stresses[:, 2] ** 2) ** 0.5 - ft[:]
+
+            # invariants for drucker prager yield surface
+            I1 = stresses[:, 0] + stresses[:, 1] + stresses[:, 2]
+            I2 = ((stresses[:, 0] + stresses[:, 1] + stresses[:, 2]) ** 2 - (
+                        (stresses[:, 0]) ** 2 + (stresses[:, 1]) ** 2 + (stresses[:, 2]) ** 2)) / 2
+        else:
+            raise ('Problem with input to yield surface, the array with stress values has the wrong size ')
+
+        J2 = 1 / 3 * I1 ** 2 - I2
+        beta = (3.0 ** 0.5) * (fc2 - fc) / (2 * fc2 - fc)
+        Hp = fc2 * fc / ((3.0 ** 0.5) * (2 * fc2 - fc))
+
+        dp_yield_vals = beta / 3 * I1 + J2 ** 0.5 - Hp
+
+        # TODO: is this "correct", does this make sense? for a compression state, what if rk yield > dp yield???
+        yield_vals = np.maximum(rk_yield_vals, dp_yield_vals)
+
+        return np.asarray(yield_vals)
+
+
     def evaluate_material(self):
         # convert quadrature spaces to numpy vector
         alpha_list = self.q_alpha.vector().get_local()
@@ -788,7 +843,6 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         ft_plot = df.project(self.q_ft, self.visu_space, form_compiler_parameters={'quadrature_degree': self.p.degree})
         yield_plot = df.project(self.q_yield, self.visu_space,
                                 form_compiler_parameters={'quadrature_degree': self.p.degree})
-        #
         E_plot.rename("Young's Modulus", "test string, what does this do??")  # TODO: what does the second string do?
         fc_plot.rename("Compressive strength",
                        "test string, what does this do??")  # TODO: what does the second string do?
