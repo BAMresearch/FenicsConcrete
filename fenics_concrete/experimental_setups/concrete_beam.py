@@ -81,7 +81,7 @@ class ConcreteBeamExperiment(Experiment):
         displ_bcs.append(df.DirichletBC(V, fixed_bc, left_support, method='pointwise'))
         displ_bcs.append(df.DirichletBC(V.sub(dir_id), df.Constant(0), right_support, method='pointwise'))
         if self.p.dim == 3:
-            displ_bcs.append(df.DirichletBC(V.sub(3), df.Constant(0), right_support, method='pointwise'))
+            displ_bcs.append(df.DirichletBC(V.sub(1), df.Constant(0), right_support, method='pointwise'))
 
         if self.p['bc_setting'] == 'full':  # not the best default or good name, but this will not break existing tests...
             displ_bcs.append(df.DirichletBC(V.sub(dir_id), self.displ_load, center_top, method='pointwise'))
