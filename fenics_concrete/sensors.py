@@ -1,5 +1,6 @@
 import dolfin as df
 import numpy as np
+import ufl
 
 
 class Sensors(dict):
@@ -242,9 +243,16 @@ class StressSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get stress
-        stress = df.project(problem.stress, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+
+        if isinstance(problem.stress, ufl.algebra.Sum):
+            stress = df.project(problem.stress, problem.visu_space_T)
+        else:
+            stress = df.project(problem.stress, problem.visu_space_T,
+                                form_compiler_parameters={'quadrature_degree': problem.p.degree})
+
         self.data.append(stress(self.where))
         self.time.append(t)
+
 
 class StrainSensor(Sensor):
     """A sensor that measure the strain tensor in at a point"""
@@ -267,6 +275,7 @@ class StrainSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get strain
-        strain = df.project(problem.strain, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+        strain = df.project(problem.strain, problem.visu_space_T,
+                            form_compiler_parameters={'quadrature_degree': problem.p.degree})
         self.data.append(strain(self.where))
         self.time.append(t)
