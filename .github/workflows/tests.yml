@@ -11,6 +11,13 @@ on:
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+  # Runs the workflow once per day at 3:15am
+  schedule:
+    - cron: '3 15 * * *'
+
+#env:
+#  CACHE_NUMBER: 2  # increase to reset cache manually
+
 jobs:
   testing_tests:
     runs-on: ubuntu-latest
@@ -18,18 +25,17 @@ jobs:
     steps:
       - name: checkout repo content
         uses: actions/checkout@v2
-      - name: setup python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.9
-
-      - name: setup-conda-environment
+      - name: Setup Mambaforge
         uses: conda-incubator/setup-miniconda@v2
         with:
-          environment-file: environment.yml
-          mamba-version: "*"
-          auto-update-conda: true
-          activate-environment: FenicsConcrete
+            miniforge-variant: Mambaforge
+            miniforge-version: latest
+            activate-environment: FenicsConcrete
+            use-mamba: true
+            python-version: 3.9
+
+      - name: Update environment
+        run: mamba env update -n FenicsConcrete -f environment.yml
       
       - name: Run tests
         shell: bash -l {0}

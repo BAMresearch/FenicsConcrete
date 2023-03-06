@@ -53,15 +53,7 @@ class ConcreteBeamExperiment(Experiment):
 
         temp_bcs = []
 
-        if self.p.bc_setting == 'full':
-            # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc1, self.boundary_full()))
-        elif self.p.bc_setting == 'left-right':
-            # bc.append(DirichletBC(temperature_problem.V, T_bc, full_boundary))
-            temp_bcs.append(df.DirichletBC(V, T_bc2, self.boundary_left()))
-            temp_bcs.append(df.DirichletBC(V, T_bc3, self.boundary_right()))
-        else:
-            raise Exception(f'parameter[\'bc_setting\'] = {self.p.bc_setting} is not implemented as temperature boundary.')
+        temp_bcs.append(df.DirichletBC(V, T_bc1, self.boundary_full()))
 
         return temp_bcs
 
@@ -83,13 +75,18 @@ class ConcreteBeamExperiment(Experiment):
             return df.near(x[0], self.p.length/2) and df.near(x[dir_id], self.p.height)
 
 
-
         # define displacement boundary
         displ_bcs = []
 
         displ_bcs.append(df.DirichletBC(V, fixed_bc, left_support, method='pointwise'))
         displ_bcs.append(df.DirichletBC(V.sub(dir_id), df.Constant(0), right_support, method='pointwise'))
-        displ_bcs.append(df.DirichletBC(V.sub(dir_id), self.displ_load, center_top, method='pointwise'))
+        if self.p.dim == 3:
+            displ_bcs.append(df.DirichletBC(V.sub(1), df.Constant(0), right_support, method='pointwise'))
+
+        if self.p['bc_setting'] == 'full':  # not the best default or good name, but this will not break existing tests...
+            displ_bcs.append(df.DirichletBC(V.sub(dir_id), self.displ_load, center_top, method='pointwise'))
+        elif self.p['bc_setting'] == 'no_external_load':  # this will allow to add other loads without having to change this
+            pass #
 
         return displ_bcs
 

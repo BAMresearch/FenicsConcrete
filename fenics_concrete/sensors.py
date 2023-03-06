@@ -1,5 +1,6 @@
 import dolfin as df
 import numpy as np
+import ufl
 
 
 class Sensors(dict):
@@ -54,8 +55,12 @@ class Sensor:
         return self.__class__.__name__
 
     def data_max(self, value):
-        if value > self.max:
+        if self.max: # check for initial value (None is default)
+            if value > self.max:
+                self.max = value
+        else:
             self.max = value
+
 
 
 class DisplacementSensor(Sensor):
@@ -109,9 +114,9 @@ class MaxTemperatureSensor(Sensor):
 
     def __init__(self):
         super().__init__()
-        self.data = [0.0]
-        self.time = [0.0]
-        self.max = 0.0
+        self.data = []
+        self.time = []
+        self.max = None
 
     def measuredata(self, problem, t=1.0):
         """
@@ -174,9 +179,9 @@ class MaxYieldSensor(Sensor):
 
     def __init__(self):
         super().__init__()
-        self.data = [0.0]
-        self.time = [0.0]
-        self.max = 0.0
+        self.data = []
+        self.time = []
+        self.max = None
 
     def measuredata(self, problem, t=1.0):
         """
@@ -238,8 +243,14 @@ class StressSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get stress
-        stress = df.project(problem.stress, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+        if isinstance(problem.stress, ufl.algebra.Sum):
+            stress = df.project(problem.stress, problem.visu_space_T)
+        else:
+            stress = df.project(problem.stress, problem.visu_space_T,
+                                form_compiler_parameters={'quadrature_degree': problem.p.degree})
+
         return stress(self.where)
+
 
 class StrainSensor(Sensor):
     """A sensor that measure the strain tensor in at a point"""
@@ -261,5 +272,6 @@ class StrainSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get strain
-        strain = df.project(problem.strain, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+        strain = df.project(problem.strain, problem.visu_space_T,
+                            form_compiler_parameters={'quadrature_degree': problem.p.degree})
         return strain(self.where)
