@@ -9,7 +9,7 @@ def setup_test(parameters,sensor):
 
     file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
 
-    problem = fenics_concrete.ConcreteThixMechanical(experiment, parameters, pv_name=file_path + 'test_displ_thix')
+    problem = fenics_concrete.ConcreteThixMechanical(experiment, parameters, pv_name='test_displ_thix', vmapoutput = True)
     problem.experiment.apply_displ_load(parameters['u_bc'])
     for i in range(len(sensor)):
         problem.add_sensor(sensor[i])

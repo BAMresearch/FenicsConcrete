@@ -261,4 +261,5 @@ class StrainSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get strain
-        return df.project(problem.strain, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+        strain = df.project(problem.strain, problem.visu_space_T, form_compiler_parameters={'quadrature_degree': problem.p.degree})
+        return strain(self.where)
