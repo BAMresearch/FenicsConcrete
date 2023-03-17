@@ -72,7 +72,7 @@ def test_cylinder_setup(dim, boundary_setting):
     displacement = -parameters.height * 0.1
 
     experiment = fenics_concrete.ConcreteCylinderExperiment(parameters)
-    problem = fenics_concrete.LinearElasticity(experiment, parameters)
+    problem = fenics_concrete.LinearElasticity(experiment, parameters, vmapoutput=True)
 
     problem.experiment.apply_displ_load(displacement)
 
