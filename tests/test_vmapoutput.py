@@ -50,12 +50,10 @@ def test_vmapoutput():
 
   # test metadata
   problem.wrapper.vmap_file.readMetaInformation(metaInfoRead)
-  hasmeta = True
-  if not metaInfoRead.getExporterName(): hasmeta = False
-  if not metaInfoRead.getFileDate(): hasmeta = False
-  if not metaInfoRead.getFileTime(): hasmeta = False
-  if not metaInfoRead.getDescription(): hasmeta = False
-  assert hasmeta
+  assert metaInfoRead.getExporterName()
+  assert metaInfoRead.getFileDate()
+  assert metaInfoRead.getFileTime()
+  assert metaInfoRead.getDescription()
 
   # test unitsystem
   problem.wrapper.vmap_file.readUnitSystem(unitSystemRead)
