@@ -60,7 +60,7 @@ def test_vmapoutput():
   # test unitsystem
   problem.wrapper.vmap_file.readUnitSystem(unitSystemRead)
   hasunits = True
-  if not unitSystemRead.myLengthUnit.myUnitSymbol: hasunits = False
+  assert unitSystemRead.myLengthUnit.myUnitSymbol
   if not unitSystemRead.myMassUnit.myUnitSymbol: hasunits = False
   if not unitSystemRead.myTimeUnit.myUnitSymbol: hasunits = False
   if not unitSystemRead.myCurrentUnit.myUnitSymbol: hasunits = False
