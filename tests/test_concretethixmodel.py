@@ -7,7 +7,7 @@ import pytest
 def setup_test(parameters,sensor):
     experiment = fenics_concrete.ConcreteCubeUniaxialExperiment(parameters)
 
-    problem = fenics_concrete.ConcreteThixMechanical(experiment, parameters, pv_name='test_displ_thix', vmapoutput = True)
+    problem = fenics_concrete.ConcreteThixMechanical(experiment, parameters, pv_name='test_displ_thix', vmapoutput = False)
     if parameters['bc_setting'] == 'disp':
         problem.experiment.apply_displ_load(parameters['u_bc'])
     for i in range(len(sensor)):

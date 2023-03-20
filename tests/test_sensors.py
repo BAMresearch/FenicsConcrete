@@ -56,7 +56,7 @@ def simple_simulation(sensor, name):
     parameters['a_ft'] = 1.0
 
     experiment = fenics_concrete.ConcreteCubeExperiment(parameters)
-    problem = fenics_concrete.ConcreteThermoMechanical(experiment = experiment, parameters = parameters, pv_name = name, vmapoutput = True)
+    problem = fenics_concrete.ConcreteThermoMechanical(experiment = experiment, parameters = parameters, pv_name = name, vmapoutput = False)
 
     problem.add_sensor(sensor)
 
