@@ -9,7 +9,7 @@ import pytest
 #     import QuadratureRepresentationDeprecationWarning
 # warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
-def simple_simulation(sensor):
+def simple_simulation(sensor, name):
 
     parameters = fenics_concrete.Parameters()  # using the current default values
     # general
@@ -56,7 +56,7 @@ def simple_simulation(sensor):
     parameters['a_ft'] = 1.0
 
     experiment = fenics_concrete.ConcreteCubeExperiment(parameters)
-    problem = fenics_concrete.ConcreteThermoMechanical(experiment, parameters)
+    problem = fenics_concrete.ConcreteThermoMechanical(experiment = experiment, parameters = parameters, pv_name = name, vmapoutput = False)
 
     problem.add_sensor(sensor)
 
@@ -91,7 +91,6 @@ def simple_simulation(sensor):
                                     (fenics_concrete.sensors.MaxYieldSensor(),-52685.14211)
                                     ])
 def test_sensor(sensor_input):
-        
     sensor = sensor_input[0]
     result = sensor_input[1]
     if isinstance(result, float):
@@ -99,6 +98,6 @@ def test_sensor(sensor_input):
     else:
         result = np.asarray(result)
 
-    data = simple_simulation(sensor)
+    data = simple_simulation(sensor, f"SensorTest{sensor.name}")
 
     assert data == pytest.approx(result, 1e-06)

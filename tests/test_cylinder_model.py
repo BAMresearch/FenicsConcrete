@@ -15,7 +15,7 @@ def simple_setup(p, displacement, sensor):
 
     experiment = fenics_concrete.ConcreteCylinderExperiment(parameters)
 
-    problem = fenics_concrete.LinearElasticity(experiment, parameters)
+    problem = fenics_concrete.LinearElasticity(experiment, parameters, vmapoutput=False)
     problem.add_sensor(sensor)
 
     problem.experiment.apply_displ_load(displacement)

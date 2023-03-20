@@ -20,12 +20,12 @@ warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 # copy from concrete_thermo_mechanical.py
 # change/ adapted models for modelling structural build-up
 class ConcreteThixMechanical(MaterialProblem):
-    def __init__(self, experiment=None, parameters=None, pv_name='pv_output_concrete-thix'):
+    def __init__(self, experiment=None, parameters=None, pv_name='pv_output_concrete-thix', vmapoutput = False):
         # generate "dummy" experiment when none is passed
         if experiment == None:
             experiment = experimental_setups.get_experiment('MinimalCube', parameters)
 
-        super().__init__(experiment, parameters, pv_name)
+        super().__init__(experiment, parameters, pv_name, vmapoutput)
 
     def setup(self):
         # setup initial material parameters
@@ -60,6 +60,7 @@ class ConcreteThixMechanical(MaterialProblem):
 
         # setting bcs
         bcs = self.experiment.create_displ_bcs(self.mechanics_problem.V) # fixed boundary bottom
+        if self.wrapper: self.wrapper.set_geometry(self.mechanics_problem.V, [])
 
         self.mechanics_problem.set_bcs(bcs)
 
@@ -72,7 +73,7 @@ class ConcreteThixMechanical(MaterialProblem):
         self.mechanics_problem.set_initial_path(path)
 
     def solve(self, t=1.0):
-
+        if self.wrapper: self.wrapper.next_state()
         # print('solve for',t)
         self.mechanics_solver.solve(self.mechanics_problem, self.mechanics_problem.u.vector())
 
@@ -87,8 +88,9 @@ class ConcreteThixMechanical(MaterialProblem):
         self.residual = self.mechanics_problem.R  # for residual sensor
         for sensor_name in self.sensors:
             # go through all sensors and measure
-            self.sensors[sensor_name].measure(self, t)
 
+            self.sensors[sensor_name].measure(self,self.wrapper, t)
+        if self.wrapper: self.wrapper.write_state()
         # update age & path before next step!
         self.mechanics_problem.update_values()
 

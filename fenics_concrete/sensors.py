@@ -34,7 +34,19 @@ class Sensors(dict):
 class Sensor:
     """Template for a sensor object"""
 
-    def measure(self, problem, t):
+    def __init__(self):
+        self.data = []
+        self.time = []
+        self.LOCATION = 'GLOBAL'
+
+    def measure(self, problem, wrapper = None,t = 1.0):
+        measured = self.measuredata(problem, t)
+        self.data.append(measured)
+        self.time.append(t)
+        if wrapper: wrapper.set_variable(self.__class__.__name__, measured, self.LOCATION)
+
+
+    def measuredata(self, problem, t):
         """Needs to be implemented in child, depending on the sensor"""
         raise NotImplementedError()
 
@@ -60,11 +72,11 @@ class DisplacementSensor(Sensor):
             where : Point
                 location where the value is measured
         """
+        super().__init__()
         self.where = where
-        self.data = []
-        self.time = []
 
-    def measure(self, problem, t=1.0):
+
+    def measuredata(self, problem, t=1.0):
         """
         Arguments:
             problem : FEM problem object
@@ -72,8 +84,7 @@ class DisplacementSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get displacements
-        self.data.append(problem.displacement(self.where))
-        self.time.append(t)
+        return problem.displacement(self.where)
 
 
 class TemperatureSensor(Sensor):
@@ -85,31 +96,29 @@ class TemperatureSensor(Sensor):
             where : Point
                 location where the value is measured
         """
+        super().__init__()
         self.where = where
-        self.data = []
-        self.time = []
 
-    def measure(self, problem, t=1.0):
+    def measuredata(self, problem, t=1.0):
         """
         Arguments:
             problem : FEM problem object
             t : float, optional
                 time of measurement for time dependent problems
         """
-        T = problem.temperature(self.where) - problem.p.zero_C
-        self.data.append(T)
-        self.time.append(t)
+        return problem.temperature(self.where) - problem.p.zero_C
 
 
 class MaxTemperatureSensor(Sensor):
     """A sensor that measure the maximum temperature at each timestep"""
 
     def __init__(self):
+        super().__init__()
         self.data = []
         self.time = []
         self.max = None
 
-    def measure(self, problem, t=1.0):
+    def measuredata(self, problem, t=1.0):
         """
         Arguments:
             problem : FEM problem object
@@ -117,9 +126,8 @@ class MaxTemperatureSensor(Sensor):
                 time of measurement for time dependent problems
         """
         max_T = np.amax(problem.temperature.vector().get_local()) - problem.p.zero_C
-        self.data.append(max_T)
         self.data_max(max_T)
-        self.time.append(t)
+        return max_T
 
 
 class DOHSensor(Sensor):
@@ -131,11 +139,10 @@ class DOHSensor(Sensor):
             where : Point
                 location where the value is measured
         """
+        super().__init__()
         self.where = where
-        self.data = []
-        self.time = []
 
-    def measure(self, problem, t=1.0):
+    def measuredata(self, problem, t=1.0):
         """
         Arguments:
             problem : FEM problem object
@@ -144,19 +151,16 @@ class DOHSensor(Sensor):
         """
         # get DOH
         # TODO: problem with projected field onto linear mesh!?!
-        alpha = problem.degree_of_hydration(self.where)
-        self.data.append(alpha)
-        self.time.append(t)
+        return problem.degree_of_hydration(self.where)
 
 
 class MinDOHSensor(Sensor):
     """A sensor that measure the minimum degree of hydration at each timestep"""
 
     def __init__(self):
-        self.data = []
-        self.time = []
+        super().__init__()
 
-    def measure(self, problem, t=1.0):
+    def measuredata(self, problem, t=1.0):
         """
         Arguments:
             problem : FEM problem object
@@ -164,9 +168,8 @@ class MinDOHSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get min DOH
-        min_DOH = np.amin(problem.q_degree_of_hydration.vector().get_local())
-        self.data.append(min_DOH)
-        self.time.append(t)
+        return np.amin(problem.q_degree_of_hydration.vector().get_local())
+        
 
 
 class MaxYieldSensor(Sensor):
@@ -175,11 +178,12 @@ class MaxYieldSensor(Sensor):
     A max value > 0 indicates that at some place the stress exceeds the limits"""
 
     def __init__(self):
+        super().__init__()
         self.data = []
         self.time = []
         self.max = None
 
-    def measure(self, problem, t=1.0):
+    def measuredata(self, problem, t=1.0):
         """
         Arguments:
             problem : FEM problem object
@@ -187,19 +191,17 @@ class MaxYieldSensor(Sensor):
                 time of measurement for time dependent problems
         """
         max_yield = np.amax(problem.q_yield.vector().get_local())
-        self.data.append(max_yield)
-        self.time.append(t)
         self.data_max(max_yield)
+        return max_yield
 
 
 class ReactionForceSensorBottom(Sensor):
     """A sensor that measure the reaction force at the bottom perpendicular to the surface"""
 
     def __init__(self):
-        self.data = []
-        self.time = []
+        super().__init__()
 
-    def measure(self, problem, t=1.0):
+    def measuredata(self, problem, t = 1.0):
         """
         Arguments:
             problem : FEM problem object
@@ -216,10 +218,8 @@ class ReactionForceSensorBottom(Sensor):
             bc_z = df.DirichletBC(problem.V.sub(2), df.Constant(1.), bottom_surface)
 
         bc_z.apply(v_reac.vector())
-        computed_force = (-df.assemble(df.action(problem.residual, v_reac)))
+        return (-df.assemble(df.action(problem.residual, v_reac)))
 
-        self.data.append(computed_force)
-        self.time.append(t)
 
 
 class StressSensor(Sensor):
@@ -231,11 +231,11 @@ class StressSensor(Sensor):
             where : Point
                 location where the value is measured
         """
+        super().__init__()
         self.where = where
-        self.data = []
-        self.time = []
+        self.LOCATION = 'NODE'
 
-    def measure(self, problem, t=1.0):
+    def measuredata(self, problem, t=1.0):
         """
         Arguments:
             problem : FEM problem object
@@ -243,15 +243,13 @@ class StressSensor(Sensor):
                 time of measurement for time dependent problems
         """
         # get stress
-
         if isinstance(problem.stress, ufl.algebra.Sum):
             stress = df.project(problem.stress, problem.visu_space_T)
         else:
             stress = df.project(problem.stress, problem.visu_space_T,
                                 form_compiler_parameters={'quadrature_degree': problem.p.degree})
 
-        self.data.append(stress(self.where))
-        self.time.append(t)
+        return stress(self.where)
 
 
 class StrainSensor(Sensor):
@@ -263,11 +261,10 @@ class StrainSensor(Sensor):
             where : Point
                 location where the value is measured
         """
+        super().__init__()
         self.where = where
-        self.data = []
-        self.time = []
 
-    def measure(self, problem, t=1.0):
+    def measuredata(self, problem, t=1.0):
         """
         Arguments:
             problem : FEM problem object
@@ -277,5 +274,4 @@ class StrainSensor(Sensor):
         # get strain
         strain = df.project(problem.strain, problem.visu_space_T,
                             form_compiler_parameters={'quadrature_degree': problem.p.degree})
-        self.data.append(strain(self.where))
-        self.time.append(t)
+        return strain(self.where)

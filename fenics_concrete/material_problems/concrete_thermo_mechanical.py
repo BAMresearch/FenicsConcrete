@@ -20,13 +20,13 @@ warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
 # full concrete model, including hydration-temperate and mechanics, including calls to solve etc.
 class ConcreteThermoMechanical(MaterialProblem):
-    def __init__(self, experiment=None, parameters=None, pv_name='pv_output_concrete-thermo-mechanical'):
+    def __init__(self, experiment=None, parameters=None, pv_name='pv_output_concrete-thermo-mechanical', vmapoutput = False):
         # generate "dummy" experiement when none is passed
         if experiment == None:
             #experiment = experimental_setups.get_experiment('MinimalCube', parameters)
             experiment = fenics_concrete.MinimalCubeExperiment(parameters)
 
-        super().__init__(experiment, parameters, pv_name)
+        super().__init__(experiment, parameters, pv_name, vmapoutput)
 
     #     # TODO: define global fields here
     #     #       - alpha, V
@@ -97,13 +97,14 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.mechanics_solver = df.NewtonSolver()
         self.mechanics_solver.parameters['absolute_tolerance'] = 1e-9
         self.mechanics_solver.parameters['relative_tolerance'] = 1e-8
+        if self.wrapper: self.wrapper.set_geometry(self.mechanics_problem.V, [])
 
 
 
 
 
     def solve(self, t=1.0):
-
+        if self.wrapper: self.wrapper.next_state()
         # print('Solving: T') # TODO ouput only a certain log level INFO
         self.temperature_solver.solve(self.temperature_problem, self.temperature_problem.T.vector())
 
@@ -133,7 +134,8 @@ class ConcreteThermoMechanical(MaterialProblem):
         # get sensor data
         for sensor_name in self.sensors:
             # go through all sensors and measure
-            self.sensors[sensor_name].measure(self, t)
+            self.sensors[sensor_name].measure(self, self.wrapper, t)
+        if self.wrapper: self.wrapper.write_state()
 
     def pv_plot(self, t=0):
         # calls paraview output for both problems

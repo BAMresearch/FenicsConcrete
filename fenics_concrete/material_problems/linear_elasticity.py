@@ -15,7 +15,7 @@ warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 class LinearElasticity(MaterialProblem):
     """Material definition for linear elasticity"""
 
-    def __init__(self, experiment=None, parameters=None, pv_name='pv_output_linear_elasticity'):
+    def __init__(self, experiment=None, parameters=None, pv_name='pv_output_linear_elasticity', vmapoutput = False):
         """Initializes the object by calling super().__init__
 
         Parameters
@@ -31,11 +31,10 @@ class LinearElasticity(MaterialProblem):
         if experiment is None:
             experiment = experimental_setups.MinimalCubeExperiment(parameters)
 
-        super().__init__(experiment, parameters, pv_name)
+        super().__init__(experiment, parameters, pv_name, vmapoutput)
 
     def setup(self):
         default_p = Parameters()
-
         default_p['degree'] = 2  # polynomial degree
 
         # parameters for mechanics problem
@@ -64,9 +63,9 @@ class LinearElasticity(MaterialProblem):
         self.residual = None  # initialize residual
 
         # Define variational problem
-        u_trial = df.TrialFunction(self.V)
+        self.u_trial = df.TrialFunction(self.V)
         v = df.TestFunction(self.V)
-        self.a = df.inner(self.sigma(u_trial), df.grad(v)) * df.dx
+        self.a = df.inner(self.sigma(self.u_trial), df.grad(v)) * df.dx
 
         if self.p.dim == 2:
             f = df.Constant((0, 0))
@@ -86,13 +85,15 @@ class LinearElasticity(MaterialProblem):
         # TODO better names!!!!
         self.visu_space_T = df.TensorFunctionSpace(self.experiment.mesh, "Lagrange", self.p.degree)
 
+        if self.wrapper: self.wrapper.set_geometry(self.V, [self.a, self.L])
+
     # Stress computation for linear elastic problem
     def sigma(self, v):
         # v is the displacement field
         return 2.0 * self.p.mu * df.sym(df.grad(v)) + self.p.lmbda * df.tr(df.sym(df.grad(v))) * df.Identity(len(v))
 
-    def solve(self, t=1.0):
-        # time in this example only relevant for the naming of the paraview steps and the sensor output
+    def solve(self, t = 1.0):
+        if self.wrapper: self.wrapper.next_state()
         # solve
         df.solve(self.a == self.L, self.displacement, self.bcs)
 
@@ -104,7 +105,8 @@ class LinearElasticity(MaterialProblem):
         # get sensor data
         for sensor_name in self.sensors:
             # go through all sensors and measure
-            self.sensors[sensor_name].measure(self, t)
+            self.sensors[sensor_name].measure(self, self.wrapper, t)
+        if self.wrapper: self.wrapper.write_state()
 
     def compute_residual(self):
         # compute reaction forces

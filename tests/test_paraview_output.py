@@ -58,7 +58,7 @@ def simple_simulation(new_parameters, name):
     experiment = fenics_concrete.ConcreteCubeExperiment(parameters)
 
     file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
-    problem = fenics_concrete.ConcreteThermoMechanical(experiment, parameters, pv_name=file_path+'test_'+name)
+    problem = fenics_concrete.ConcreteThermoMechanical(experiment, parameters, pv_name='test_'+name, vmapoutput=False)
 
 
     # data for time stepping
