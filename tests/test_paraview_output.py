@@ -86,8 +86,8 @@ def compare_pv_files(ref_file, test_file):
     file_path = os.path.dirname(os.path.realpath(__file__)) + '/'
     
     #   better compare the files...
-    root_ref = ET.parse(file_path+ref_file).getroot()
-    test_ref = ET.parse(file_path+test_file).getroot()
+    root_ref = ET.parse('tests/'+ref_file).getroot()
+    test_ref = ET.parse(test_file).getroot()
 
     # loop over all timesteps
     for ref_step, test_step in zip(root_ref[0][0], test_ref[0][0]):
