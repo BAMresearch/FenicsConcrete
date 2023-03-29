@@ -31,4 +31,4 @@ jobs:
           mamba config --set anaconda_upload yes
           mamba install boa
           cd $GITHUB_WORKSPACE
-          mamba mambabuild --token 6424080f33829b3c7e0bf816 --user testuser77 .
+          mamba mambabuild --token "6424080f33829b3c7e0bf816" --user testuser77 .
