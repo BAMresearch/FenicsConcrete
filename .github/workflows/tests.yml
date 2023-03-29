@@ -4,6 +4,7 @@ name: Tests for fenics concrete
 on:
   push:
     branches-ignore:
+      - ' add-github-action-for-building-mamba-package'
 
   pull_request:
     branches: [ main ]
