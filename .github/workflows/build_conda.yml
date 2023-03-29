@@ -33,4 +33,4 @@ jobs:
           mamba install anaconda-client
           mamba config --set anaconda_upload yes
           cd $GITHUB_WORKSPACE
-          mamba mambabuild --token "6424080f33829b3c7e0bf816" --user testuser77 .
+          mamba mambabuild --token "642438ef33829b3c7ec78e95" --user testuser77 .
