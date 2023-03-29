@@ -30,6 +30,7 @@ jobs:
         run: |
           mamba config --set anaconda_upload yes
           mamba install boa
+          mamba install install anaconda-client
           mamba install conda-verify
           cd $GITHUB_WORKSPACE
-          mamba mambabuild --token "$ANACONDA_TOKEN" --user bam77 .
+          mamba mambabuild --token "$ANACONDA_TOKEN" .
