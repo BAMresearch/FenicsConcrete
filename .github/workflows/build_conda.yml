@@ -3,14 +3,31 @@ name: publish_conda
 on:
   release:
     types: [published]
+  # for testing
+  workflow_dispatch:
     
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: publish-to-conda
-      uses: fcakyon/conda-publish-action@v1.3
-      with:
-        anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
-        platforms: 'linux'
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Mambaforge
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          use-mamba: true
+          python-version: 3.9
+          channels: conda-forge, hannes2621, defaults
+          channel-priority: true
+
+      - name: Build and upload
+        shell: bash -l {0}
+        env:
+          ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+        run: |
+          conda config --set anaconda_upload yes
+          echo $GITHUB_WORKSPACE
+          #conda build --token "$ANACONDA_TOKEN" --user bam77 .conda -m .conda/conda_build_config.yaml
