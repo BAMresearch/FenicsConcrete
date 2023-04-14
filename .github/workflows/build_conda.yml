@@ -10,9 +10,27 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: publish-to-conda
-      uses: fcakyon/conda-publish-action@v1.3
-      with:
-        anacondatoken: ${{ secrets.ANACONDA_TOKEN }}
-        platforms: 'linux'
+      - name: checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Mambaforge
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          use-mamba: true
+          python-version: 3.9
+          channels: conda-forge, bam77, defaults
+          channel-priority: true
+
+      - name: Build and upload
+        shell: bash -l {0}
+        env:
+          ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
+        run: |
+          mamba install boa
+          mamba install conda-verify
+          mamba install anaconda-client
+          mamba config --set anaconda_upload yes
+          cd $GITHUB_WORKSPACE
+          mamba mambabuild --token "$ANACONDA_TOKEN" --user bam77 .
