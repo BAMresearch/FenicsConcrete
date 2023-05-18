@@ -1,4 +1,3 @@
-
 import os, sys
 parentdir = os.path.dirname(os.path.dirname(__file__))
 sys.path.append(parentdir)
@@ -20,7 +19,6 @@ def simple_setup(p, sensor):
     experiment = fenicsX_concrete.concreteSlabExperiment(parameters)         # Specifies the domain, discretises it and apply Dirichlet BCs
 
     problem = fenicsX_concrete.LinearElasticity(experiment, parameters)      # Specifies the material law and weak forms.
-    #print(help(fenics_concrete.LinearElasticity))
 
     for i in range(len(sensor)):
         problem.add_sensor(sensor[i])
@@ -29,8 +27,6 @@ def simple_setup(p, sensor):
 
     problem.solve()  # solving this
 
-    #print(problem.displacement([0,2]))
-
     problem.pv_plot()
 
     # last measurement
@@ -38,12 +34,14 @@ def simple_setup(p, sensor):
     #return sensor_output
 
     return problem.sensors
+
 import math
 p = fenicsX_concrete.Parameters()  # using the current default values
 p['problem'] = 'cantilever_beam' #'cantilever_beam' #
 
 # N/m², m, kg, sec, N
 p['rho'] = 7750
+p['nu'] = 0.28
 p['g'] = 9.81
 p['E'] = 210e9
 p['length'] = 1
@@ -52,6 +50,7 @@ p['breadth'] = 0.2
 p['k_x'] = 1e15
 p['k_y'] = 1e13
 p['K_torsion'] = 1e11
+p['degree'] = 2 
 
 # MPa, mm, kg, sec, N
 #p['rho'] = 7750e-9 #kg/mm³
@@ -61,36 +60,45 @@ p['K_torsion'] = 1e11
 #p['breadth'] = 200
 #p['load'] = 100e-6 #N/mm²
 
-p['nu'] = 0.28
-p['num_elements_length'] = 30
+p['num_elements_length'] = 20
 p['num_elements_breadth'] = 20
 p['dim'] = 2
-p['uncertainties'] = [1]
+
+# 0: Constant E and nu fields.
+# 1: Random E and nu fields.
+# 2: Linear Springs.
+# 3: Torsion Springs
+p['uncertainties'] = [0]
+
 #Defining sensor positions
 sensor = []
 sensor_pos_x = []
 number_of_sensors = 20
 for i in range(number_of_sensors):
-    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[p['length']/20*(i+1), 0.5*p['breadth'], 0]])))
-    sensor_pos_x.append(p['length']/20*(i+1))
+    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[p['length']/number_of_sensors*(i+1), 0.5*p['breadth'], 0]])))
+    sensor.append(fenicsX_concrete.sensors.StrainSensor(np.array([[p['length']/number_of_sensors*(i+1), 0.5*p['breadth'], 0]])))
+    sensor_pos_x.append(p['length']/number_of_sensors*(i+1))
 
 # Synthetic data generation
 solution = simple_setup(p, sensor)
-number_of_sensors =20
 
-def collect_sensor_solutions(model_solution, total_sensors):
+def collect_sensor_solutions(model_solution, field_data, field_type):
     counter=0
-    disp_model = np.zeros((total_sensors,2))
     for i in model_solution:
-        disp_model[counter] = model_solution[i].data[-1]
-        counter += 1
-    return disp_model
+        if isinstance(model_solution[i], field_type):
+            field_data[counter] = model_solution[i].data[-1]
+            counter += 1
+    return field_data
     #print(measured[i].data[-1])
 
-displacement_data = collect_sensor_solutions(solution, number_of_sensors)
+disp_model = np.zeros((number_of_sensors,2))
+strain_model = np.zeros((number_of_sensors,4))
+
+displacement_data = collect_sensor_solutions(solution, disp_model, fenicsX_concrete.sensors.DisplacementSensor)
+strain_data = collect_sensor_solutions(solution, strain_model, fenicsX_concrete.sensors.StrainSensor)
 
 import plotly.express as px
-fig = px.line(x=sensor_pos_x, y=displacement_data[:,1])
+fig = px.line(x=sensor_pos_x, y=strain_data[:,0], markers=True, title='Strain Curve')
 fig.update_layout(
     title_text='Vertical Displacement Curve'
 )

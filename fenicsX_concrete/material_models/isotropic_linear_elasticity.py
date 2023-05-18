@@ -16,7 +16,7 @@ import warnings
 #warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
 
-class LinearElasticity(MaterialProblem):
+class IsotropicLinearElasticity(MaterialProblem):
     """Material definition for linear elasticity"""
 
     def __init__(self, experiment=None, parameters=None, pv_name='pv_output_linear_elasticity'):
@@ -48,27 +48,20 @@ class LinearElasticity(MaterialProblem):
         default_p['lmbda'] = None
 
         self.p = default_p + self.p
-        self.ds = self.experiment.create_neumann_boundary() # Neumann boundary
 
         for i in self.p['uncertainties']:
             if i == 1:
                 print(i)
+          
+        self.residual = None  # initialize residual
 
-        if 0 in self.p['uncertainties'] and self.p.constitutive == 'orthotropic':
-            self.E_m = df.fem.Constant(self.experiment.mesh, self.p.E_m)
-            self.E_d = df.fem.Constant(self.experiment.mesh, self.p.E_d)
-            self.nu_12 = df.fem.Constant(self.experiment.mesh, self.p.nu_12)
-            self.G_12 = df.fem.Constant(self.experiment.mesh, self.p.G_12)
-        
         # Constant E and nu fields.
-        if 0 in self.p['uncertainties'] and self.p.constitutive == 'isotropic':
-            self.E = df.fem.Constant(self.experiment.mesh, self.p.E)
-            self.nu = df.fem.Constant(self.experiment.mesh, self.p.nu)
+        if 0 in self.p['uncertainties']:
+            E = self.p.E 
+            nu = self.p.nu 
 
-            #E = self.p.E 
-            #nu = self.p.nu 
-            #self.lambda_ = df.fem.Constant(self.experiment.mesh, E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)))
-            #self.mu = df.fem.Constant(self.experiment.mesh, E / (2.0 * (1.0 + nu)))
+            self.lambda_ = df.fem.Constant(self.experiment.mesh, E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)))
+            self.mu = df.fem.Constant(self.experiment.mesh, E / (2.0 * (1.0 + nu)))
 
         # Random E and nu fields.
         if 1 in self.p['uncertainties']:
@@ -90,10 +83,10 @@ class LinearElasticity(MaterialProblem):
         # Selects the problem which you want to solve
         if self.p.problem == 'tensile_test':
             self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
-            #self.ds = self.experiment.create_neumann_boundary()
-            self.L =  ufl.dot(self.T, self.v) * self.ds(1) 
+            ds = self.experiment.create_neumann_boundary()
+            self.L =  ufl.dot(self.T, self.v) * ds(1) 
 
-        elif self.p.problem == 'bending_test':
+        elif self.p.problem == 'cantilever_beam':
             if self.p.dim == 2:
                 #f = df.Constant((0, 0))
                 f = df.fem.Constant(self.experiment.mesh, ScalarType((0, -self.p.rho*self.p.g))) #0, -self.p.rho*self.p.g
@@ -113,29 +106,29 @@ class LinearElasticity(MaterialProblem):
             moment_arm_array = np.zeros(length_x)
             transformed_coordinates_vector = np.absolute(x[1]) - 0.5*self.p.breadth
             for i in range(length_x):
-                if transformed_coordinates_vector[i]!=0:   #### must be corrected
+                if transformed_coordinates_vector[i]!=0:
                     moment_arm_array[i] = 1/transformed_coordinates_vector[i]**2
             return moment_arm_array
     
         #For torsional spring
         def clamped_neutral_axis(x):          
-            return np.logical_and(np.isclose(x[0], 0), np.isclose(x[1],0.5*self.p.breadth))
+            return np.logical_and(np.isclose(x[0], 0), np.isclose(x[1],0.1))
             #return np.isclose(x[0], 0)
 
         if 2 in self.p['uncertainties']:
             #Linear Spring
-            self.k_x = df.fem.Constant(self.experiment.mesh, self.p.k_x)
-            self.k_y = df.fem.Constant(self.experiment.mesh, self.p.k_x)
+            k_x = self.p.k_x
+            k_y = self.p.k_y
+            self.k_x = df.fem.Constant(self.experiment.mesh, k_x)
+            self.k_y = df.fem.Constant(self.experiment.mesh, k_y)
     
             spring_stiffness = ufl.as_matrix([[self.k_x, 0], [0, self.k_y]])
             self.spring_stress = ufl.dot(spring_stiffness,self.u_trial)
 
-            #self.ds = self.experiment.create_neumann_boundary()  
-            self.internal_force_term = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx #- ufl.dot(self.spring_stress, self.v) * self.ds(2)
-            self.spring_force_term = ufl.dot(self.spring_stress, self.v) * self.ds(2)
-            self.a = self.internal_force_term - self.spring_force_term
+            ds = self.experiment.create_neumann_boundary()  
+            self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx + ufl.dot(self.spring_stress, self.v) * ds(2)
             self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-            
+
         elif 3 in self.p['uncertainties']:
             #Torsion Spring
             K_torsion = self.p.K_torsion
@@ -154,11 +147,10 @@ class LinearElasticity(MaterialProblem):
             bc2_dofs_sub0 = df.fem.locate_dofs_topological(self.experiment.V.sub(0), 0, bc2_facets)
             bc2 = df.fem.dirichletbc(ScalarType(0), bc2_dofs_sub0, self.experiment.V.sub(0))
 
-            #ds = self.experiment.create_neumann_boundary()
-            self.internal_force_term = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx #- ufl.dot(self.spring_stress, self.v) * self.ds(2)
-            self.spring_force_term = ufl.dot(self.spring_stress, self.v) * self.ds(2)
-            self.a = self.internal_force_term - self.spring_force_term
+            ds = self.experiment.create_neumann_boundary()
+            self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx + ufl.dot(self.spring_stress, self.v) * ds(2)
             self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=[bc1, bc2], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+
         else:
             self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
             self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=self.experiment.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
@@ -200,48 +192,7 @@ class LinearElasticity(MaterialProblem):
 
     #Deterministic
     def sigma(self, u):
-        if self.p.constitutive == 'orthotropic':
-            #ortho3 - same results as ortho2 when E_d = 0
-            denominator = self.E_m + self.E_d - (self.E_m - self.E_d)*self.nu_12**2
-            cmatrix_11 = (self.E_m + self.E_d)*(self.E_m + self.E_d) / denominator
-            cmatrix_22 = (self.E_m - self.E_d)*(self.E_m + self.E_d) / denominator
-            cmatrix_33 = self.G_12
-            cmatrix_12 = self.nu_12*(self.E_m - self.E_d)*(self.E_m + self.E_d) / denominator
-
-            #1st attempt
-            c_matrix_voigt = ufl.as_matrix([[cmatrix_11, cmatrix_12, 0],
-                                 [cmatrix_12, cmatrix_22, 0],
-                                 [0, 0, cmatrix_33]])
-
-            epsilon_tensor = self.epsilon(u)
-            epsilon_voigt = ufl.as_vector([epsilon_tensor[0,0], epsilon_tensor[1,1], 2*epsilon_tensor[0,1]])
-            stress_voigt = ufl.dot(c_matrix_voigt, epsilon_voigt) 
-            stress_tensor = ufl.as_tensor([[stress_voigt[0], stress_voigt[2]], [stress_voigt[2], stress_voigt[1]]])
-            return stress_tensor
-        
-        elif self.p.constitutive == 'isotropic':
-            #iso1 - gives correct results
-            #cmatrix_11 = self.E/ (1 - self.nu**2)
-            #cmatrix_22 = self.E/ (1 - self.nu**2)
-            #cmatrix_33 = self.E/ (2*(1 + self.nu))
-            #cmatrix_12 = self.nu*self.E / (1 - self.nu)
-
-            denominator = 1 - self.nu**2
-            cmatrix_11 = self.E/ denominator
-            cmatrix_22 = self.E/ denominator
-            cmatrix_33 = self.E/ (2*(1 + self.nu))
-            cmatrix_12 = self.nu*self.E / denominator
-
-            c_matrix_voigt = ufl.as_matrix([[cmatrix_11, cmatrix_12, 0],
-                                 [cmatrix_12, cmatrix_22, 0],
-                                 [0, 0, cmatrix_33]])
-
-            epsilon_tensor = self.epsilon(u)
-            epsilon_voigt = ufl.as_vector([epsilon_tensor[0,0], epsilon_tensor[1,1], 2*epsilon_tensor[0,1]])
-            stress_voigt = ufl.dot(c_matrix_voigt, epsilon_voigt) 
-            stress_tensor = ufl.as_tensor([[stress_voigt[0], stress_voigt[2]], [stress_voigt[2], stress_voigt[1]]])
-            return stress_tensor
-            #return self.lambda_ * ufl.nabla_div(u) * ufl.Identity(u.geometric_dimension()) + 2*self.mu*self.epsilon(u)
+        return self.lambda_ * ufl.nabla_div(u) * ufl.Identity(u.geometric_dimension()) + 2*self.mu*self.epsilon(u)
     
     def project_fenicsx(self, v, V, dx, u=None):
         projv = ufl.TrialFunction(V)
@@ -259,6 +210,7 @@ class LinearElasticity(MaterialProblem):
     def solve(self, t=1.0):        
         self.displacement = self.weak_form_problem.solve()
         #self.strain_derivative_reshaped = self.strain_derivative.x.array.reshape((-1,4,2))
+
         #self.stress = self.sigma(self.displacement)
         
         # TODO make some switch in sensor definition to trigger this...
@@ -269,51 +221,19 @@ class LinearElasticity(MaterialProblem):
         #self.external_forces = df.fem.assemble_vector(df.fem.form(self.L))
         #self.int_forces=df.fem.assemble_vector(df.fem.form(ufl.action(self.a, self.displacement)))
 
-        #self.residual = ufl.action(self.a, self.displacement) - self.L
-        #self.residual_numeric = df.fem.assemble_vector(df.fem.form(self.residual))
-
-        # Trial 3
         self.residual = ufl.action(self.a, self.displacement) - self.L
         self.residual_numeric = df.fem.assemble_vector(df.fem.form(self.residual))
-
-        if 0 in self.p['uncertainties'] and 2 not in self.p['uncertainties'] and 3 not in self.p['uncertainties']:
-            internal_forces = df.fem.assemble_vector(df.fem.form(ufl.action(self.a, self.displacement)))
-            external_forces = df.fem.assemble_vector(df.fem.form(self.L))
-        else:
-            internal_forces = df.fem.assemble_vector(df.fem.form(ufl.action(self.internal_force_term, self.displacement)))
-            spring_forces = df.fem.assemble_vector(df.fem.form(ufl.action(self.spring_force_term, self.displacement)))
-            external_forces = df.fem.assemble_vector(df.fem.form(self.L))
-            self.force_x_vector = spring_forces.array[self.experiment.bc_x_dof] #self.residual_numval
-            self.force_y_vector = spring_forces.array[self.experiment.bc_y_dof]
 
         # get sensor data
         for sensor_name in self.sensors:
             # go through all sensors and measure
             self.sensors[sensor_name].measure(self, t)
 
-    def solve_inverse_problem(self, displacement_measured, reaction_force_measured, t=1.0):
-        self.displacement_measured_function = df.fem.Function(self.experiment.V)
-        self.displacement_measured_function.x.array[:] = displacement_measured
-        self.euclid_residual = ufl.action(self.a, self.displacement_measured_function) - self.L
-        #lhs = df.fem.assemble_vector(df.fem.form(ufl.action(self.a, self.displacement_measured_function)))
-        #rhs = df.fem.assemble_vector(df.fem.form(self.L))
-        self.euclid_residual_numeric = df.fem.assemble_vector(df.fem.form(self.euclid_residual))
-        #self.spring_force_inverse_problem = df.fem.assemble_vector(df.fem.form(ufl.action(self.spring_force_term, self.displacement_measured_function)))
-
-        self.dirichlet_dofs = np.concatenate((self.experiment.bc_x_dof, self.experiment.bc_y_dof))
-        self.momentum_balance = np.delete(self.euclid_residual_numeric.array, self.dirichlet_dofs)
-        #self.momentum_balance = self.euclid_residual_numeric.array #For the case of springs, where LHS nodes becomes the internal nodes.
-
-        self.force_balance_x = np.sum(self.euclid_residual_numeric.array[self.experiment.bc_x_dof]) - reaction_force_measured[0]
-        self.force_balance_y = np.sum(self.euclid_residual_numeric.array[self.experiment.bc_y_dof]) - reaction_force_measured[1]
-        self.force_balance = np.array([self.force_balance_x, self.force_balance_y])
-        self.reaction_force_model = np.array([np.sum(self.euclid_residual_numeric.array[self.experiment.bc_x_dof]), np.sum(self.euclid_residual_numeric.array[self.experiment.bc_y_dof]) ])
-
-    def pv_plot(self, name, t=0):
+    def pv_plot(self, t=0):
         # paraview output
         
         # Displacement Plot
-        with df.io.XDMFFile(self.experiment.mesh.comm, name, "w") as xdmf:
+        with df.io.XDMFFile(self.experiment.mesh.comm, "Displacement.xdmf", "w") as xdmf:
             xdmf.write_mesh(self.experiment.mesh)
             xdmf.write_function(self.displacement)
 
@@ -327,14 +247,14 @@ class LinearElasticity(MaterialProblem):
         #    xdmf.write_function(self.strain_CG1)
 
         # Strain Plot
-        #with df.io.XDMFFile(self.experiment.mesh.comm, "Strain.xdmf", "w") as xdmf:
-        #    xdmf.write_mesh(self.experiment.mesh)
-        #    xdmf.write_function(self.strain)
-        #
-        ## Strain derivative Plot
-        #with df.io.XDMFFile(self.experiment.mesh.comm, "Displacement_Double_Derivative.xdmf", "w") as xdmf:
-        #    xdmf.write_mesh(self.experiment.mesh)
-        #    xdmf.write_function(self.displacement_double_derivative)
+        with df.io.XDMFFile(self.experiment.mesh.comm, "Strain.xdmf", "w") as xdmf:
+            xdmf.write_mesh(self.experiment.mesh)
+            xdmf.write_function(self.strain)
+        
+        # Strain derivative Plot
+        with df.io.XDMFFile(self.experiment.mesh.comm, "Displacement_Double_Derivative.xdmf", "w") as xdmf:
+            xdmf.write_mesh(self.experiment.mesh)
+            xdmf.write_function(self.displacement_double_derivative)
 
         #with df.io.XDMFFile(self.experiment.mesh.comm, "Strain_commonspace.xdmf", "w") as xdmf:
         #    xdmf.write_mesh(self.experiment.mesh)

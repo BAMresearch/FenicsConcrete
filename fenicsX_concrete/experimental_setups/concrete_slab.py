@@ -12,8 +12,6 @@ class concreteSlabExperiment(Experiment):
         p = Parameters()
         # boundary values...
         p['bc_setting'] = 'full'  # default boundary setting
-        p['degree'] = 1  # polynomial degree
-        #p['dim'] = 2  # default boundary setting
         p = p + parameters
         super().__init__(p)
 
@@ -53,9 +51,16 @@ class concreteSlabExperiment(Experiment):
             #displ_bcs.append(df.fem.DirichletBC(V, df.Constant((0, 0)), self.boundary_left()))
             displ_bcs.append(df.fem.dirichletbc(np.array([0, 0], dtype=ScalarType), df.fem.locate_dofs_geometrical(V, clamped_boundary), V))
             #valbc = df.fem.Constant(self.mesh, ScalarType(0))
-            #boundary_facets = df.mesh.locate_entities_boundary(self.mesh, self.p.dim -1, clamped_boundary)
             #displ_bcs.append(df.fem.dirichletbc(valbc, df.fem.locate_dofs_topological(V.sub(0), self.p.dim -1, boundary_facets), V.sub(0)))
+            #fg=df.fem.locate_dofs_geometrical(V, clamped_boundary)
+
+            boundary_facets = df.mesh.locate_entities_boundary(self.mesh, self.p.dim -1, clamped_boundary)  
             
+            self.bc_x_dof = df.fem.locate_dofs_topological(V.sub(0), self.mesh.topology.dim-1, boundary_facets)
+            self.bc_y_dof = df.fem.locate_dofs_topological(V.sub(1), self.mesh.topology.dim-1, boundary_facets)
+
+            #df.fem.Constant(domain=self.mesh, c=1.0)
+
         elif self.p.dim == 3:
             #displ_bcs.append(df.fem.DirichletBC(V, df.Constant((0, 0, 0)),  self.boundary_left()))
             displ_bcs.append(df.fem.dirichletbc(np.array([0, 0, 0], dtype=ScalarType), df.fem.locate_dofs_geometrical(V, clamped_boundary), V))
