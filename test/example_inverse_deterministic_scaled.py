@@ -109,12 +109,12 @@ def forward_model_run(parameters):
 from numpy import linalg as LA
 cost_function_values = []
 parameter_values = {'E_m':[], 'E_d':[]}
-sparsity_factor = 1e-3
+sparsity_factor = 1e-1
 def cost_function(param):
     # Function to calculate the cost function
     displacement_model = forward_model_run(param)  
     delta_displacement = displacement_model - displacement_data
-    #print('Inferred Parameters',param[0], param[1])
+    print('Inferred Parameters',param[0], param[1])
     #print('Cost Function', np.dot(delta_displacement, delta_displacement), sparsity_factor*LA.norm(param, ord=1))
     function_evaluation = np.dot(delta_displacement, delta_displacement) 
     cost_function_values.append(function_evaluation)
@@ -122,12 +122,16 @@ def cost_function(param):
     parameter_values['E_d'].append(param[1])
     return function_evaluation  #+  sparsity_factor*LA.norm(param, ord=1)
 
-from scipy.optimize import minimize, least_squares
+from scipy.optimize import minimize, least_squares, LinearConstraint
 
-start_point = np.array([0.9, 0.6]) #, 1e8, 1e8
+constraint_matrix = np.array([[1,-1]])
+constraint = LinearConstraint(constraint_matrix, [0])
+start_point = np.array([0.9, 0.6]) #, 1e8, 1e8 #[0.9, 0.6]
 parameter_bounds = [(0, np.inf), (0, np.inf)] #, (0, np.inf), (0, np.inf) L-BFGS-B
-res = minimize(cost_function, start_point, method='Powell', bounds=parameter_bounds,#0.50.5
-              options={ 'ftol': 1e-40, 'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
+#res = minimize(cost_function, start_point, method='Powell', bounds=parameter_bounds,#0.50.5
+#              options={ 'ftol': 1e-40, 'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
+res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds,constraints=[constraint],
+              options={'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
 print(res.x) 
 print("Inferred Values",np.multiply(res.x, np.array([E_scaler, E_scaler])))
 print(p['G_12'])
@@ -223,9 +227,10 @@ def cost_function_plot():
     #fig.colorbar(trials, shrink=0.5, aspect=5)
     plt.show()
 
-cost_function_plot() """
-
-""" #Isotropic data, istropic identification of tensile test
+cost_function_plot()
+""" 
+"""
+#Isotropic data, istropic identification of tensile test
 start_point = np.array([50e9, 0.15]) #, 1e8, 1e8
 parameter_bounds = [(0, np.inf), (0, 0.45)] #, (0, np.inf), (0, np.inf)
 res = minimize(cost_function, start_point, method='Nelder-Mead', bounds=parameter_bounds,#0.50.5

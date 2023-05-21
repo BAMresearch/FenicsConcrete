@@ -40,13 +40,19 @@ p['g'] = 9.81e3 #mm/s² for units to be consistent g must be given in m/s².
 p['E'] = 210e6 #Kgmms⁻2/mm² ---- N/mm² or MPa
 
 p['dirichlet_bdy'] = 'left'
-
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 problem.solve() 
-displacement_data = problem.displacement.x.array
-disp = np.copy(displacement_data)
+displacement_data_tensile_x = np.copy(problem.displacement.x.array)
 
+
+p['dirichlet_bdy'] = 'bottom'
+experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
+problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
+problem.solve() 
+displacement_data_tensile_y = np.copy(problem.displacement.x.array)
+
+disp = np.concatenate((displacement_data_tensile_x, displacement_data_tensile_y))
 
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['constitutive'] = 'orthotropic'
@@ -58,18 +64,36 @@ p['G_12'] =  210e6/(2*(1+0.28)) #(0.5*1e5)/(1+0.3)
 p['k_x'] = 1e12
 p['k_y'] = 1e12
 
+scaler = 500e6
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 
-scaler = 500e6
 def forward_model_run(parameters):
     # Function to run the forward model
     #problem.E.value = parameters[0]
     #problem.nu.value = parameters[1]
+
     problem.E_m.value = parameters[0]*scaler
     problem.E_d.value = parameters[1]*scaler
-    problem.solve()
-    return problem.displacement.x.array
+
+    problem.p.dirichlet_bdy = 'left'
+    experiment.p.dirichlet_bdy = 'left'
+    problem.p.load = [1e3, 0]
+    problem.experiment.bcs = problem.experiment.create_displ_bcs(problem.experiment.V)
+    problem.solve() 
+    dispX = np.copy(problem.displacement.x.array) 
+
+    
+    problem.p.dirichlet_bdy = 'bottom'
+    experiment.p.dirichlet_bdy = 'bottom'
+    problem.p.load = [0, 1e3]
+    problem.experiment.bcs = problem.experiment.create_displ_bcs(problem.experiment.V)
+    problem.apply_neumann_bc()
+    problem.solve() 
+    dispY = np.copy(problem.displacement.x.array)
+
+    return np.concatenate((dispX, dispY))
+
 
 from numpy import linalg as LA
 def cost_function(param):
@@ -78,6 +102,7 @@ def cost_function(param):
     delta_displacement = displacement_model - disp
     #print('Optimisation Parameters',param[0], param[1])
     return   np.dot(delta_displacement, delta_displacement) #+ 0.1*LA.norm(param, ord=1)
+
 
 import matplotlib.pyplot as plt
 from matplotlib import cm

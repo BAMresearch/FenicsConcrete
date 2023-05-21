@@ -43,8 +43,14 @@ class concreteSlabExperiment(Experiment):
     def create_displ_bcs(self, V):
         # define displacement boundary
 
-        def clamped_boundary(x):          # fenics will individually call this function for every node and will note the true or false value.
-            return np.isclose(x[0], 0)
+        if self.p.dirichlet_bdy == 'left':
+            def clamped_boundary(x):          # fenics will individually call this function for every node and will note the true or false value.
+                return np.isclose(x[0], 0)
+            
+        elif self.p.dirichlet_bdy == 'bottom':
+            def clamped_boundary(x):          # fenics will individually call this function for every node and will note the true or false value.
+                return np.isclose(x[1], 0)
+
 
         displ_bcs = []
         if self.p.dim == 2:
@@ -54,10 +60,10 @@ class concreteSlabExperiment(Experiment):
             #displ_bcs.append(df.fem.dirichletbc(valbc, df.fem.locate_dofs_topological(V.sub(0), self.p.dim -1, boundary_facets), V.sub(0)))
             #fg=df.fem.locate_dofs_geometrical(V, clamped_boundary)
 
-            boundary_facets = df.mesh.locate_entities_boundary(self.mesh, self.p.dim -1, clamped_boundary)  
+            #boundary_facets = df.mesh.locate_entities_boundary(self.mesh, self.p.dim -1, clamped_boundary)  
             
-            self.bc_x_dof = df.fem.locate_dofs_topological(V.sub(0), self.mesh.topology.dim-1, boundary_facets)
-            self.bc_y_dof = df.fem.locate_dofs_topological(V.sub(1), self.mesh.topology.dim-1, boundary_facets)
+            #self.bc_x_dof = df.fem.locate_dofs_topological(V.sub(0), self.mesh.topology.dim-1, boundary_facets)
+            #self.bc_y_dof = df.fem.locate_dofs_topological(V.sub(1), self.mesh.topology.dim-1, boundary_facets)
 
             #df.fem.Constant(domain=self.mesh, c=1.0)
 
@@ -69,7 +75,8 @@ class concreteSlabExperiment(Experiment):
 
     def create_neumann_boundary(self):
         boundaries = [(1, lambda x: np.isclose(x[0], self.p.length)),
-        (2, lambda x: np.isclose(x[0], 0))]
+        (2, lambda x: np.isclose(x[0], 0)),
+        (3, lambda x: np.isclose(x[1], self.p.breadth))]
 
         facet_indices, facet_markers = [], []
         fdim = self.mesh.topology.dim - 1

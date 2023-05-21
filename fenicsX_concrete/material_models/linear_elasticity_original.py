@@ -7,7 +7,6 @@ from fenicsX_concrete.randomfieldModified import Randomfield
 from fenicsX_concrete.material_models.material import MaterialProblem
 from fenicsX_concrete.helpers import Parameters
 import numpy as np
-from petsc4py import PETSc
 
 # this is necessary, otherwise this warning will not stop
 # https://fenics.readthedocs.io/projects/ffc/en/latest/_modules/ffc/quadrature/deprecation.html
@@ -87,111 +86,7 @@ class LinearElasticity(MaterialProblem):
         # Define variational problem
         self.u_trial = ufl.TrialFunction(self.experiment.V)
         self.v = ufl.TestFunction(self.experiment.V)
-        
-        self.apply_neumann_bc()
 
-
-        #For torsional spring
-        def moment_arm_(x):
-            length_x = x[1].shape[0]
-            moment_arm_array = np.zeros(length_x)
-            transformed_coordinates_vector = np.absolute(x[1]) - 0.5*self.p.breadth
-            for i in range(length_x):
-                if transformed_coordinates_vector[i]!=0:   #### must be corrected
-                    moment_arm_array[i] = 1/transformed_coordinates_vector[i]**2
-            return moment_arm_array
-    
-        #For torsional spring
-        def clamped_neutral_axis(x):          
-            return np.logical_and(np.isclose(x[0], 0), np.isclose(x[1],0.5*self.p.breadth))
-            #return np.isclose(x[0], 0)
-
-        if 2 in self.p['uncertainties']:
-            #Linear Spring
-            self.k_x = df.fem.Constant(self.experiment.mesh, self.p.k_x)
-            self.k_y = df.fem.Constant(self.experiment.mesh, self.p.k_x)
-    
-            spring_stiffness = ufl.as_matrix([[self.k_x, 0], [0, self.k_y]])
-            self.spring_stress = ufl.dot(spring_stiffness,self.u_trial)
-
-            #self.ds = self.experiment.create_neumann_boundary()  
-            self.internal_force_term = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx #- ufl.dot(self.spring_stress, self.v) * self.ds(2)
-            self.spring_force_term = ufl.dot(self.spring_stress, self.v) * self.ds(2)
-            self.a = self.internal_force_term - self.spring_force_term
-
-            self.bilinear_form = df.fem.form(self.a)
-            self.solver = PETSc.KSP().create(self.experiment.mesh.comm)
-            self.solver.setType(PETSc.KSP.Type.PREONLY)
-            self.solver.getPC().setType(PETSc.PC.Type.LU)
-            #self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-            
-        elif 3 in self.p['uncertainties']:
-            #Torsion Spring
-            K_torsion = self.p.K_torsion
-            self.K_torsion = df.fem.Constant(self.experiment.mesh, K_torsion)
-            moment_arm = df.fem.Function(self.experiment.V_scalar)
-
-            moment_arm.interpolate(moment_arm_)
-            spring_stiffness = ufl.as_matrix([[self.K_torsion*moment_arm, 0], [0, 0]])
-            self.spring_stress = ufl.dot(spring_stiffness,self.u_trial)
-
-            bc1_facets = df.mesh.locate_entities_boundary(self.experiment.mesh, 0, clamped_neutral_axis)
-            bc1_dofs_sub1 = df.fem.locate_dofs_topological(self.experiment.V.sub(1), 0, bc1_facets)
-            bc1 = df.fem.dirichletbc(ScalarType(0), bc1_dofs_sub1, self.experiment.V.sub(1))
-
-            bc2_facets = df.mesh.locate_entities_boundary(self.experiment.mesh, 0, clamped_neutral_axis)
-            bc2_dofs_sub0 = df.fem.locate_dofs_topological(self.experiment.V.sub(0), 0, bc2_facets)
-            bc2 = df.fem.dirichletbc(ScalarType(0), bc2_dofs_sub0, self.experiment.V.sub(0))
-
-            #ds = self.experiment.create_neumann_boundary()
-            self.internal_force_term = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx #- ufl.dot(self.spring_stress, self.v) * self.ds(2)
-            self.spring_force_term = ufl.dot(self.spring_stress, self.v) * self.ds(2)
-            self.a = self.internal_force_term - self.spring_force_term
-            
-            
-            self.bilinear_form = df.fem.form(self.a)
-            self.solver = PETSc.KSP().create(self.experiment.mesh.comm)
-            self.solver.setType(PETSc.KSP.Type.PREONLY)
-            self.solver.getPC().setType(PETSc.PC.Type.LU)
-            #self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=[bc1, bc2], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-        else:
-            self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
-            
-
-            self.bilinear_form = df.fem.form(self.a)
-            self.solver = PETSc.KSP().create(self.experiment.mesh.comm)
-            self.solver.setType(PETSc.KSP.Type.PREONLY)
-            self.solver.getPC().setType(PETSc.PC.Type.LU)
-            #self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=self.experiment.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-
-    # Random E and nu fields.
-    def random_field_generator(self, field_function_space, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol):
-        random_field = Randomfield(field_function_space, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol)
-        #random_field.solve_covariance_EVP()
-        return random_field
-
-    def parameters_conversion(self, lognormal_mean, lognormal_sigma):
-        from math import sqrt
-        normal_mean = np.log(lognormal_mean/sqrt(1 + (lognormal_sigma/lognormal_mean)**2))
-        normal_sigma = np.log(1 + (lognormal_sigma/lognormal_mean)**2)
-        return normal_mean, normal_sigma
-    
-    def get_lames_constants(self,):
-        # Random E and nu fields.
-        E_mean, E_variance = self.parameters_conversion(self.p.E, 30e9)#3
-        Nu_mean, Nu_variance = self.parameters_conversion(self.p.nu, 0.05)#0.03
-
-        self.E_randomfield  = self.random_field_generator(self.field_function_space,'squared_exp', E_mean, 0.3, 0.05, E_variance, 3, 0.01) 
-        self.E_randomfield.create_random_field(_type='random', _dist='LN')
-
-        self.nu_randomfield = self.random_field_generator(self.field_function_space,'squared_exp', Nu_mean, 0.3, 0.05, Nu_variance, 3, 0.01)
-        self.nu_randomfield.create_random_field(_type='random', _dist='LN')
-
-        lame1 = (self.E_randomfield.field.vector[:] * self.nu_randomfield.field.vector[:])/((1 + self.nu_randomfield.field.vector[:])*(1-2*self.nu_randomfield.field.vector[:]))
-        lame2 = self.E_randomfield.field.vector[:]/(2*(1+self.nu_randomfield.field.vector[:]))
-        return lame1, lame2
-    
-    def apply_neumann_bc(self):
         # Selects the problem which you want to solve
         if self.p.problem == 'tensile_test':
             self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
@@ -231,6 +126,89 @@ class LinearElasticity(MaterialProblem):
         else:
             print('wrong problem type')
             exit()
+
+        #For torsional spring
+        def moment_arm_(x):
+            length_x = x[1].shape[0]
+            moment_arm_array = np.zeros(length_x)
+            transformed_coordinates_vector = np.absolute(x[1]) - 0.5*self.p.breadth
+            for i in range(length_x):
+                if transformed_coordinates_vector[i]!=0:   #### must be corrected
+                    moment_arm_array[i] = 1/transformed_coordinates_vector[i]**2
+            return moment_arm_array
+    
+        #For torsional spring
+        def clamped_neutral_axis(x):          
+            return np.logical_and(np.isclose(x[0], 0), np.isclose(x[1],0.5*self.p.breadth))
+            #return np.isclose(x[0], 0)
+
+        if 2 in self.p['uncertainties']:
+            #Linear Spring
+            self.k_x = df.fem.Constant(self.experiment.mesh, self.p.k_x)
+            self.k_y = df.fem.Constant(self.experiment.mesh, self.p.k_x)
+    
+            spring_stiffness = ufl.as_matrix([[self.k_x, 0], [0, self.k_y]])
+            self.spring_stress = ufl.dot(spring_stiffness,self.u_trial)
+
+            #self.ds = self.experiment.create_neumann_boundary()  
+            self.internal_force_term = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx #- ufl.dot(self.spring_stress, self.v) * self.ds(2)
+            self.spring_force_term = ufl.dot(self.spring_stress, self.v) * self.ds(2)
+            self.a = self.internal_force_term - self.spring_force_term
+            self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+            
+        elif 3 in self.p['uncertainties']:
+            #Torsion Spring
+            K_torsion = self.p.K_torsion
+            self.K_torsion = df.fem.Constant(self.experiment.mesh, K_torsion)
+            moment_arm = df.fem.Function(self.experiment.V_scalar)
+
+            moment_arm.interpolate(moment_arm_)
+            spring_stiffness = ufl.as_matrix([[self.K_torsion*moment_arm, 0], [0, 0]])
+            self.spring_stress = ufl.dot(spring_stiffness,self.u_trial)
+
+            bc1_facets = df.mesh.locate_entities_boundary(self.experiment.mesh, 0, clamped_neutral_axis)
+            bc1_dofs_sub1 = df.fem.locate_dofs_topological(self.experiment.V.sub(1), 0, bc1_facets)
+            bc1 = df.fem.dirichletbc(ScalarType(0), bc1_dofs_sub1, self.experiment.V.sub(1))
+
+            bc2_facets = df.mesh.locate_entities_boundary(self.experiment.mesh, 0, clamped_neutral_axis)
+            bc2_dofs_sub0 = df.fem.locate_dofs_topological(self.experiment.V.sub(0), 0, bc2_facets)
+            bc2 = df.fem.dirichletbc(ScalarType(0), bc2_dofs_sub0, self.experiment.V.sub(0))
+
+            #ds = self.experiment.create_neumann_boundary()
+            self.internal_force_term = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx #- ufl.dot(self.spring_stress, self.v) * self.ds(2)
+            self.spring_force_term = ufl.dot(self.spring_stress, self.v) * self.ds(2)
+            self.a = self.internal_force_term - self.spring_force_term
+            self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=[bc1, bc2], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        else:
+            self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
+            self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=self.experiment.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+
+    # Random E and nu fields.
+    def random_field_generator(self, field_function_space, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol):
+        random_field = Randomfield(field_function_space, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol)
+        #random_field.solve_covariance_EVP()
+        return random_field
+
+    def parameters_conversion(self, lognormal_mean, lognormal_sigma):
+        from math import sqrt
+        normal_mean = np.log(lognormal_mean/sqrt(1 + (lognormal_sigma/lognormal_mean)**2))
+        normal_sigma = np.log(1 + (lognormal_sigma/lognormal_mean)**2)
+        return normal_mean, normal_sigma
+    
+    def get_lames_constants(self,):
+        # Random E and nu fields.
+        E_mean, E_variance = self.parameters_conversion(self.p.E, 30e9)#3
+        Nu_mean, Nu_variance = self.parameters_conversion(self.p.nu, 0.05)#0.03
+
+        self.E_randomfield  = self.random_field_generator(self.field_function_space,'squared_exp', E_mean, 0.3, 0.05, E_variance, 3, 0.01) 
+        self.E_randomfield.create_random_field(_type='random', _dist='LN')
+
+        self.nu_randomfield = self.random_field_generator(self.field_function_space,'squared_exp', Nu_mean, 0.3, 0.05, Nu_variance, 3, 0.01)
+        self.nu_randomfield.create_random_field(_type='random', _dist='LN')
+
+        lame1 = (self.E_randomfield.field.vector[:] * self.nu_randomfield.field.vector[:])/((1 + self.nu_randomfield.field.vector[:])*(1-2*self.nu_randomfield.field.vector[:]))
+        lame2 = self.E_randomfield.field.vector[:]/(2*(1+self.nu_randomfield.field.vector[:]))
+        return lame1, lame2
 
     # Stress computation for linear elastic problem 
     def epsilon(self, u):
@@ -298,65 +276,8 @@ class LinearElasticity(MaterialProblem):
             solver = df.fem.petsc.LinearProblem(a_proj, L_proj, u=u)
             solver.solve()
 
-    def solve(self, t=1.0):  
-
-        if 2 in self.p['uncertainties']:
-            # Assemble the bilinear form A   and apply Dirichlet boundary condition to the matrix
-            self.A = df.fem.petsc.assemble_matrix(self.bilinear_form, bcs=[] ) 
-            self.A.assemble()
-            self.solver.setOperators(self.A)
-
-            self.linear_form = df.fem.form(self.L)
-            self.b = df.fem.petsc.create_vector(self.linear_form)
-
-            # Update the right hand side reusing the initial vector
-            with self.b.localForm() as loc_b:
-                loc_b.set(0)
-            df.fem.petsc.assemble_vector(self.b, self.linear_form)
-
-            # Apply Dirichlet boundary condition to the vector
-            df.fem.petsc.apply_lifting(self.b, [self.bilinear_form], [[]])
-            self.b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
-            df.fem.petsc.set_bc(self.b, [])
-
-            # Solve linear problem
-            self.displacement = df.fem.Function(self.experiment.V)
-            self.solver.solve(self.b, self.displacement.vector)
-            self.displacement.x.scatter_forward()
-
-        else:
-            # Assemble the bilinear form A   and apply Dirichlet boundary condition to the matrix
-            self.A = df.fem.petsc.assemble_matrix(self.bilinear_form, bcs=self.experiment.bcs)
-            self.A.assemble()
-            self.solver.setOperators(self.A)
-
-            self.linear_form = df.fem.form(self.L)
-            self.b = df.fem.petsc.create_vector(self.linear_form)
-
-            # Update the right hand side reusing the initial vector
-            with self.b.localForm() as loc_b:
-                loc_b.set(0)
-            df.fem.petsc.assemble_vector(self.b, self.linear_form)
-
-            # Apply Dirichlet boundary condition to the vector
-            df.fem.petsc.apply_lifting(self.b, [self.bilinear_form], [self.experiment.bcs])
-            self.b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
-            df.fem.petsc.set_bc(self.b, self.experiment.bcs)
-
-            # Solve linear problem
-            self.displacement = df.fem.Function(self.experiment.V)
-            self.solver.solve(self.b, self.displacement.vector)
-            self.displacement.x.scatter_forward()
-
-        #self.displacement = self.weak_form_problem.solve()
-
-
-
-
-
-
-
-
+    def solve(self, t=1.0):        
+        self.displacement = self.weak_form_problem.solve()
         #self.strain_derivative_reshaped = self.strain_derivative.x.array.reshape((-1,4,2))
         #self.stress = self.sigma(self.displacement)
         
