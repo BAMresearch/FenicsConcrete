@@ -42,21 +42,45 @@ p['E'] = 210e6 #Kgmms⁻2/mm² ---- N/mm² or MPa
 p['dirichlet_bdy'] = 'left'
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
-problem.solve() 
-problem.pv_plot("Displacement_cantilever_1.xdmf")
-displacement_data_tensile_x = np.copy(problem.displacement.x.array)
 
+#problem.solve() 
+#problem.pv_plot("Displacement_cantilever_1.xdmf")
+#displacement_data_tensile_x = np.copy(problem.displacement.x.array)
 
-problem.p.dirichlet_bdy = 'bottom'
+def run_test(exp, prob, dirichlet_bdy, load):
+    prob.p.dirichlet_bdy = dirichlet_bdy
+    exp.p.dirichlet_bdy = dirichlet_bdy
+    prob.p.load = load
+    prob.experiment.bcs = prob.experiment.create_displ_bcs(prob.experiment.V)
+    prob.apply_neumann_bc()
+    prob.calculate_bilinear_form()
+    prob.solve()
+    #prob.pv_plot("Displacement.xdmf")
+    return prob.displacement.x.array
+
+testx_disp = np.copy(run_test(experiment, problem, 'left', [1e3,0]))
+testy_disp = np.copy(run_test(experiment, problem, 'bottom', [0,1e3]))
+
+disp = np.concatenate((testx_disp, testy_disp))
+
+""" problem.p.dirichlet_bdy = 'bottom'
 experiment.p.dirichlet_bdy = 'bottom'
 problem.p.load = [0, 1e3]
 problem.experiment.bcs = problem.experiment.create_displ_bcs(problem.experiment.V)
 problem.apply_neumann_bc()
 problem.solve() 
-problem.pv_plot("Displacement_cantilever_2.xdmf")
+#problem.pv_plot("Displacement_cantilever_2.xdmf")
 displacement_data_tensile_y = np.copy(problem.displacement.x.array)
 
-disp = np.concatenate((displacement_data_tensile_x, displacement_data_tensile_y))
+disp = np.concatenate((displacement_data_tensile_x, displacement_data_tensile_y)) """
+
+
+#########################################################################
+#########################################################################
+#2nd Step - Inverse Problem
+#########################################################################
+#########################################################################
+
 
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['constitutive'] = 'orthotropic'
@@ -78,7 +102,12 @@ def forward_model_run(parameters):
     problem.E_m.value = parameters[0]*scaler
     problem.E_d.value = parameters[1]*scaler
 
-    problem.p.dirichlet_bdy = 'left'
+    trialx_disp = np.copy(run_test(experiment, problem, 'left', [1e3,0]))
+    trialy_disp = np.copy(run_test(experiment, problem, 'bottom', [0,1e3]))
+
+    return np.concatenate((trialx_disp, trialy_disp))
+
+"""     problem.p.dirichlet_bdy = 'left'
     experiment.p.dirichlet_bdy = 'left'
     problem.p.load = [1e3, 0]
     problem.experiment.bcs = problem.experiment.create_displ_bcs(problem.experiment.V)
@@ -99,7 +128,7 @@ def forward_model_run(parameters):
     #problem.pv_plot("Displacement_cantilever_4.xdmf")
     dispY = np.copy(problem.displacement.x.array)
 
-    return np.concatenate((dispX, dispY))
+    return np.concatenate((dispX, dispY)) """
 
 
 from numpy import linalg as LA
