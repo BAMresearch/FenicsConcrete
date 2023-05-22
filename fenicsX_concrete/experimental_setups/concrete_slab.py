@@ -11,7 +11,6 @@ class concreteSlabExperiment(Experiment):
         # initialize a set of "basic paramters" (for now...)
         p = Parameters()
         # boundary values...
-        p['bc_setting'] = 'full'  # default boundary setting
         p = p + parameters
         super().__init__(p)
 
@@ -24,11 +23,6 @@ class concreteSlabExperiment(Experiment):
             self.mesh = df.mesh.create_rectangle(comm=MPI.COMM_WORLD,
                             points=((0.0, 0.0), (self.p.length, self.p.breadth)), n=(self.p.num_elements_length, self.p.num_elements_breadth),
                             cell_type=df.mesh.CellType.quadrilateral)
-        elif self.p.dim == 3:
-            #self.mesh = df.UnitCubeMesh(n, n, n)
-            self.mesh = df.mesh.create_box(comm=MPI.COMM_WORLD,
-                            points=((0.0, 0.0), (self.p.length, self.p.breadth, self.p.height)), n=(self.p.num_elements_length, self.p.num_elements_breadth, self.p.num_elements_height),
-                            cell_type=df.mesh.CellType.hexahedron)
         else:
             print(f'wrong dimension {self.p.dim} for problem setup')
             exit()
@@ -53,6 +47,7 @@ class concreteSlabExperiment(Experiment):
 
 
         displ_bcs = []
+
         if self.p.dim == 2:
             #displ_bcs.append(df.fem.DirichletBC(V, df.Constant((0, 0)), self.boundary_left()))
             displ_bcs.append(df.fem.dirichletbc(np.array([0, 0], dtype=ScalarType), df.fem.locate_dofs_geometrical(V, clamped_boundary), V))
@@ -66,17 +61,16 @@ class concreteSlabExperiment(Experiment):
             #self.bc_y_dof = df.fem.locate_dofs_topological(V.sub(1), self.mesh.topology.dim-1, boundary_facets)
 
             #df.fem.Constant(domain=self.mesh, c=1.0)
-
-        elif self.p.dim == 3:
-            #displ_bcs.append(df.fem.DirichletBC(V, df.Constant((0, 0, 0)),  self.boundary_left()))
-            displ_bcs.append(df.fem.dirichletbc(np.array([0, 0, 0], dtype=ScalarType), df.fem.locate_dofs_geometrical(V, clamped_boundary), V))
-
+        else:
+            print(f'wrong dimension {self.p.dim} for problem setup')
+            exit()
         return displ_bcs
 
-    def create_neumann_boundary(self):
-        boundaries = [(1, lambda x: np.isclose(x[0], self.p.length)),
-        (2, lambda x: np.isclose(x[0], 0)),
-        (3, lambda x: np.isclose(x[1], self.p.breadth))]
+    def identify_domain_boundaries(self):
+        boundaries = [(1, lambda x: np.isclose(x[0], self.p.length)), # right
+        (2, lambda x: np.isclose(x[0], 0)), # left                              
+        (3, lambda x: np.isclose(x[1], self.p.breadth)),    # top
+        (4, lambda x: np.isclose(x[1], 0))]    # bottom
 
         facet_indices, facet_markers = [], []
         fdim = self.mesh.topology.dim - 1

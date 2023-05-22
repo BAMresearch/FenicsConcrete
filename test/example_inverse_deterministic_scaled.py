@@ -47,7 +47,8 @@ p['nu'] = 0.28
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['length'] = 5000
 p['breadth'] = 1000
-p['load'] = [1e3,0] 
+p['load'] = [0,1e3] 
+p['dirichlet_bdy'] = 'bottom'
 p['rho'] = 7750e-9 #kg/mm³
 p['g'] = 9.81e3 #mm/s² for units to be consistent g must be given in m/s².
 p['E'] = 210e6 #Kgmms⁻2/mm² ---- N/mm² or MPa

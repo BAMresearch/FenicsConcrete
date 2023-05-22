@@ -34,26 +34,13 @@ class LinearElasticity(MaterialProblem):
         """
         # generate "dummy" experiment when none is passed
 
-        #if experiment is None:
-        #    #experiment = experimental_setups.MinimalCubeExperiment(parameters)
-
         super().__init__(experiment, parameters, pv_name)
 
     def setup(self):
         default_p = Parameters()
 
-        # parameters for mechanics problem
-        default_p['E'] = None  # Young's Modulus
-        default_p['nu'] = None  # Poisson's Ratio
-        default_p['mu'] = None
-        default_p['lmbda'] = None
-
         self.p = default_p + self.p
-        self.ds = self.experiment.create_neumann_boundary() # Neumann boundary
-
-        for i in self.p['uncertainties']:
-            if i == 1:
-                print(i)
+        self.ds = self.experiment.identify_domain_boundaries() # Domain's boundary
 
         if 0 in self.p['uncertainties'] and self.p.constitutive == 'orthotropic':
             self.E_m = df.fem.Constant(self.experiment.mesh, self.p.E_m)
@@ -66,8 +53,6 @@ class LinearElasticity(MaterialProblem):
             self.E = df.fem.Constant(self.experiment.mesh, self.p.E)
             self.nu = df.fem.Constant(self.experiment.mesh, self.p.nu)
 
-            #E = self.p.E 
-            #nu = self.p.nu 
             #self.lambda_ = df.fem.Constant(self.experiment.mesh, E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)))
             #self.mu = df.fem.Constant(self.experiment.mesh, E / (2.0 * (1.0 + nu)))
 
@@ -80,9 +65,6 @@ class LinearElasticity(MaterialProblem):
             lame1, lame2 = self.get_lames_constants()
             self.lambda_.vector[:] = lame1
             self.mu.vector[:] = lame2  #make this vector as a fenics constant array. Update the lame1 and lame2 in each iteration.
-
-        #self.lambda_.vector[:] = self.lame1
-        #self.mu.vector[:] = self.lame2  #make this vector as a fenics constant array. Update the lame1 and lame2 in each iteration.
         
         # Define variational problem
         self.u_trial = ufl.TrialFunction(self.experiment.V)
@@ -111,15 +93,14 @@ class LinearElasticity(MaterialProblem):
             self.k_x = df.fem.Constant(self.experiment.mesh, self.p.k_x)
             self.k_y = df.fem.Constant(self.experiment.mesh, self.p.k_x)
     
-            spring_stiffness = ufl.as_matrix([[self.k_x, 0], [0, self.k_y]])
-            self.spring_stress = ufl.dot(spring_stiffness,self.u_trial)
+            self.spring_stiffness = ufl.as_matrix([[self.k_x, 0], [0, self.k_y]])
+            self.spring_stress = ufl.dot(self.spring_stiffness,self.u_trial)
 
             #self.ds = self.experiment.create_neumann_boundary()  
             self.internal_force_term = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx #- ufl.dot(self.spring_stress, self.v) * self.ds(2)
-            self.spring_force_term = ufl.dot(self.spring_stress, self.v) * self.ds(2)
-            self.a = self.internal_force_term - self.spring_force_term
+            
+            self.calculate_bilinear_form()
 
-            self.bilinear_form = df.fem.form(self.a)
             self.solver = PETSc.KSP().create(self.experiment.mesh.comm)
             self.solver.setType(PETSc.KSP.Type.PREONLY)
             self.solver.getPC().setType(PETSc.PC.Type.LU)
@@ -190,6 +171,15 @@ class LinearElasticity(MaterialProblem):
         lame1 = (self.E_randomfield.field.vector[:] * self.nu_randomfield.field.vector[:])/((1 + self.nu_randomfield.field.vector[:])*(1-2*self.nu_randomfield.field.vector[:]))
         lame2 = self.E_randomfield.field.vector[:]/(2*(1+self.nu_randomfield.field.vector[:]))
         return lame1, lame2
+    
+    def calculate_bilinear_form(self):
+        if 2 in self.p['uncertainties']:
+            if self.p.dirichlet_bdy == 'left':
+                self.spring_force_term = ufl.dot(self.spring_stress, self.v) * self.ds(2)
+            elif self.p.dirichlet_bdy == 'bottom':
+                self.spring_force_term = ufl.dot(self.spring_stress, self.v) * self.ds(4)
+            self.a = self.internal_force_term - self.spring_force_term
+            self.bilinear_form = df.fem.form(self.a)
     
     def apply_neumann_bc(self):
         # Selects the problem which you want to solve

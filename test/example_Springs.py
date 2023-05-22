@@ -17,7 +17,6 @@ import math
 #########################################################################
 
 p = fenicsX_concrete.Parameters()  # using the current default values
-p['bc_setting'] = 'free'
 p['problem'] =  'tensile_test'    #'tensile_test' #'bending_test' 
 p['degree'] = 1
 p['num_elements_length'] = 50
@@ -30,14 +29,14 @@ p['dim'] = 2
 # 3: Torsion Springs
 
 p['nu'] = 0.28 
-p['uncertainties'] = [0]
+p['uncertainties'] = [0,2]
 p['k_x'] = 1e12
 p['k_y'] = 1e12
 #p['K_torsion'] = 1e11
 
 p['constitutive'] = 'isotropic'
-p['E_m'] = 1.72228206e+07 
-p['E_d'] = 1.96009718e+08 
+p['E_m'] = 210e6 #1.72228206e+07 
+p['E_d'] = 0. #1.96009718e+08 
 p['nu_12'] = 0.28
 p['G_12'] = 210e6/(2*(1+0.28))    #p['E_m']/(2*(1+p['nu_12']))
 
@@ -63,16 +62,15 @@ p['dirichlet_bdy'] = 'left'
 
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
-#problem.add_sensor(fenicsX_concrete.sensors.ReactionForceSensor())
 problem.solve() 
-#reaction_force_data = problem.sensors['ReactionForceSensor'].data[-1]
-#displacement_data = problem.displacement.x.array
 problem.pv_plot("Displacement_cantilever_x.xdmf")
 
+# Example of how to change the parameters of the problem
 problem.p.load = [0, 1e3]
 problem.p.dirichlet_bdy = 'bottom'
 experiment.p.dirichlet_bdy = 'bottom'
 problem.experiment.bcs = problem.experiment.create_displ_bcs(problem.experiment.V)
 problem.apply_neumann_bc()
+problem.calculate_bilinear_form()
 problem.solve() 
 problem.pv_plot("Displacement_cantilever_y.xdmf")

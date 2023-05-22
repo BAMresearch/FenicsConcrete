@@ -24,10 +24,7 @@ class MaterialProblem():
         self.p = Parameters()
         # constants
         # TODO: where to put these?, what about units???
-        self.p['zero_C'] = 273.15
-        self.p['igc'] = 8.3145  # ideal gas constant [JK −1 mol −1 ]
-        #self.p['g'] = 9.81  # graviational acceleration in m/s²
-        #self.p['rho'] = 1
+
 
         # other "globel" paramters...
         self.p['log_level'] = 'INFO'
@@ -76,10 +73,10 @@ class MaterialProblem():
         self.pv_name = pv_name
 
         #setup fields for sensor output, can be defined in model
-        self.displacement = None
-        self.temperature = None
-        self.degree_of_hydration = None
-        self.q_degree_of_hydration = None
+        #self.displacement = None
+        #self.temperature = None
+        #self.degree_of_hydration = None
+        #self.q_degree_of_hydration = None
 
         # setup the material object to access the function
         self.setup()

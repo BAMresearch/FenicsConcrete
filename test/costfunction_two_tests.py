@@ -43,13 +43,17 @@ p['dirichlet_bdy'] = 'left'
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 problem.solve() 
+problem.pv_plot("Displacement_cantilever_1.xdmf")
 displacement_data_tensile_x = np.copy(problem.displacement.x.array)
 
 
-p['dirichlet_bdy'] = 'bottom'
-experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
-problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
+problem.p.dirichlet_bdy = 'bottom'
+experiment.p.dirichlet_bdy = 'bottom'
+problem.p.load = [0, 1e3]
+problem.experiment.bcs = problem.experiment.create_displ_bcs(problem.experiment.V)
+problem.apply_neumann_bc()
 problem.solve() 
+problem.pv_plot("Displacement_cantilever_2.xdmf")
 displacement_data_tensile_y = np.copy(problem.displacement.x.array)
 
 disp = np.concatenate((displacement_data_tensile_x, displacement_data_tensile_y))
@@ -70,8 +74,6 @@ problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the 
 
 def forward_model_run(parameters):
     # Function to run the forward model
-    #problem.E.value = parameters[0]
-    #problem.nu.value = parameters[1]
 
     problem.E_m.value = parameters[0]*scaler
     problem.E_d.value = parameters[1]*scaler
@@ -80,7 +82,10 @@ def forward_model_run(parameters):
     experiment.p.dirichlet_bdy = 'left'
     problem.p.load = [1e3, 0]
     problem.experiment.bcs = problem.experiment.create_displ_bcs(problem.experiment.V)
+    problem.apply_neumann_bc()
+    problem.calculate_bilinear_form()
     problem.solve() 
+    #problem.pv_plot("Displacement_cantilever_3.xdmf")
     dispX = np.copy(problem.displacement.x.array) 
 
     
@@ -89,7 +94,9 @@ def forward_model_run(parameters):
     problem.p.load = [0, 1e3]
     problem.experiment.bcs = problem.experiment.create_displ_bcs(problem.experiment.V)
     problem.apply_neumann_bc()
+    problem.calculate_bilinear_form()
     problem.solve() 
+    #problem.pv_plot("Displacement_cantilever_4.xdmf")
     dispY = np.copy(problem.displacement.x.array)
 
     return np.concatenate((dispX, dispY))
@@ -108,14 +115,8 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 
 def cost_function_plot():
-    
-    #counter=0
-    #E_values = np.linspace(185e9,225e9,30)
-    #E_values = np.linspace(100e6,400e6,30)
-    #nu_values = np.linspace(0.01,0.45,15)
-    #E_buildup, nu_buildup = np.meshgrid(E_values, nu_values)
-    E_m_values = np.linspace(0.,0.5,50)#(0.3,0.5,30)
-    E_d_values = np.linspace(0.,0.5,50)#(0.,0.1,15)
+    E_m_values = np.linspace(0.,5,50)#(0.3,0.5,30)
+    E_d_values = np.linspace(0.,5,50)#(0.,0.1,15)
     E_m_buildup, E_d_buildup = np.meshgrid(E_m_values, E_d_values)
     counter=0
     cost_func_val = np.zeros((E_m_buildup.shape[0],E_d_buildup.shape[1]))
@@ -132,7 +133,7 @@ def cost_function_plot():
     fig.update_layout(title='Cost Function Vs. Parameters',autosize=False,width=950, height=950,)
     #fig.update_layout(scene=dict(zaxis=dict(dtick=1, type='log')))
     fig.show()
-    fig.write_html(p['problem']+'legit.html')
+    fig.write_html('Twotests_'+ p['problem']+'_DC_'+p['dirichlet_bdy']+'.html')
     """     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
     # Plot the surface.
     surf = ax.plot_surface(E_m_buildup, E_d_buildup, cost_func_val,  cmap=cm.coolwarm, edgecolor = 'black',
