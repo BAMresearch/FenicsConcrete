@@ -18,8 +18,8 @@ p = fenicsX_concrete.Parameters()  # using the current default values
 p['bc_setting'] = 'free'
 p['problem'] =  'tensile_test'    #'tensile_test' #'bending_test' #bending+tensile_test
 p['degree'] = 1
-p['num_elements_length'] = 10
-p['num_elements_breadth'] = 50
+p['num_elements_length'] = 50
+p['num_elements_breadth'] = 10
 p['dim'] = 2
 # Uncertainty type:
 # 0: Constant E and nu fields.
@@ -32,8 +32,8 @@ p['constitutive'] = 'isotropic'
 p['nu'] = 0.28 
 
 # Kgmms⁻2/mm², mm, kg, sec, N
-p['length'] = 1000
-p['breadth'] = 5000
+p['length'] = 5000
+p['breadth'] = 1000
 p['load'] = [0, 1e3] 
 p['rho'] = 7750e-9 #kg/mm³
 p['g'] = 9.81e3 #mm/s² for units to be consistent g must be given in m/s².
@@ -46,7 +46,7 @@ problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the 
 problem.solve() 
 displacement_data = problem.displacement.x.array
 disp = np.copy(displacement_data)
-problem.pv_plot("Displacement_cantilever_isotropic.xdmf")
+#problem.pv_plot("Displacement_cantilever_isotropic.xdmf")
 
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['constitutive'] = 'orthotropic'
@@ -60,19 +60,18 @@ p['k_y'] = 1e12
 
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
-problem.solve() 
-problem.pv_plot("Displacement_cantilever_orthotropic.xdmf")
+#problem.solve() 
+#problem.pv_plot("Displacement_cantilever_orthotropic.xdmf")
 
 
 scaler = 500e6
 def forward_model_run(parameters):
     # Function to run the forward model
-    #problem.E.value = parameters[0]
-    #problem.nu.value = parameters[1]
     problem.E_m.value = parameters[0]*scaler
     problem.E_d.value = parameters[1]*scaler
     problem.solve()
-    return problem.displacement.x.array
+    return np.copy(problem.displacement.x.array)
+    
 
 from numpy import linalg as LA
 def cost_function(param):
@@ -111,18 +110,6 @@ def cost_function_plot():
     #fig.update_layout(scene=dict(zaxis=dict(dtick=1, type='log')))
     fig.show()
     fig.write_html(p['problem']+'_DC_'+p['dirichlet_bdy']+'.html')
-    """     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    # Plot the surface.
-    surf = ax.plot_surface(E_m_buildup, E_d_buildup, cost_func_val,  cmap=cm.coolwarm, edgecolor = 'black',
-                           linewidth=0, antialiased=False)
- 
-    # Add a color bar which maps values to colors.
-    ax.set_xlabel('E_m')
-    ax.set_ylabel('E_d')
-    ax.set_zlabel('Cost function value')
-    ax.zaxis._set_scale('log')
-    fig.colorbar(surf, shrink=0.5, aspect=5)
-    plt.show() """
 
 cost_function_plot()
 
