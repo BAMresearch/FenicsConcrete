@@ -15,8 +15,8 @@ import math
 #########################################################################
 
 p = fenicsX_concrete.Parameters()  # using the current default values
-#p['bc_setting'] = 'free'
-p['problem'] =  'tensile_test'     #'bending_test' 
+p['bc_setting'] = 'free'
+p['problem'] =  'tensile_test'    #'tensile_test' #'bending_test' #bending+tensile_test
 p['degree'] = 1
 p['num_elements_length'] = 50
 p['num_elements_breadth'] = 10
@@ -39,24 +39,17 @@ p['nu'] = 0.28
 #p['g'] = 9.81
 #p['E'] = 210e9 
 
-
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['length'] = 5000
 p['breadth'] = 1000
-p['load'] = [1e3,0] 
-p['dirichlet_bdy'] = 'left'
+p['load'] = [1e3, 0] 
 p['rho'] = 7750e-9 #kg/mm³
 p['g'] = 9.81e3 #mm/s² for units to be consistent g must be given in m/s².
 p['E'] = 210e6 #Kgmms⁻2/mm² ---- N/mm² or MPa
 
-
+p['dirichlet_bdy'] = 'left'
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
-#problem.add_sensor(fenicsX_concrete.sensors.ReactionForceSensor())
-#reaction_force_data = problem.sensors['ReactionForceSensor'].data[-1]
-#displacement_data = problem.displacement.x.array
-#problem.pv_plot("Displacement_cantilever_1.xdmf")
-#displacement_data_tensile_x = np.copy(problem.displacement.x.array)
 
 def run_test(exp, prob, dirichlet_bdy, load):
     prob.p.dirichlet_bdy = dirichlet_bdy
@@ -69,10 +62,19 @@ def run_test(exp, prob, dirichlet_bdy, load):
     #prob.pv_plot("Displacement.xdmf")
     return prob.displacement.x.array
 
-testx_disp = np.copy(run_test(experiment, problem, 'left', [1e3,0]))
+testx_disp = np.copy(run_test(experiment, problem, 'left', [1e3, 0]))
 testy_disp = np.copy(run_test(experiment, problem, 'bottom', [0,1e3]))
+#tests1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3,0]))
 
-displacement_data = np.concatenate((testx_disp, testy_disp))
+def combine_test_results(test_results):
+    if len(test_results) == 1:
+        return test_results[0]
+    else:
+        return np.concatenate((test_results[0], combine_test_results(test_results[1:])))
+
+list_of_disp = [testx_disp, testy_disp] #, testy_disp
+num_of_tests = str(len(list_of_disp)) + ' tests'
+displacement_data = combine_test_results(list_of_disp)  
 
 #########################################################################
 #########################################################################
@@ -80,35 +82,35 @@ displacement_data = np.concatenate((testx_disp, testy_disp))
 #########################################################################
 #########################################################################
 
-p['uncertainties'] = [0,2]
-p['constitutive'] = 'orthotropic'
-p['dirichlet_bdy'] = 'left'
-
 # Kgmms⁻2/mm², mm, kg, sec, N
-p['E_m'] = 180e6 #1e5
+p['constitutive'] = 'orthotropic'
+p['uncertainties'] = [0,2]
+p['E_m'] = 210e6
 p['E_d'] = 0.
 p['nu_12'] = 0.28 #0.3
-p['G_12'] =  p['E_m']/(2*(1+p['nu_12'])) #(0.5*1e5)/(1+0.3)
-p['k_x'] = 1e8 #1e13
-p['k_y'] = 1e8 #1e12
+p['G_12'] =  210e6/(2*(1+0.28)) #(0.5*1e5)/(1+0.3)
+p['k_x'] = 1e12
+p['k_y'] = 1e12
 
-experiment = fenicsX_concrete.concreteSlabExperiment(p)  
-problem = fenicsX_concrete.LinearElasticity(experiment, p)
+scaler = 500e6
+experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
+problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
+
 
 E_scaler = 500e6
 G_12_scaler = 250e6
 
 def forward_model_run(parameters):
     # Function to run the forward model
-    problem.E_m.value = parameters[0]*E_scaler
-    problem.E_d.value = parameters[1]*E_scaler
-    problem.nu_12.value = parameters[2]       #0.28                  # parameters[2]#parameters[2]
-    problem.G_12.value = problem.E_m.value/(2*(1+problem.nu_12.value))*G_12_scaler #210e6/(2*(1+0.28))  
-    problem.k_x.value = 1e12            #parameters[4]               #abs(1/parameters[0] -1) +1e9 #*p['E_m']
-    problem.k_y.value = 1e12            #parameters[5]               #abs(1/parameters[1] -1) +1e9#*p['E_m']
-    trialx_disp = np.copy(run_test(experiment, problem, 'left', [1e3,0]))
-    trialy_disp = np.copy(run_test(experiment, problem, 'bottom', [0,1e3]))
-    return np.concatenate((trialx_disp, trialy_disp))
+
+    problem.E_m.value = parameters[0]*scaler
+    problem.E_d.value = parameters[1]*scaler
+    problem.nu_12.value = parameters[2]
+    problem.G_12.value = parameters[3]*G_12_scaler #problem.E_m.value/(2*(1+problem.nu_12.value))*G_12_scaler
+    trialx_disp = np.copy(run_test(experiment, problem, 'left', [1e3, 0]))
+    trialy_disp = np.copy(run_test(experiment, problem, 'bottom', [0, 1e3]))
+    #trials1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3, 0]))
+    return combine_test_results([trialx_disp, trialy_disp]) #, trialy_disp
 
 
 from numpy import linalg as LA
@@ -129,16 +131,16 @@ def cost_function(param):
 
 from scipy.optimize import minimize, least_squares, LinearConstraint
 
-constraint_matrix = np.array([[1,-1, 0, 0]])
-constraint = LinearConstraint(constraint_matrix, [0])
-start_point = np.array([0.9, 0.6, 0.1, 0.2]) #, 1e8, 1e8 #[0.9, 0.6]
-parameter_bounds = [(0, np.inf), (0, np.inf), (0, 0.45), (0, np.inf)] #, (0, np.inf), (0, np.inf) L-BFGS-B
+constraint_matrix = np.array([[1,-1, 0, 0]]) # 0, 0
+constraint = LinearConstraint(constraint_matrix, lb = [0])
+start_point = np.array([0.9, 0.6, 0.32, 0.2 ]) #, 1e8, 1e8 #[0.9, 0.6] 0.1, 0.2
+parameter_bounds = [(0, 1), (0, 1), (0, 0.45), (0, np.inf) ] #, (0, np.inf), (0, np.inf) L-BFGS-B (0, 0.45), (0, np.inf)
 #res = minimize(cost_function, start_point, method='Powell', bounds=parameter_bounds,#0.50.5
 #              options={ 'ftol': 1e-40, 'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
 res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds,constraints=[constraint],
               options={'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
 print(res.x) 
-print("Inferred Values",np.multiply(res.x, np.array([E_scaler, E_scaler, 1, G_12_scaler])))
+print("Inferred Values",np.multiply(res.x, np.array([E_scaler, E_scaler,  1, G_12_scaler]))) #1, G_12_scaler
 print(p['G_12'])
 
 

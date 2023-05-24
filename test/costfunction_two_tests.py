@@ -31,6 +31,14 @@ p['uncertainties'] = [0]
 p['constitutive'] = 'isotropic'
 p['nu'] = 0.28 
 
+# N/m², m, kg, sec, N
+#p['length'] = 5
+#p['breadth'] = 1
+#p['load'] = [1e6,0] #[0, -10] #
+#p['rho'] = 7750
+#p['g'] = 9.81
+#p['E'] = 210e9 
+
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['length'] = 5000
 p['breadth'] = 1000
@@ -64,10 +72,9 @@ def combine_test_results(test_results):
     else:
         return np.concatenate((test_results[0], combine_test_results(test_results[1:])))
 
-list_of_disp = [testx_disp, testy_disp] #, testy_disp
+list_of_disp = [testx_disp, testy_disp ] #, testy_disp
 num_of_tests = str(len(list_of_disp)) + ' tests'
-disp = combine_test_results(list_of_disp)
-
+disp = combine_test_results(list_of_disp)  
 
 #########################################################################
 #########################################################################
