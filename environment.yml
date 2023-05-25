@@ -1,7 +1,7 @@
 name: FenicsConcrete
 channels:
   - conda-forge
-  - hannes2621
+  - bam77
   - defaults
 dependencies:
   - python=3.9.7
