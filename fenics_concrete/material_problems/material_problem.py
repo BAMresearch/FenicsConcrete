@@ -8,14 +8,12 @@ from scipy import constants as consts
 from loguru import logger
 import logging
 import sys
-#
-# import warnings
-# from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
+import warnings
+from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
 
 from vmap4fenics import VMAP4Fenics
-#
 # df.parameters["form_compiler"]["representation"] = "quadrature"
-# warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
+warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
 
 class MaterialProblem():

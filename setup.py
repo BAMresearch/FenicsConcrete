@@ -15,7 +15,7 @@ URL = 'https://github.com/BAMresearch/FenicsConcrete'
 EMAIL = 'erik.tamsen@bam.de'
 AUTHOR = 'Erik Tamsen'
 REQUIRES_PYTHON = '>=3.9.0'
-VERSION = '0.7.1'
+VERSION = '0.7.2'
 
 # What packages are required for this module to be executed?
 REQUIRED = []

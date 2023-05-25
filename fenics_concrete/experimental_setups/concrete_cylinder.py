@@ -6,6 +6,10 @@ import gmsh
 import os
 import meshio
 
+import warnings
+from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
+warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
+
 
 def generate_cylinder_mesh(radius,height,mesh_density):
     '''Uses gmsh to generate a cylinder mesh for fenics
