@@ -6,10 +6,9 @@ from fenics_concrete import experimental_setups
 
 # this is necessary, otherwise this warning will not stop
 # https://fenics.readthedocs.io/projects/ffc/en/latest/_modules/ffc/quadrature/deprecation.html
-# import warnings
-# from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
-# df.parameters["form_compiler"]["representation"] = "quadrature"
-# warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
+import warnings
+from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
+warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
 
 class LinearElasticity(MaterialProblem):

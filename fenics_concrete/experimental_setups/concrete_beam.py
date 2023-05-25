@@ -4,6 +4,10 @@ from fenics_concrete.experimental_setups.experiment import Experiment
 from fenics_concrete.helpers import Parameters
 import dolfin as df
 
+import warnings
+from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
+warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
+
 
 class ConcreteBeamExperiment(Experiment):
     def __init__(self, parameters = None):
