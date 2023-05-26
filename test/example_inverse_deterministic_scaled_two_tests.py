@@ -72,7 +72,7 @@ def combine_test_results(test_results):
     else:
         return np.concatenate((test_results[0], combine_test_results(test_results[1:])))
 
-list_of_disp = [testx_disp, testy_disp] #, testy_disp
+list_of_disp = [testx_disp, testy_disp ] #, tests1_disp
 num_of_tests = str(len(list_of_disp)) + ' tests'
 displacement_data = combine_test_results(list_of_disp)  
 
@@ -92,31 +92,38 @@ p['G_12'] =  210e6/(2*(1+0.28)) #(0.5*1e5)/(1+0.3)
 p['k_x'] = 1e12
 p['k_y'] = 1e12
 
-scaler = 500e6
+
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 
 
 E_scaler = 500e6
-G_12_scaler = 250e6
+G_12_scaler = 250e6 
+#K_scaler = 1e2 #1e7
 
 def forward_model_run(parameters):
     # Function to run the forward model
 
-    problem.E_m.value = parameters[0]*scaler
-    problem.E_d.value = parameters[1]*scaler
+    problem.E_m.value = parameters[0]*E_scaler #500e6
+    problem.E_d.value = parameters[1]*E_scaler
     problem.nu_12.value = parameters[2]
-    problem.G_12.value = parameters[3]*G_12_scaler #problem.E_m.value/(2*(1+problem.nu_12.value))*G_12_scaler
+    problem.G_12.value =  parameters[3]*G_12_scaler #(parameters[0]*scaler)/(2*(1+parameters[2])) - parameters[3]
+    problem.k_x.value =  10**(12 - (12-6)*parameters[4])  #1e15 - (1e15-1e5)*parameters[0] 
+    problem.k_y.value =  10**(12 - (12-6)*parameters[5])  #parameters[3]*G_12_scaler
     trialx_disp = np.copy(run_test(experiment, problem, 'left', [1e3, 0]))
     trialy_disp = np.copy(run_test(experiment, problem, 'bottom', [0, 1e3]))
     #trials1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3, 0]))
-    return combine_test_results([trialx_disp, trialy_disp]) #, trialy_disp
+    return combine_test_results([trialx_disp, trialy_disp]) #, trials1_disp
 
 
 from numpy import linalg as LA
 cost_function_values = []
-parameter_values = {'E_m':[], 'E_d':[]}
-sparsity_factor = 1e-1
+total_model_error = []
+displacement_model_error = []
+#parameter_values = {'E_m':[], 'E_d':[]}
+#parameter_values['E_m'].append(param[0])
+#parameter_values['E_d'].append(param[1])
+sparsity_factor = 1e-6
 def cost_function(param):
     # Function to calculate the cost function
     displacement_model = forward_model_run(param)  
@@ -124,42 +131,49 @@ def cost_function(param):
     print('Inferred Parameters',param)
     #print('Cost Function', np.dot(delta_displacement, delta_displacement), sparsity_factor*LA.norm(param, ord=1))
     function_evaluation = np.dot(delta_displacement, delta_displacement) 
-    cost_function_values.append(function_evaluation)
-    parameter_values['E_m'].append(param[0])
-    parameter_values['E_d'].append(param[1])
-    return function_evaluation  #+  sparsity_factor*LA.norm(param, ord=1)
+    cost_function_value = function_evaluation + sparsity_factor*LA.norm(param, ord=1)
+    displacement_model_error.append(function_evaluation)
+    total_model_error.append(cost_function_value)
+    return cost_function_value
 
 from scipy.optimize import minimize, least_squares, LinearConstraint
 
-constraint_matrix = np.array([[1,-1, 0, 0]]) # 0, 0
+constraint_matrix = np.array([[1,-1, 0, 0, 0 ,0]]) # 0, 0 ,0
 constraint = LinearConstraint(constraint_matrix, lb = [0])
-start_point = np.array([0.9, 0.6, 0.32, 0.2 ]) #, 1e8, 1e8 #[0.9, 0.6] 0.1, 0.2
-parameter_bounds = [(0, 1), (0, 1), (0, 0.45), (0, np.inf) ] #, (0, np.inf), (0, np.inf) L-BFGS-B (0, 0.45), (0, np.inf)
+start_point = np.array([0.9, 0.6, 0.32, 0.2, 0.4, 0.3 ])  #0.2, 0.4, 0.3
+parameter_bounds = [(0, 1), (0, 1), (0, 0.45), (0, np.inf), (0, 1), (0, 1)] #   L-BFGS-B , 
 #res = minimize(cost_function, start_point, method='Powell', bounds=parameter_bounds,#0.50.5
 #              options={ 'ftol': 1e-40, 'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
-res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds,constraints=[constraint],
-              options={'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
+res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds, constraints=[constraint],
+              options={'disp': True, 'gtol': 1e-16, 'xtol': 1e-10,},  ) #'ftol': 1e-10, 'xtol': 1e-16, 'barrier_tol': 1e-16,
 print(res.x) 
-print("Inferred Values",np.multiply(res.x, np.array([E_scaler, E_scaler,  1, G_12_scaler]))) #1, G_12_scaler
+#print('Results', res.fun, res.grad, res.v, res.cg_stop_cond)
+print("Spring Stiffness:","{:e}".format(10**(12 - (12-6)*res.x[0])),  "{:e}".format(10**(12 - (12-6)*res.x[1])) )
+print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x, np.array([E_scaler, E_scaler,  1, G_12_scaler, 0, 0]))) #1, G_12_scaler
 print(p['G_12'])
 
-
-import plotly.express as px
+""" import plotly.express as px
 fig = px.line(x=[i for i in range(46,len(cost_function_values)+1)], y=cost_function_values[45:], markers=True, title='Cost Function Curve', log_y=True)
 fig.update_layout(
     title_text='Cost Function Curve',
 )
-fig.show()
+fig.show() """
 
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-E_m_trials = np.array(parameter_values['E_m'])
-E_d_trials = np.array(parameter_values['E_d'])
-cost_function_trials = np.array(cost_function_values)
 
-
-
+import plotly.graph_objects as go
+iteration_no = np.arange(1, len(total_model_error)+1)
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=iteration_no, y=total_model_error,  
+                    mode='lines+markers',
+                    name='Total Model Error'))
+fig.add_trace(go.Scatter(x=iteration_no, y=displacement_model_error,  
+                    mode='lines+markers',
+                    name='Displacement Model Error'))
+#fig.update_layout(yaxis_type = "log")
+fig.show()
 
 
 
@@ -206,6 +220,12 @@ parameter_bounds = [(0, np.inf), (0, 0.45)] #, (0, np.inf), (0, np.inf)
 res = minimize(cost_function, start_point, method='Nelder-Mead', bounds=parameter_bounds,#0.50.5
               options={'disp': True, 'maxiter':400}) 
 print(res.x) 
-print(p['G_12']) """
+print(p['G_12'])
+
+E_m_trials = np.array(parameter_values['E_m'])
+E_d_trials = np.array(parameter_values['E_d'])
+cost_function_trials = np.array(cost_function_values) 
+
+"""
 
 

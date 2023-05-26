@@ -102,8 +102,9 @@ def forward_model_run(parameters):
 
 
 from numpy import linalg as LA
-cost_function_values = []
-parameter_values = {'E_m':[], 'E_d':[]}
+total_model_error = []
+displacement_model_error = []
+
 sparsity_factor = 1e-1
 def cost_function(param):
     # Function to calculate the cost function
@@ -112,10 +113,10 @@ def cost_function(param):
     print('Inferred Parameters',param[0], param[1])
     #print('Cost Function', np.dot(delta_displacement, delta_displacement), sparsity_factor*LA.norm(param, ord=1))
     function_evaluation = np.dot(delta_displacement, delta_displacement) 
-    cost_function_values.append(function_evaluation)
-    parameter_values['E_m'].append(param[0])
-    parameter_values['E_d'].append(param[1])
-    return function_evaluation  #+  sparsity_factor*LA.norm(param, ord=1)
+    cost_function_value = function_evaluation +  sparsity_factor*LA.norm(param, ord=1)
+    displacement_model_error.append(function_evaluation)
+    total_model_error.append(cost_function_value)
+    return cost_function_value
 
 from scipy.optimize import minimize, least_squares, LinearConstraint
 
@@ -132,8 +133,8 @@ print("Inferred Values",np.multiply(res.x, np.array([E_scaler, E_scaler])))
 print(p['G_12'])
 
 
-import plotly.express as px
-fig = px.line(x=[i for i in range(46,len(cost_function_values)+1)], y=cost_function_values[45:], markers=True, title='Cost Function Curve', log_y=True)
+""" import plotly.express as px
+fig = px.line(x=total_model_error, y=cost_function_values[45:], markers=True, title='Cost Function Curve', log_y=True)
 fig.update_layout(
     title_text='Cost Function Curve',
 )
@@ -144,12 +145,18 @@ from matplotlib import cm
 
 E_m_trials = np.array(parameter_values['E_m'])
 E_d_trials = np.array(parameter_values['E_d'])
-cost_function_trials = np.array(cost_function_values)
+cost_function_trials = np.array(cost_function_values) """
 
 
-
-
-
+import plotly.graph_objects as go
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=np.range(1,len(total_model_error)+1), y=total_model_error,
+                    mode='lines',
+                    name='lines'))
+fig.add_trace(go.Scatter(x=np.range(1,len(total_model_error)+1), y=displacement_model_error,
+                    mode='lines+markers',
+                    name='lines+markers'))
+fig.show()
 
 
 
@@ -194,6 +201,12 @@ parameter_bounds = [(0, np.inf), (0, 0.45)] #, (0, np.inf), (0, np.inf)
 res = minimize(cost_function, start_point, method='Nelder-Mead', bounds=parameter_bounds,#0.50.5
               options={'disp': True, 'maxiter':400}) 
 print(res.x) 
-print(p['G_12']) """
+print(p['G_12']) 
+
+#parameter_values = {'E_m':[], 'E_d':[]}
+#parameter_values['E_m'].append(param[0])
+#parameter_values['E_d'].append(param[1])
+
+"""
 
 
