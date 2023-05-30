@@ -31,14 +31,6 @@ p['uncertainties'] = [0]
 p['constitutive'] = 'isotropic'
 p['nu'] = 0.28 
 
-# N/m², m, kg, sec, N
-#p['length'] = 5
-#p['breadth'] = 1
-#p['load'] = [1e6,0] #[0, -10] #
-#p['rho'] = 7750
-#p['g'] = 9.81
-#p['E'] = 210e9 
-
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['length'] = 5000
 p['breadth'] = 1000
@@ -48,10 +40,30 @@ p['g'] = 9.81e3 #mm/s² for units to be consistent g must be given in m/s².
 p['E'] = 210e6 #Kgmms⁻2/mm² ---- N/mm² or MPa
 
 p['dirichlet_bdy'] = 'left'
-experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
-problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 
-def run_test(exp, prob, dirichlet_bdy, load):
+# Adding sensors to the problem definition.
+def add_sensor(prob, dirichlet_bdy, sensors_per_side):
+    sensor = []
+    if dirichlet_bdy == 'left':
+        for i in range(10): #20
+            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[p['length']/sensors_per_side*(i+1), 0, 0]]))) #1/20
+            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[p['length']/sensors_per_side*(i+1), p['breadth'], 0]])))
+
+        for i in range(len(sensor)):
+            prob.add_sensor(sensor[i])
+        return len(sensor)
+
+    elif dirichlet_bdy == 'bottom':
+        for i in range(5): #20
+            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[0, p['breadth']/sensors_per_side*(i+1), 0]]))) #1/20
+            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[p['length'], p['breadth']/sensors_per_side*(i+1), 0]])))
+
+        for i in range(len(sensor)):
+            prob.add_sensor(sensor[i])
+        return len(sensor)
+
+
+def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
     prob.p.dirichlet_bdy = dirichlet_bdy
     exp.p.dirichlet_bdy = dirichlet_bdy
     prob.p.load = load
@@ -60,21 +72,63 @@ def run_test(exp, prob, dirichlet_bdy, load):
     prob.calculate_bilinear_form()
     prob.solve()
     #prob.pv_plot("Displacement.xdmf")
-    return prob.displacement.x.array
-
-testx_disp = np.copy(run_test(experiment, problem, 'left', [1e3, 0]))
-testy_disp = np.copy(run_test(experiment, problem, 'bottom', [0,1e3]))
-#tests1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3,0]))
-
+    if sensor_flag == 0:
+        return prob.displacement.x.array
+    elif sensor_flag == 1 :
+        counter=0
+        displacement_at_sensors = np.zeros((len(prob.sensors),2))
+        for i in prob.sensors:
+            displacement_at_sensors[counter] = prob.sensors[i].data[-1]
+            counter += 1
+        prob.sensors = fenicsX_concrete.sensors.Sensors()
+        return displacement_at_sensors#.flatten()
+    
 def combine_test_results(test_results):
     if len(test_results) == 1:
         return test_results[0]
     else:
         return np.concatenate((test_results[0], combine_test_results(test_results[1:])))
 
-list_of_disp = [testx_disp, testy_disp ] #, tests1_disp
-num_of_tests = str(len(list_of_disp)) + ' tests'
+experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
+problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
+
+def add_noise_to_data(clean_data, no_of_sensors):
+    max_disp = np.amax(np.absolute(clean_data))
+    min_disp = np.amin(np.absolute(clean_data))
+    print('Max', max_disp, 'Min', min_disp)
+    return clean_data #+ np.random.normal(0, 0.01 * min_disp, no_of_sensors)
+
+""" #Sparse data (with sensors)
+test1_sensors_per_edge = 10
+test1_total_sensors = add_sensor(problem, 'left', test1_sensors_per_edge)
+test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1)
+
+test1_x_component = add_noise_to_data(test1_disp[:,0], test1_total_sensors)
+test1_y_component = add_noise_to_data(test1_disp[:,1], test1_total_sensors)
+
+test2_sensors_per_edge = 5
+test2_total_sensors = add_sensor(problem, 'bottom', test2_sensors_per_edge)
+test2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1)
+
+test2_x_component = add_noise_to_data(test2_disp[:,0], test2_total_sensors)
+test2_y_component = add_noise_to_data(test2_disp[:,1], test2_total_sensors)
+
+list_of_disp = [test1_x_component, test1_y_component, test2_x_component, test2_y_component]
+num_of_tests = str(abs(0.5*len(list_of_disp))) + ' tests'  """
+
+#Dense data (without sensors)s
+test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
+test2_disp = run_test(experiment, problem, 'bottom', [0,1e3], 0)
+#tests1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3,0]))
+list_of_disp = [test1_disp, test2_disp] #, tests1_disp
+num_of_tests = str(len(list_of_disp)) + ' tests' 
+
 displacement_data = combine_test_results(list_of_disp)  
+
+#displacement_data.shape[0]
+#0.001*displacement_data
+#np.random.multivariate_normal(np.shape(displacement_data)[0], np.eye(2), 1)
+
 
 #########################################################################
 #########################################################################
@@ -110,10 +164,20 @@ def forward_model_run(parameters):
     problem.G_12.value =  parameters[3]*G_12_scaler #(parameters[0]*scaler)/(2*(1+parameters[2])) - parameters[3]
     problem.k_x.value =  10**(12 - (12-6)*parameters[4])  #1e15 - (1e15-1e5)*parameters[0] 
     problem.k_y.value =  10**(12 - (12-6)*parameters[5])  #parameters[3]*G_12_scaler
-    trialx_disp = np.copy(run_test(experiment, problem, 'left', [1e3, 0]))
-    trialy_disp = np.copy(run_test(experiment, problem, 'bottom', [0, 1e3]))
-    #trials1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3, 0]))
+    
+    #Dense data (without sensors)
+    trialx_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
+    trialy_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 0)
     return combine_test_results([trialx_disp, trialy_disp]) #, trials1_disp
+
+    #Sparse data (with sensors)
+    #_ = add_sensor(problem, 'left', test1_sensors_per_edge)
+    #trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1)
+    #_ = add_sensor(problem, 'bottom', test2_sensors_per_edge)
+    #trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1)
+#
+    ##trials1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3, 0]))
+    #return combine_test_results([trial1_disp[:,0], trial1_disp[:,1], trial2_disp[:,0], trial2_disp[:,1]]) #, trials1_disp
 
 
 from numpy import linalg as LA
@@ -175,7 +239,13 @@ fig.add_trace(go.Scatter(x=iteration_no, y=displacement_model_error,
 #fig.update_layout(yaxis_type = "log")
 fig.show()
 
-
+# N/m², m, kg, sec, N
+#p['length'] = 5
+#p['breadth'] = 1
+#p['load'] = [1e6,0] #[0, -10] #
+#p['rho'] = 7750
+#p['g'] = 9.81
+#p['E'] = 210e9 
 
 
 
