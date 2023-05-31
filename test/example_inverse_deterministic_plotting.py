@@ -96,9 +96,9 @@ def add_noise_to_data(clean_data, no_of_sensors):
     max_disp = np.amax(np.absolute(clean_data))
     min_disp = np.amin(np.absolute(clean_data))
     print('Max', max_disp, 'Min', min_disp)
-    return clean_data + np.random.normal(0, 0.01 * min_disp, no_of_sensors)
+    return clean_data #+ np.random.normal(0, 0.01 * min_disp, no_of_sensors)
 
-#Sparse data (with sensors)
+""" #Sparse data (with sensors)
 test1_sensors_per_edge = 10
 test1_total_sensors = add_sensor(problem, 'left', test1_sensors_per_edge)
 test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1)
@@ -113,11 +113,11 @@ test2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1)
 
 test2_x_component = add_noise_to_data(test2_disp[:,0], test2_total_sensors)
 test2_y_component = add_noise_to_data(test2_disp[:,1], test2_total_sensors)
-test2_disp = np.vstack((test2_x_component, test2_y_component)).T.flatten()
+test2_disp = np.vstack((test2_x_component, test2_y_component)).T.flatten() """
 
 #Dense data (without sensors)s
-#test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
-#test2_disp = run_test(experiment, problem, 'bottom', [0,1e3], 0)
+test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
+test2_disp = run_test(experiment, problem, 'bottom', [0,1e3], 0)
 ##tests1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3,0]))
 
 # Not in Use
@@ -170,18 +170,18 @@ def forward_model_run(parameters):
     problem.k_y.value =  10**(12 - (12-6)*parameters[5])  #parameters[3]*G_12_scaler
     
     #Dense data (without sensors)
-    #trialx_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
-    #trialy_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 0)
+    trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
+    trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 0)
 
     #trialx_disp = np.reshape(run_test(experiment, problem, 'left', [1e3, 0], 0), (-1,2), order='C') #np.copy is removed
     #trialy_disp = np.reshape(run_test(experiment, problem, 'bottom', [0, 1e3], 0), (-1,2), order='C')
     #return combine_test_results([trialx_disp.flatten('F'), trialy_disp.flatten('F')]) #, trials1_disp
 
     #Sparse data (with sensors)
-    _ = add_sensor(problem, 'left', test1_sensors_per_edge)
-    trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1).flatten()
-    _ = add_sensor(problem, 'bottom', test2_sensors_per_edge)
-    trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1).flatten()
+    #_ = add_sensor(problem, 'left', test1_sensors_per_edge)
+    #trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1).flatten()
+    #_ = add_sensor(problem, 'bottom', test2_sensors_per_edge)
+    #trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1).flatten()
     return combine_test_results([trial1_disp, trial2_disp])
 
 from numpy import linalg as LA
@@ -191,12 +191,13 @@ displacement_model_error = []
 #parameter_values = {'E_m':[], 'E_d':[]}
 #parameter_values['E_m'].append(param[0])
 #parameter_values['E_d'].append(param[1])
-sparsity_factor = 1e-6
-def cost_function(param):
+#sparsity_factor = 1e-6
+def cost_function(param, sparsity_factor):
     # Function to calculate the cost function
     displacement_model = forward_model_run(param)  
+    #print(sparsity_factor)
     delta_displacement = displacement_model - displacement_data
-    print('Inferred Parameters',param)
+    #print('Inferred Parameters',param)
     function_evaluation = np.dot(delta_displacement, delta_displacement) 
     cost_function_value = function_evaluation + sparsity_factor*LA.norm(param, ord=1)
     displacement_model_error.append(function_evaluation)
@@ -211,15 +212,15 @@ constraint_matrix = np.array([[1,-1, 0, 0, 0 ,0]]) # 0, 0 ,0
 constraint = LinearConstraint(constraint_matrix, lb = [0])
 start_point = np.array([0.9, 0.6, 0.32, 0.2, 0.4, 0.3 ])  #0.2, 0.4, 0.3
 parameter_bounds = [(0, 1), (0, 1), (0, 0.45), (0, np.inf), (0, 1), (0, 1)] #   L-BFGS-B , 
-#res = minimize(cost_function, start_point, method='Powell', bounds=parameter_bounds,#0.50.5
-#              options={ 'ftol': 1e-40, 'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
-res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds, constraints=[constraint],
-              options={'disp': True, 'gtol': 1e-16, 'xtol': 1e-10,},  ) #'ftol': 1e-10, 'xtol': 1e-16, 'barrier_tol': 1e-16,
-print(res.x) 
+
+
+#res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds, constraints=[constraint],
+#              options={'disp': True, 'gtol': 1e-16, 'xtol': 1e-10,},  ) #'ftol': 1e-10, 'xtol': 1e-16, 'barrier_tol': 1e-16,
+#print(res.x) 
 #print('Results', res.fun, res.grad, res.v, res.cg_stop_cond)
-print("Spring Stiffness:","{:e}".format(10**(12 - (12-6)*res.x[0])),  "{:e}".format(10**(12 - (12-6)*res.x[1])) )
-print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x, np.array([E_scaler, E_scaler,  1, G_12_scaler, 0, 0]))) #1, G_12_scaler
-print(p['G_12'])
+#print("Spring Stiffness:","{:e}".format(10**(12 - (12-6)*res.x[0])),  "{:e}".format(10**(12 - (12-6)*res.x[1])) )
+#print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x, np.array([E_scaler, E_scaler,  1, G_12_scaler, 0, 0]))) #1, G_12_scaler
+#print(p['G_12'])
 
 """ import plotly.express as px
 fig = px.line(x=[i for i in range(46,len(cost_function_values)+1)], y=cost_function_values[45:], markers=True, title='Cost Function Curve', log_y=True)
@@ -232,6 +233,43 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 
 
+# Plotting the tendenacy of the parameters to tend to zero.
+sp_factor = [0, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] 
+inferred_parameters = np.zeros((len(sp_factor), len(start_point)))
+for index, value in enumerate(sp_factor):
+    print('#', index+1)
+    res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds, constraints=[constraint], args = (value),
+                  options={'disp': True, 'gtol': 1e-16, 'xtol': 1e-10,}, )
+    inferred_parameters[index] = res.x
+
+import plotly.graph_objects as go
+fig1 = go.Figure()
+inferred_parameters_name = ['E_m', 'E_d', 'nu', 'G_12', 'K_x', 'K_y']
+
+for i in range(inferred_parameters.shape[1]):
+        fig1.add_trace(go.Scatter(x=sp_factor, y=[x for x in inferred_parameters[:,i]],
+                        mode='markers',
+                        name=inferred_parameters_name[i]))
+fig1.add_hline(y=0.1, line_dash="dot")
+fig1.update_xaxes(type="log")
+fig1.update_yaxes(type="log")
+fig1.update_layout(title="Inferred Parameters Vs. Sparsity Factor (No Noise,  Dense Data)",
+    xaxis_title="Sparsity Factor",
+    yaxis_title="Inferred Parameters (Log Scale)",
+    legend_title="Parameters",)
+
+fig1.update_traces(marker=dict(size=11,
+                              line=dict(width=2,
+                                        color='DarkSlateGrey')),
+                  selector=dict(mode='markers'))
+
+fig1.show()
+fig1.write_html('Inferred Parameters Vs. Sparsity Factor (No Noise, Dense Data)'+'.html')
+np.savetxt('Inferred Parameters Vs. Sparsity Factor (No Noise, Dense Data)', inferred_parameters, delimiter=",")
+
+
+
+""" # Plotting the model error + sparsity error
 import plotly.graph_objects as go
 iteration_no = np.arange(1, len(total_model_error)+1)
 fig = go.Figure()
@@ -242,7 +280,7 @@ fig.add_trace(go.Scatter(x=iteration_no, y=displacement_model_error,
                     mode='lines+markers',
                     name='Displacement Model Error'))
 #fig.update_layout(yaxis_type = "log")
-fig.show()
+fig.show() """
 
 # N/m², m, kg, sec, N
 #p['length'] = 5
