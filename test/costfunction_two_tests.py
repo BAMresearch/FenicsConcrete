@@ -59,7 +59,7 @@ def run_test(exp, prob, dirichlet_bdy, load):
     prob.apply_neumann_bc()
     prob.calculate_bilinear_form()
     prob.solve()
-    #prob.pv_plot("Displacement.xdmf")
+    prob.pv_plot("Displacement.xdmf")
     return prob.displacement.x.array
 
 testx_disp = np.copy(run_test(experiment, problem, 'left', [1e3, 0]))
@@ -72,7 +72,7 @@ def combine_test_results(test_results):
     else:
         return np.concatenate((test_results[0], combine_test_results(test_results[1:])))
 
-list_of_disp = [testx_disp, testy_disp ] #, testy_disp
+list_of_disp = [testx_disp, testy_disp] #, testy_disp
 num_of_tests = str(len(list_of_disp)) + ' tests'
 disp = combine_test_results(list_of_disp)  
 
@@ -101,11 +101,11 @@ problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the 
 def forward_model_run(parameters):
     # Function to run the forward model
 
-    #problem.E_m.value = parameters[0]*scaler
-    #problem.E_d.value = parameters[1]*scaler
+    problem.E_m.value = parameters[0]*scaler
+    problem.E_d.value = parameters[1]*scaler
 
-    problem.k_x.value = parameters[0]*scaler
-    problem.k_y.value = parameters[1]*scaler
+    #problem.k_x.value = parameters[0]*scaler
+    #problem.k_y.value = parameters[1]*scaler
 
     trialx_disp = np.copy(run_test(experiment, problem, 'left', [1e3, 0]))
     trialy_disp = np.copy(run_test(experiment, problem, 'bottom', [0, 1e3]))
@@ -126,25 +126,30 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 
 def cost_function_plot():
-    E_m_values = np.linspace(1e5,1e15,50)#(0.,0.5,50)
-    E_d_values = np.linspace(1e5,1e15,50)#(0.,0.5,50)
+    E_m_values = np.linspace(0.,1.,40)#(0.,0.5,50)
+    E_d_values = np.linspace(0.,1.,40)#(0.,0.5,50)
     E_m_buildup, E_d_buildup = np.meshgrid(E_m_values, E_d_values)
     counter=0
     cost_func_val = np.zeros((E_m_buildup.shape[0],E_d_buildup.shape[1]))
     for i in range(E_m_buildup.shape[0]):
         for j in range(E_d_buildup.shape[1]):
-            #if E_m_buildup[i,j] - E_d_buildup[i,j] > 0:
+            if E_m_buildup[i,j] - E_d_buildup[i,j] > 0:
                 cost_func_val[i,j] = cost_function(np.array([E_m_buildup[i,j],E_d_buildup[i,j]]))
                 counter+=1
                 #print(cost_func_val[i,j])
         print(counter)
 
     import plotly.graph_objects as go
-    fig = go.Figure(data=[go.Surface(z=np.log10(cost_func_val), x= np.log10(E_m_values), y=np.log10(E_d_values))])
-    fig.update_layout(title='Cost Function Vs. Parameters',autosize=False,width=950, height=950,)
+    fig = go.Figure(data=[go.Surface(z=np.log10(cost_func_val), x = E_m_values, y = E_d_values)]) # x= np.log10(E_m_values), y=np.log10(E_d_values)
+    #fig.update_layout(title='Cost Function (Log-Scale) Vs. E_m, E_d',autosize=False,width=950, height=950,)
     #fig.update_layout(scene=dict(zaxis=dict(dtick=1, type='log')))
+    fig.update_layout(title="Cost Function Vs. E_m, E_d (2 Tensile Tests)",)
+    fig.update_layout(scene = dict(
+                    xaxis_title='E_m',
+                    yaxis_title='E_d',
+                    zaxis_title='Cost Function (Log-Scale)'))
     fig.show()
-    fig.write_html(num_of_tests + '_' + p['problem']+'_DC_'+p['dirichlet_bdy']+'.html')
+    fig.write_html(num_of_tests + '_' + p['problem']+'.html')
 
 
     """     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})

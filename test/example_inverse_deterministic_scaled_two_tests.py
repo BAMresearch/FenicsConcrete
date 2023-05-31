@@ -170,8 +170,8 @@ def forward_model_run(parameters):
     problem.k_y.value =  10**(12 - (12-6)*parameters[5])  #parameters[3]*G_12_scaler
     
     #Dense data (without sensors)
-    #trialx_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
-    #trialy_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 0)
+    #trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
+    #trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 0)
 
     #trialx_disp = np.reshape(run_test(experiment, problem, 'left', [1e3, 0], 0), (-1,2), order='C') #np.copy is removed
     #trialy_disp = np.reshape(run_test(experiment, problem, 'bottom', [0, 1e3], 0), (-1,2), order='C')
@@ -191,7 +191,7 @@ displacement_model_error = []
 #parameter_values = {'E_m':[], 'E_d':[]}
 #parameter_values['E_m'].append(param[0])
 #parameter_values['E_d'].append(param[1])
-sparsity_factor = 1e-6
+sparsity_factor = 1e-7
 def cost_function(param):
     # Function to calculate the cost function
     displacement_model = forward_model_run(param)  
@@ -210,15 +210,16 @@ from scipy.optimize import minimize, least_squares, LinearConstraint
 constraint_matrix = np.array([[1,-1, 0, 0, 0 ,0]]) # 0, 0 ,0
 constraint = LinearConstraint(constraint_matrix, lb = [0])
 start_point = np.array([0.9, 0.6, 0.32, 0.2, 0.4, 0.3 ])  #0.2, 0.4, 0.3
-parameter_bounds = [(0, 1), (0, 1), (0, 0.45), (0, np.inf), (0, 1), (0, 1)] #   L-BFGS-B , 
+parameter_bounds = [(0, 1), (0, 1), (0, 0.45), (0, 1), (0, 1), (0, 1)] #   L-BFGS-B , 
 #res = minimize(cost_function, start_point, method='Powell', bounds=parameter_bounds,#0.50.5
 #              options={ 'ftol': 1e-40, 'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
 res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds, constraints=[constraint],
               options={'disp': True, 'gtol': 1e-16, 'xtol': 1e-10,},  ) #'ftol': 1e-10, 'xtol': 1e-16, 'barrier_tol': 1e-16,
-print(res.x) 
+print("Inferred parameters (scaled):", res.x) 
 #print('Results', res.fun, res.grad, res.v, res.cg_stop_cond)
-print("Spring Stiffness:","{:e}".format(10**(12 - (12-6)*res.x[0])),  "{:e}".format(10**(12 - (12-6)*res.x[1])) )
-print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x, np.array([E_scaler, E_scaler,  1, G_12_scaler, 0, 0]))) #1, G_12_scaler
+print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x[:4], np.array([E_scaler, E_scaler,  1, G_12_scaler]))) #1, G_12_scaler
+print("Spring Stiffness K_x, K_y:","{:e}".format(10**(12 - (12-6)*res.x[0])),  "{:e}".format(10**(12 - (12-6)*res.x[1])))
+#print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x, np.array([E_scaler, E_scaler,  1, G_12_scaler, 0, 0]))) #1, G_12_scaler
 print(p['G_12'])
 
 """ import plotly.express as px

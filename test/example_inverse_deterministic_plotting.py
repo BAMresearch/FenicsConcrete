@@ -253,7 +253,7 @@ for i in range(inferred_parameters.shape[1]):
 fig1.add_hline(y=0.1, line_dash="dot")
 fig1.update_xaxes(type="log")
 fig1.update_yaxes(type="log")
-fig1.update_layout(title="Inferred Parameters Vs. Sparsity Factor (No Noise,  Dense Data)",
+fig1.update_layout(title="Inferred Parameters Vs. Sparsity Factor (No Noise, Dense Data)",
     xaxis_title="Sparsity Factor",
     yaxis_title="Inferred Parameters (Log Scale)",
     legend_title="Parameters",)
