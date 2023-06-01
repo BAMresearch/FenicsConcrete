@@ -96,9 +96,9 @@ def add_noise_to_data(clean_data, no_of_sensors):
     max_disp = np.amax(np.absolute(clean_data))
     min_disp = np.amin(np.absolute(clean_data))
     print('Max', max_disp, 'Min', min_disp)
-    return clean_data #+ np.random.normal(0, 0.01 * min_disp, no_of_sensors)
+    return clean_data + np.random.normal(0, 0.01 * min_disp, no_of_sensors)
 
-""" #Sparse data (with sensors)
+#Sparse data (with sensors)
 test1_sensors_per_edge = 10
 test1_total_sensors = add_sensor(problem, 'left', test1_sensors_per_edge)
 test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1)
@@ -113,11 +113,11 @@ test2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1)
 
 test2_x_component = add_noise_to_data(test2_disp[:,0], test2_total_sensors)
 test2_y_component = add_noise_to_data(test2_disp[:,1], test2_total_sensors)
-test2_disp = np.vstack((test2_x_component, test2_y_component)).T.flatten() """
+test2_disp = np.vstack((test2_x_component, test2_y_component)).T.flatten()
 
 #Dense data (without sensors)s
-test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
-test2_disp = run_test(experiment, problem, 'bottom', [0,1e3], 0)
+#test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
+#test2_disp = run_test(experiment, problem, 'bottom', [0,1e3], 0)
 ##tests1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3,0]))
 
 # Not in Use
@@ -165,23 +165,23 @@ def forward_model_run(parameters):
     problem.E_m.value = parameters[0]*E_scaler #500e6
     problem.E_d.value = parameters[1]*E_scaler
     problem.nu_12.value = parameters[2]
-    problem.G_12.value =  parameters[3]*G_12_scaler #(parameters[0]*scaler)/(2*(1+parameters[2])) - parameters[3]
+    problem.G_12.value =  parameters[3]*G_12_scaler + (parameters[0]*E_scaler)/(2*(1+parameters[2])) #parameters[3]*G_12_scaler 
     problem.k_x.value =  10**(12 - (12-6)*parameters[4])  #1e15 - (1e15-1e5)*parameters[0] 
     problem.k_y.value =  10**(12 - (12-6)*parameters[5])  #parameters[3]*G_12_scaler
     
     #Dense data (without sensors)
-    trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
-    trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 0)
+    #trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
+    #trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 0)
 
     #trialx_disp = np.reshape(run_test(experiment, problem, 'left', [1e3, 0], 0), (-1,2), order='C') #np.copy is removed
     #trialy_disp = np.reshape(run_test(experiment, problem, 'bottom', [0, 1e3], 0), (-1,2), order='C')
     #return combine_test_results([trialx_disp.flatten('F'), trialy_disp.flatten('F')]) #, trials1_disp
 
     #Sparse data (with sensors)
-    #_ = add_sensor(problem, 'left', test1_sensors_per_edge)
-    #trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1).flatten()
-    #_ = add_sensor(problem, 'bottom', test2_sensors_per_edge)
-    #trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1).flatten()
+    _ = add_sensor(problem, 'left', test1_sensors_per_edge)
+    trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1).flatten()
+    _ = add_sensor(problem, 'bottom', test2_sensors_per_edge)
+    trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1).flatten()
     return combine_test_results([trial1_disp, trial2_disp])
 
 from numpy import linalg as LA
@@ -199,7 +199,7 @@ def cost_function(param, sparsity_factor):
     delta_displacement = displacement_model - displacement_data
     #print('Inferred Parameters',param)
     function_evaluation = np.dot(delta_displacement, delta_displacement) 
-    cost_function_value = function_evaluation + sparsity_factor*LA.norm(param, ord=1)
+    cost_function_value = function_evaluation + sparsity_factor*LA.norm(param[np.array([1, 2, 3, 4, 5])], ord=1)
     displacement_model_error.append(function_evaluation)
     total_model_error.append(cost_function_value)
     return cost_function_value
@@ -234,7 +234,7 @@ from matplotlib import cm
 
 
 # Plotting the tendenacy of the parameters to tend to zero.
-sp_factor = [0, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] 
+sp_factor = [1e-16, 1e-12, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] 
 inferred_parameters = np.zeros((len(sp_factor), len(start_point)))
 for index, value in enumerate(sp_factor):
     print('#', index+1)
@@ -253,7 +253,7 @@ for i in range(inferred_parameters.shape[1]):
 fig1.add_hline(y=0.1, line_dash="dot")
 fig1.update_xaxes(type="log")
 fig1.update_yaxes(type="log")
-fig1.update_layout(title="Inferred Parameters Vs. Sparsity Factor (No Noise, Dense Data)",
+fig1.update_layout(title="Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)",
     xaxis_title="Sparsity Factor",
     yaxis_title="Inferred Parameters (Log Scale)",
     legend_title="Parameters",)
@@ -264,11 +264,28 @@ fig1.update_traces(marker=dict(size=11,
                   selector=dict(mode='markers'))
 
 fig1.show()
-fig1.write_html('Inferred Parameters Vs. Sparsity Factor (No Noise, Dense Data)'+'.html')
-np.savetxt('Inferred Parameters Vs. Sparsity Factor (No Noise, Dense Data)', inferred_parameters, delimiter=",")
+fig1.write_html('Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)_1Jun'+'.html')
+np.savetxt('Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)_1Jun', inferred_parameters, delimiter=",")
 
+cf_value = []
+for i in range(inferred_parameters.shape[0]):
+    cf_value.append(cost_function(inferred_parameters[i], 0)) 
 
-
+fig2 = go.Figure()
+fig2.add_trace(go.Scatter(x=sp_factor, y=cf_value,
+                        mode='lines+markers',))
+fig2.update_xaxes(type="log")
+fig2.update_yaxes(type="log")
+fig2.update_layout(title="Inferred Parameters Vs. Cost Function (No sparsity term, 1% Noise, Sparse Data)",
+    xaxis_title="Sparsity Factor",
+    yaxis_title="Cost Function (Log Scale)")
+fig2.update_traces(marker=dict(size=11,
+                              line=dict(width=2,
+                                        color='DarkSlateGrey')),
+                  selector=dict(mode='lines+markers'))
+fig2.show()
+fig2.write_html('Inferred Parameters Vs. Cost Function (1% Noise, Sparse Data)'+'.html')
+np.savetxt('Inferred Parameters Vs. Cost Function (1% Noise, Sparse Data)', inferred_parameters, delimiter=",")
 """ # Plotting the model error + sparsity error
 import plotly.graph_objects as go
 iteration_no = np.arange(1, len(total_model_error)+1)

@@ -165,10 +165,11 @@ def forward_model_run(parameters):
     problem.E_m.value = parameters[0]*E_scaler #500e6
     problem.E_d.value = parameters[1]*E_scaler
     problem.nu_12.value = parameters[2]
-    problem.G_12.value =  parameters[3]*G_12_scaler #(parameters[0]*scaler)/(2*(1+parameters[2])) - parameters[3]
+    problem.G_12.value =  parameters[3]*G_12_scaler + (parameters[0]*E_scaler)/(2*(1+parameters[2])) #(parameters[3] + (parameters[0])/(2*(1+parameters[2])))*G_12_scaler 
     problem.k_x.value =  10**(12 - (12-6)*parameters[4])  #1e15 - (1e15-1e5)*parameters[0] 
     problem.k_y.value =  10**(12 - (12-6)*parameters[5])  #parameters[3]*G_12_scaler
     
+    #parameters[3]*G_12_scaler 
     #Dense data (without sensors)
     #trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
     #trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 0)
@@ -198,7 +199,7 @@ def cost_function(param):
     delta_displacement = displacement_model - displacement_data
     print('Inferred Parameters',param)
     function_evaluation = np.dot(delta_displacement, delta_displacement) 
-    cost_function_value = function_evaluation + sparsity_factor*LA.norm(param, ord=1)
+    cost_function_value = function_evaluation + sparsity_factor*LA.norm(param[np.array([1, 2, 3, 4, 5])], ord=1)
     displacement_model_error.append(function_evaluation)
     total_model_error.append(cost_function_value)
     return cost_function_value

@@ -15,26 +15,22 @@ inferred_parameters_name = ['E_m', 'E_d', 'nu', 'G_12', 'k_x', 'k_y']
 for i in range(inferred_parameters.shape[1]):
         print(sp_factor, inferred_parameters[:,i])
         fig1.add_trace(go.Scatter(x=sp_factor, y=[x for x in inferred_parameters[:,i]],
-                        mode='markers',
+                        mode='lines+markers',
                         name=inferred_parameters_name[i]))
 fig1.add_hline(y=0.1, line_dash="dot")
 fig1.update_xaxes(type="log")
 fig1.update_yaxes(type="log")
-
-fig1.add_trace(go.Scatter(x=sp_factor, y=[x for x in inferred_parameters[:,i]],
-                mode='markers',
-                name=inferred_parameters_name[i]))
 
 #fig1.update_layout(yaxis_type = "log")
 
 fig1.update_traces(marker=dict(size=11,
                               line=dict(width=2,
                                         color='DarkSlateGrey')),
-                  selector=dict(mode='markers'))
+                  selector=dict(mode='lines+markers'))
 fig1.show()
 fig1.write_html('Inferred Parameters Vs. Sparsity Factor'+'.html')
 
 np.savetxt("foo.csv", inferred_parameters, delimiter=",")
 
-arr = np.loadtxt("foo.csv",
-                 delimiter=",", dtype=float)
+#arr = np.loadtxt("foo.csv",
+#                 delimiter=",", dtype=float)
