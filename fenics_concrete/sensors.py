@@ -222,6 +222,57 @@ class ReactionForceSensorBottom(Sensor):
 
 
 
+class YoungsModulusSensor(Sensor):
+    """A sensor that measure the Young's Modulus at a point"""
+
+    def __init__(self, where):
+        """
+        Arguments:
+            where : Point
+                location where the value is measured
+        """
+        super().__init__()
+        self.where = where
+        self.LOCATION = 'NODE'
+
+    def measuredata(self, problem, t=1.0):
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
+
+        # problem.E(self.where)
+        # youngs_modulus = df.project(problem.E, problem.visu_space,
+        #                             form_compiler_parameters={'quadrature_degree': problem.p.degree})
+
+        return problem.E(self.where)
+
+
+class CompressiveStrengthSensor(Sensor):
+    """A sensor that measure the compressive strength at a point"""
+
+    def __init__(self, where):
+        """
+        Arguments:
+            where : Point
+                location where the value is measured
+        """
+        super().__init__()
+        self.where = where
+        self.LOCATION = 'NODE'
+
+    def measuredata(self, problem, t=1.0):
+        """
+        Arguments:
+            problem : FEM problem object
+            t : float, optional
+                time of measurement for time dependent problems
+        """
+        return problem.fc(self.where)
+
+
 class StressSensor(Sensor):
     """A sensor that measure the stress tensor in at a point"""
 

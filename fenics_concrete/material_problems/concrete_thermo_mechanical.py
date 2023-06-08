@@ -130,6 +130,10 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.q_degree_of_hydration = self.temperature_problem.q_alpha
         self.q_yield = self.mechanics_problem.q_yield
         self.stress = self.mechanics_problem.sigma_ufl
+        self.E =  df.project(self.mechanics_problem.q_E, self.mechanics_problem.visu_space,
+                   form_compiler_parameters={'quadrature_degree': self.p.degree})
+        self.fc = df.project(self.mechanics_problem.q_fc, self.mechanics_problem.visu_space,
+                   form_compiler_parameters={'quadrature_degree': self.p.degree})
 
         # get sensor data
         for sensor_name in self.sensors:

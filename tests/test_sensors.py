@@ -87,6 +87,8 @@ def simple_simulation(sensor, name):
 @pytest.mark.parametrize("sensor_input", [(fenics_concrete.sensors.TemperatureSensor((0.25, 0.25)),23.84773),
                                     (fenics_concrete.sensors.MaxTemperatureSensor(),31.904592),
                                     (fenics_concrete.sensors.DOHSensor((0.25, 0.25)),0.165813),
+                                    (fenics_concrete.sensors.YoungsModulusSensor((0.25, 0.25)),4155285.9654043815),
+                                    (fenics_concrete.sensors.CompressiveStrengthSensor((0.25, 0.25)),716820.1589367568),
                                     (fenics_concrete.sensors.DisplacementSensor((0.25, 0.25)),[-0.00021360386200055683 , -0.0009104520121141141]),
                                     (fenics_concrete.sensors.MaxYieldSensor(),-52685.14211)
                                     ])
