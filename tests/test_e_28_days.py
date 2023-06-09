@@ -42,9 +42,9 @@ def test_e_28_days():
     parameters['alpha_0'] = 0.05
     parameters['a_E'] = 0.6
     # required paramters for alpha to tensile and compressive stiffness mapping
-    parameters['fc_inf'] = 6210000
+    parameters['fc'] = 6210000
     parameters['a_fc'] = 1.2
-    parameters['ft_inf'] = 467000
+    parameters['ft'] = 467000
     parameters['a_ft'] = 1.0
 
     experiment = fenics_concrete.ConcreteCubeExperiment(parameters)

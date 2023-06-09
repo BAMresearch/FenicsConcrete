@@ -50,9 +50,9 @@ def simple_simulation(sensor, name):
     parameters['alpha_0'] = 0.05
     parameters['a_E'] = 0.6
     # required paramters for alpha to tensile and compressive stiffness mapping
-    parameters['fc_inf'] = 6210000
+    parameters['fc'] = 6210000
     parameters['a_fc'] = 1.2
-    parameters['ft_inf'] = 467000
+    parameters['ft'] = 467000
     parameters['a_ft'] = 1.0
 
     experiment = fenics_concrete.ConcreteCubeExperiment(parameters)
@@ -87,9 +87,9 @@ def simple_simulation(sensor, name):
 @pytest.mark.parametrize("sensor_input", [(fenics_concrete.sensors.TemperatureSensor((0.25, 0.25)),23.84773),
                                     (fenics_concrete.sensors.MaxTemperatureSensor(),31.904592),
                                     (fenics_concrete.sensors.DOHSensor((0.25, 0.25)),0.165813),
-                                    (fenics_concrete.sensors.YoungsModulusSensor((0.25, 0.25)),4155285.9654043815),
+                                    (fenics_concrete.sensors.YoungsModulusSensor((0.25, 0.25)),4522334.800674216),
                                     (fenics_concrete.sensors.CompressiveStrengthSensor((0.25, 0.25)),716820.1589367568),
-                                    (fenics_concrete.sensors.DisplacementSensor((0.25, 0.25)),[-0.00021360386200055683 , -0.0009104520121141141]),
+                                    (fenics_concrete.sensors.DisplacementSensor((0.25, 0.25)),[-0.000196267010046188, -0.0008365564770464269]),
                                     (fenics_concrete.sensors.MaxYieldSensor(),-52685.14211)
                                     ])
 def test_sensor(sensor_input):

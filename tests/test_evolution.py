@@ -41,9 +41,9 @@ def test_parameter_evolution():
     parameters['alpha_0'] = 0.05
     parameters['a_E'] = 0.6
     # required paramters for alpha to tensile and compressive stiffness mapping
-    parameters['fc_inf'] = 6210000
+    parameters['fc'] = 6210000
     parameters['a_fc'] = 1.2
-    parameters['ft_inf'] = 467000
+    parameters['ft'] = 467000
     parameters['a_ft'] = 1.0
 
     experiment = fenics_concrete.ConcreteCubeExperiment(parameters)
@@ -82,4 +82,4 @@ def test_parameter_evolution():
         doh = problem.sensors[doh_sensor.name].data[-1]
 
     assert problem.sensors[E_sensor.name].data[-1] == pytest.approx(parameters['E'], 0.1)
-    assert problem.sensors[fc_sensor.name].data[-1] == pytest.approx(parameters['fc_inf'], 0.1)
+    assert problem.sensors[fc_sensor.name].data[-1] == pytest.approx(parameters['fc'], 0.1)

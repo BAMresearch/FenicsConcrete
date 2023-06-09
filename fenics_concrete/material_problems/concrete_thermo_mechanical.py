@@ -66,9 +66,9 @@ class ConcreteThermoMechanical(MaterialProblem):
         default_p['a_E'] = 0.6
 
         # required paramters for alpha to tensile and compressive stiffness mapping
-        default_p['fc_inf'] = 6210000
+        #default_p['fc_inf'] = 6210000
         default_p['a_fc'] = 1.2
-        default_p['ft_inf'] = 467000
+        #default_p['ft_inf'] = 467000
         default_p['a_ft'] = 1.0
         default_p['evolution_ft'] = True
 
@@ -614,7 +614,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
 
     def general_hydration_fkt(self, alpha, parameters):
 
-        return parameters['X_inf'] * alpha ** (parameters['a_X'])
+        return parameters['X'] * alpha ** (parameters['a_X'])
 
     def principal_stress(self, stresses):
         # checking type of problem
@@ -797,20 +797,20 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         E_list = E_fkt_vectorized(alpha_list, parameters)
 
         parameters = {}
-        parameters['X_inf'] = self.p.fc_inf
+        parameters['X'] = self.p.fc
         parameters['a_X'] = self.p.a_fc
 
         fc_list = self.general_hydration_fkt(alpha_list, parameters)
 
         parameters = {}
-        parameters['X_inf'] = self.p.ft_inf
+        parameters['X'] = self.p.ft
         parameters['a_X'] = self.p.a_ft
 
         if self.p.evolution_ft == True:
             ft_list = self.general_hydration_fkt(alpha_list, parameters)
         else:
             # no evolution....
-            ft_list = np.full_like(alpha_list, self.p.ft_inf)
+            ft_list = np.full_like(alpha_list, self.p.ft)
 
         # now do the yield function thing!!!
         # I need stresses!!!
