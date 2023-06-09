@@ -57,7 +57,7 @@ class ConcreteThermoMechanical(MaterialProblem):
         default_p['degree'] = 2  #
 
         ### paramters for mechanics problem
-        default_p['E_28'] = 15000000  # Youngs Modulus N/m2 or something... TODO: check units!
+        #default_p['E'] = 15000000  # Youngs Modulus N/m2 or something... TODO: check units!
         default_p['nu'] = 0.2  # Poissons Ratio
 
         # required paramters for alpha to E mapping
@@ -66,9 +66,9 @@ class ConcreteThermoMechanical(MaterialProblem):
         default_p['a_E'] = 0.6
 
         # required paramters for alpha to tensile and compressive stiffness mapping
-        default_p['fc_inf'] = 6210000
+        #default_p['fc_inf'] = 6210000
         default_p['a_fc'] = 1.2
-        default_p['ft_inf'] = 467000
+        #default_p['ft_inf'] = 467000
         default_p['a_ft'] = 1.0
         default_p['evolution_ft'] = True
 
@@ -130,6 +130,10 @@ class ConcreteThermoMechanical(MaterialProblem):
         self.q_degree_of_hydration = self.temperature_problem.q_alpha
         self.q_yield = self.mechanics_problem.q_yield
         self.stress = self.mechanics_problem.sigma_ufl
+        self.E =  df.project(self.mechanics_problem.q_E, self.mechanics_problem.visu_space,
+                   form_compiler_parameters={'quadrature_degree': self.p.degree})
+        self.fc = df.project(self.mechanics_problem.q_fc, self.mechanics_problem.visu_space,
+                   form_compiler_parameters={'quadrature_degree': self.p.degree})
 
         # get sensor data
         for sensor_name in self.sensors:
@@ -589,6 +593,10 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         return stress_vector
 
     def E_fkt(self, alpha, parameters):
+        # compute E_inf
+
+        parameters['E_inf'] = parameters['E'] / ((parameters['alpha_tx'] - parameters['alpha_0']) /
+                                                 (1 - parameters['alpha_0'])) ** parameters['a_E']
 
         if alpha < parameters['alpha_t']:
             E = parameters['E_inf'] * alpha / parameters['alpha_t'] * (
@@ -600,8 +608,9 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         return E
 
     def general_hydration_fkt(self, alpha, parameters):
+        X_inf = parameters['X'] / (parameters['alpha_tx'] ** (parameters['a_X']))
 
-        return parameters['X_inf'] * alpha ** (parameters['a_X'])
+        return X_inf * alpha ** (parameters['a_X'])
 
     def principal_stress(self, stresses):
         # checking type of problem
@@ -766,28 +775,36 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
 
         parameters = {}
         parameters['alpha_t'] = self.p.alpha_t
-        parameters['E_inf'] = self.p.E_28
+        parameters['E'] = self.p.E
         parameters['alpha_0'] = self.p.alpha_0
         parameters['a_E'] = self.p.a_E
+
+        # this "feature is required if you want the E input to be defined other than as the value at alpha_max
+        if "alpha_tx" not in self.p.keys():
+            parameters['alpha_tx'] = self.p.alpha_max
+        else:
+            parameters['alpha_tx'] = self.p.alpha_tx
+
+        assert parameters['alpha_tx'] <= self.p.alpha_max
+        assert parameters['alpha_t'] < parameters['alpha_tx'] # can be implemented, but should usually not happen
+
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(alpha_list, parameters)
 
-        parameters = {}
-        parameters['X_inf'] = self.p.fc_inf
+        parameters['X'] = self.p.fc
         parameters['a_X'] = self.p.a_fc
 
         fc_list = self.general_hydration_fkt(alpha_list, parameters)
 
-        parameters = {}
-        parameters['X_inf'] = self.p.ft_inf
+        parameters['X'] = self.p.ft
         parameters['a_X'] = self.p.a_ft
 
         if self.p.evolution_ft == True:
             ft_list = self.general_hydration_fkt(alpha_list, parameters)
         else:
             # no evolution....
-            ft_list = np.full_like(alpha_list, self.p.ft_inf)
+            ft_list = np.full_like(alpha_list, self.p.ft)
 
         # now do the yield function thing!!!
         # I need stresses!!!

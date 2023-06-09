@@ -1,28 +1,19 @@
-import numpy as np
-
 import fenics_concrete
-
 import pytest
 
-# import warnings
-# from ffc.quadrature.deprecation \
-#     import QuadratureRepresentationDeprecationWarning
-# warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
-def simple_simulation(sensor, name):
-
+def test_e_28_days():
     parameters = fenics_concrete.Parameters()  # using the current default values
     # general
     parameters['log_level'] = 'WARNING'
     # mesh
     parameters['mesh_setting'] = 'left/right'  # default boundary setting
     parameters['dim'] = 2
-    parameters['mesh_density'] = 4
+    parameters['mesh_density'] = 2
     # temperature boundary
-    parameters['bc_setting'] = 'test-setup'  # default boundary setting
-    parameters['T_0'] = 10  # inital concrete temperature
+    parameters['bc_setting'] = 'full'  # default boundary setting
+    parameters['T_0'] = 20  # inital concrete temperature
     parameters['T_bc1'] = 20  # temperature boundary value 1
-    parameters['T_bc2'] = 30  # temperature boundary value 2
 
     parameters['density'] = 2350  # in kg/m^3 density of concrete
     parameters['density_binder'] = 1440  # in kg/m^3 density of the binder
@@ -35,7 +26,8 @@ def simple_simulation(sensor, name):
     parameters['B1'] = 2.916E-4  # in 1/s
     parameters['B2'] = 0.0024229  # -
     parameters['eta'] = 5.554  # something about diffusion
-    parameters['alpha_max'] = 0.875  # also possible to approximate based on equation with w/c
+    parameters['alpha_max'] = 0.87  # also possible to approximate based on equation with w/c
+    parameters['alpha_tx'] = 0.68  # also possible to approximate based on equation with w/c
     parameters['E_act'] = 5653 * 8.3145  # activation energy in Jmol^-1
     parameters['T_ref'] = 25  # reference temperature in degree celsius
     # setting for temperature adjustment
@@ -43,7 +35,7 @@ def simple_simulation(sensor, name):
     # polinomial degree
     parameters['degree'] = 2  # default boundary setting
     ### paramters for mechanics problem
-    parameters['E'] = 15000000  # Youngs Modulus N/m2 or something...
+    parameters['E'] = 42000000  # Youngs Modulus N/m2 or something...
     parameters['nu'] = 0.2  # Poissons Ratio
     # required paramters for alpha to E mapping
     parameters['alpha_t'] = 0.2
@@ -56,13 +48,21 @@ def simple_simulation(sensor, name):
     parameters['a_ft'] = 1.0
 
     experiment = fenics_concrete.ConcreteCubeExperiment(parameters)
-    problem = fenics_concrete.ConcreteThermoMechanical(experiment = experiment, parameters = parameters, pv_name = name, vmapoutput = False)
+    problem = fenics_concrete.ConcreteThermoMechanical(experiment=experiment, parameters=parameters,
+                                                       vmapoutput=False)
 
-    problem.add_sensor(sensor)
+
+    E_sensor = fenics_concrete.sensors.YoungsModulusSensor((0.25, 0.25))
+    fc_sensor = fenics_concrete.sensors.CompressiveStrengthSensor((0.25, 0.25))
+    doh_sensor = fenics_concrete.sensors.DOHSensor((0.25, 0.25))
+
+
+    problem.add_sensor(E_sensor)
+    problem.add_sensor(fc_sensor)
+    problem.add_sensor(doh_sensor)
 
     # data for time stepping
     dt = 3600  # 60 min step
-    time = dt * 10  # total simulation time in s
 
     # set time step
     problem.set_timestep(dt)  # for time integration scheme
@@ -70,8 +70,10 @@ def simple_simulation(sensor, name):
     # initialize time
     t = dt  # first time step time
 
+    doh = 0
+    while doh < parameters['alpha_tx']:  # time
 
-    while t <= time:  # time
+
         # solve temp-hydration-mechanics
         problem.solve(t=t)  # solving this
 
@@ -79,27 +81,7 @@ def simple_simulation(sensor, name):
         t += dt
 
     # get last measure value
-    data = problem.sensors[sensor.name].data[-1]
+        doh = problem.sensors[doh_sensor.name].data[-1]
 
-    return data
-
-
-@pytest.mark.parametrize("sensor_input", [(fenics_concrete.sensors.TemperatureSensor((0.25, 0.25)),23.84773),
-                                    (fenics_concrete.sensors.MaxTemperatureSensor(),31.904592),
-                                    (fenics_concrete.sensors.DOHSensor((0.25, 0.25)),0.165813),
-                                    (fenics_concrete.sensors.YoungsModulusSensor((0.25, 0.25)),4522334.800674216),
-                                    (fenics_concrete.sensors.CompressiveStrengthSensor((0.25, 0.25)),841396.2008982195),
-                                    (fenics_concrete.sensors.DisplacementSensor((0.25, 0.25)),[-0.000196267010046188, -0.0008365564770464269]),
-                                    (fenics_concrete.sensors.MaxYieldSensor(),-60211.590987508986)
-                                    ])
-def test_sensor(sensor_input):
-    sensor = sensor_input[0]
-    result = sensor_input[1]
-    if isinstance(result, float):
-        result = np.float64(result)
-    else:
-        result = np.asarray(result)
-
-    data = simple_simulation(sensor, f"SensorTest{sensor.name}")
-
-    assert data == pytest.approx(result, 1e-06)
+    assert problem.sensors[E_sensor.name].data[-1] == pytest.approx(parameters['E'], 0.1)
+    assert problem.sensors[fc_sensor.name].data[-1] == pytest.approx(parameters['fc'], 0.1)
