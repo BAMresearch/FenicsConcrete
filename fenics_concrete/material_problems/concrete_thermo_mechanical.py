@@ -57,7 +57,7 @@ class ConcreteThermoMechanical(MaterialProblem):
         default_p['degree'] = 2  #
 
         ### paramters for mechanics problem
-        default_p['E_28'] = 15000000  # Youngs Modulus N/m2 or something... TODO: check units!
+        #default_p['E'] = 15000000  # Youngs Modulus N/m2 or something... TODO: check units!
         default_p['nu'] = 0.2  # Poissons Ratio
 
         # required paramters for alpha to E mapping
@@ -593,6 +593,15 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         return stress_vector
 
     def E_fkt(self, alpha, parameters):
+        # compute E_inf
+
+        parameters['E_inf'] = parameters['E'] / ((parameters['alpha_tx'] - parameters['alpha_0']) /
+                                                 (1 - parameters['alpha_0'])) ** parameters['a_E']
+
+
+        # # TODO
+        # parameters['E_inf'] = parameters['E']
+
 
         if alpha < parameters['alpha_t']:
             E = parameters['E_inf'] * alpha / parameters['alpha_t'] * (
@@ -770,9 +779,19 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
 
         parameters = {}
         parameters['alpha_t'] = self.p.alpha_t
-        parameters['E_inf'] = self.p.E_28
+        parameters['E'] = self.p.E
         parameters['alpha_0'] = self.p.alpha_0
         parameters['a_E'] = self.p.a_E
+
+        # this "feature is required if you want the E input to be defined other than as the value at alpha_max
+        if "alpha_tx" not in self.p.keys():
+            parameters['alpha_tx'] = self.p.alpha_max
+        else:
+            parameters['alpha_tx'] = self.p.alpha_tx
+
+        assert parameters['alpha_tx'] <= self.p.alpha_max
+        assert parameters['alpha_t'] < parameters['alpha_tx'] # can be implemented, but should usually not happen
+
         # vectorize the function for speed up
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(alpha_list, parameters)

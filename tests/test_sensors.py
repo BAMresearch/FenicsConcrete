@@ -43,7 +43,7 @@ def simple_simulation(sensor, name):
     # polinomial degree
     parameters['degree'] = 2  # default boundary setting
     ### paramters for mechanics problem
-    parameters['E_28'] = 15000000  # Youngs Modulus N/m2 or something...
+    parameters['E'] = 15000000  # Youngs Modulus N/m2 or something...
     parameters['nu'] = 0.2  # Poissons Ratio
     # required paramters for alpha to E mapping
     parameters['alpha_t'] = 0.2
