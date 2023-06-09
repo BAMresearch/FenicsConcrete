@@ -598,11 +598,6 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         parameters['E_inf'] = parameters['E'] / ((parameters['alpha_tx'] - parameters['alpha_0']) /
                                                  (1 - parameters['alpha_0'])) ** parameters['a_E']
 
-
-        # # TODO
-        # parameters['E_inf'] = parameters['E']
-
-
         if alpha < parameters['alpha_t']:
             E = parameters['E_inf'] * alpha / parameters['alpha_t'] * (
                         (parameters['alpha_t'] - parameters['alpha_0']) / (1 - parameters['alpha_0'])) ** parameters[
@@ -613,8 +608,9 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         return E
 
     def general_hydration_fkt(self, alpha, parameters):
+        X_inf = parameters['X'] / (parameters['alpha_tx'] ** (parameters['a_X']))
 
-        return parameters['X'] * alpha ** (parameters['a_X'])
+        return X_inf * alpha ** (parameters['a_X'])
 
     def principal_stress(self, stresses):
         # checking type of problem
@@ -796,13 +792,11 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         E_fkt_vectorized = np.vectorize(self.E_fkt)
         E_list = E_fkt_vectorized(alpha_list, parameters)
 
-        parameters = {}
         parameters['X'] = self.p.fc
         parameters['a_X'] = self.p.a_fc
 
         fc_list = self.general_hydration_fkt(alpha_list, parameters)
 
-        parameters = {}
         parameters['X'] = self.p.ft
         parameters['a_X'] = self.p.a_ft
 

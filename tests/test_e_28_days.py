@@ -26,8 +26,8 @@ def test_e_28_days():
     parameters['B1'] = 2.916E-4  # in 1/s
     parameters['B2'] = 0.0024229  # -
     parameters['eta'] = 5.554  # something about diffusion
-    parameters['alpha_max'] = 0.89  # also possible to approximate based on equation with w/c
-    parameters['alpha_tx'] = 0.72  # also possible to approximate based on equation with w/c
+    parameters['alpha_max'] = 0.87  # also possible to approximate based on equation with w/c
+    parameters['alpha_tx'] = 0.68  # also possible to approximate based on equation with w/c
     parameters['E_act'] = 5653 * 8.3145  # activation energy in Jmol^-1
     parameters['T_ref'] = 25  # reference temperature in degree celsius
     # setting for temperature adjustment
@@ -35,7 +35,7 @@ def test_e_28_days():
     # polinomial degree
     parameters['degree'] = 2  # default boundary setting
     ### paramters for mechanics problem
-    parameters['E'] = 420000  # Youngs Modulus N/m2 or something...
+    parameters['E'] = 42000000  # Youngs Modulus N/m2 or something...
     parameters['nu'] = 0.2  # Poissons Ratio
     # required paramters for alpha to E mapping
     parameters['alpha_t'] = 0.2
@@ -63,7 +63,6 @@ def test_e_28_days():
 
     # data for time stepping
     dt = 3600  # 60 min step
-    time = dt * 1000  # total simulation time in s
 
     # set time step
     problem.set_timestep(dt)  # for time integration scheme
@@ -80,13 +79,9 @@ def test_e_28_days():
 
         # prepare next timestep
         t += dt
-        print("t: ", t)
-        print("doh: ", problem.sensors[doh_sensor.name].data[-1])
-        print("  E: ", problem.sensors[E_sensor.name].data[-1])
 
     # get last measure value
         doh = problem.sensors[doh_sensor.name].data[-1]
 
     assert problem.sensors[E_sensor.name].data[-1] == pytest.approx(parameters['E'], 0.1)
-
-    #assert problem.sensors[fc_sensor.name].data[-1] == pytest.approx(parameters['fc_inf'], 0.1)
+    assert problem.sensors[fc_sensor.name].data[-1] == pytest.approx(parameters['fc'], 0.1)
