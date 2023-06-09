@@ -71,7 +71,7 @@ def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
     prob.apply_neumann_bc()
     prob.calculate_bilinear_form()
     prob.solve()
-    prob.pv_plot("Displacement.xdmf")
+    #prob.pv_plot("Displacement.xdmf")
     if sensor_flag == 0:
         return prob.displacement.x.array
     elif sensor_flag == 1 :
@@ -96,24 +96,35 @@ def add_noise_to_data(clean_data, no_of_sensors):
     max_disp = np.amax(np.absolute(clean_data))
     min_disp = np.amin(np.absolute(clean_data))
     print('Max', max_disp, 'Min', min_disp)
-    return clean_data + np.random.normal(0, 0.01 * min_disp, no_of_sensors)
+    return clean_data #+ np.random.normal(0, 0.01 * min_disp, no_of_sensors)
 
 #Sparse data (with sensors)
 test1_sensors_per_edge = 10
 test1_total_sensors = add_sensor(problem, 'left', test1_sensors_per_edge)
-test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1)
+test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1).flatten()
 
-test1_x_component = add_noise_to_data(test1_disp[:,0], test1_total_sensors)
-test1_y_component = add_noise_to_data(test1_disp[:,1], test1_total_sensors)
-test1_disp = np.vstack((test1_x_component, test1_y_component)).T.flatten()
+#test1_x_component = add_noise_to_data(test1_disp[:,0], test1_total_sensors)
+#test1_y_component = add_noise_to_data(test1_disp[:,1], test1_total_sensors)
+#test1_disp = np.vstack((test1_x_component, test1_y_component)).T.flatten()
 
 test2_sensors_per_edge = 5
 test2_total_sensors = add_sensor(problem, 'bottom', test2_sensors_per_edge)
-test2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1)
+test2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1).flatten()
 
-test2_x_component = add_noise_to_data(test2_disp[:,0], test2_total_sensors)
-test2_y_component = add_noise_to_data(test2_disp[:,1], test2_total_sensors)
-test2_disp = np.vstack((test2_x_component, test2_y_component)).T.flatten()
+
+#Sparse data (with sensors)
+test3_sensors_per_edge = 10
+test3_total_sensors = add_sensor(problem, 'left', test3_sensors_per_edge)
+test3_disp = run_test(experiment, problem, 'left', [1e3, 0], 1).flatten('F')
+
+
+test4_sensors_per_edge = 5
+test4_total_sensors = add_sensor(problem, 'bottom', test4_sensors_per_edge)
+test4_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1).flatten('F')
+
+#test2_x_component = add_noise_to_data(test2_disp[:,0], test2_total_sensors)
+#test2_y_component = add_noise_to_data(test2_disp[:,1], test2_total_sensors)
+#test2_disp = np.vstack((test2_x_component, test2_y_component)).T.flatten()
 
 #Dense data (without sensors)s
 #test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
@@ -125,9 +136,13 @@ test2_disp = np.vstack((test2_x_component, test2_y_component)).T.flatten()
 #test2_disp = np.reshape(run_test(experiment, problem, 'bottom', [0,1e3], 0), (-1,2), order='C')
 #list_of_disp = [test1_disp.flatten('F'), test2_disp.flatten('F')] #, tests1_disp
 
-list_of_disp = [test1_disp, test2_disp] #, tests1_disp
+list_of_disp = [test1_disp] #, tests1_disp , test2_disp
 #num_of_tests = str(len(list_of_disp)) + ' tests' 
-displacement_data = combine_test_results(list_of_disp)  
+displacement_data_1 = combine_test_results(list_of_disp)  
+
+list_of_disp_ = [test3_disp] #, tests1_disp , test4_disp
+#num_of_tests = str(len(list_of_disp)) + ' tests' 
+displacement_data_2 = combine_test_results(list_of_disp_) 
 
 #displacement_data.shape[0]
 #0.001*displacement_data
@@ -159,7 +174,7 @@ E_scaler = 500e6
 G_12_scaler = 250e6 
 #K_scaler = 1e2 #1e7
 
-def forward_model_run(parameters):
+def forward_model_run(parameters, keyword):
     # Function to run the forward model
 
     problem.E_m.value = parameters[0]*E_scaler #500e6
@@ -168,142 +183,48 @@ def forward_model_run(parameters):
     problem.G_12.value =  parameters[3]*G_12_scaler + (parameters[0]*E_scaler)/(2*(1+parameters[2])) #(parameters[3] + (parameters[0])/(2*(1+parameters[2])))*G_12_scaler 
     problem.k_x.value =  10**(12 - (12-6)*parameters[4])  #1e15 - (1e15-1e5)*parameters[0] 
     problem.k_y.value =  10**(12 - (12-6)*parameters[5])  #parameters[3]*G_12_scaler
-    
-    #parameters[3]*G_12_scaler 
-    #Dense data (without sensors)
-    #trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
-    #trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 0)
-
-    #trialx_disp = np.reshape(run_test(experiment, problem, 'left', [1e3, 0], 0), (-1,2), order='C') #np.copy is removed
-    #trialy_disp = np.reshape(run_test(experiment, problem, 'bottom', [0, 1e3], 0), (-1,2), order='C')
-    #return combine_test_results([trialx_disp.flatten('F'), trialy_disp.flatten('F')]) #, trials1_disp
 
     #Sparse data (with sensors)
-    _ = add_sensor(problem, 'left', test1_sensors_per_edge)
-    trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1).flatten()
-    _ = add_sensor(problem, 'bottom', test2_sensors_per_edge)
-    trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1).flatten()
-    return combine_test_results([trial1_disp, trial2_disp])
+    if keyword == 'XXYY':
+        _ = add_sensor(problem, 'left', test1_sensors_per_edge)
+        trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1).flatten('F')
+        #_ = add_sensor(problem, 'bottom', test2_sensors_per_edge)
+        #trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1).flatten('F')
+    else:
+        _ = add_sensor(problem, 'left', test1_sensors_per_edge)
+        trial1_disp = run_test(experiment, problem, 'left', [1e3, 0], 1).flatten()
+        #_ = add_sensor(problem, 'bottom', test2_sensors_per_edge)
+        #trial2_disp = run_test(experiment, problem, 'bottom', [0, 1e3], 1).flatten()
+    return combine_test_results([trial1_disp]) #, trial2_disp
 
+np.set_printoptions(suppress=True,
+   formatter={'float_kind':'{:0.16f}'.format})
 from numpy import linalg as LA
 cost_function_values = []
 total_model_error = []
 displacement_model_error = []
-#parameter_values = {'E_m':[], 'E_d':[]}
-#parameter_values['E_m'].append(param[0])
-#parameter_values['E_d'].append(param[1])
 sparsity_factor = 1e-7
 def cost_function(param):
     # Function to calculate the cost function
-    displacement_model = forward_model_run(param)  
-    delta_displacement = displacement_model - displacement_data
-    #delta_displacement = (displacement_model - displacement_data)/(displacement_data + 1e-10)
-    print('Inferred Parameters',param)
-    function_evaluation = np.dot(delta_displacement, delta_displacement) 
-    cost_function_value = function_evaluation + sparsity_factor*LA.norm(param[np.array([1, 2, 3, 4, 5])], ord=1)
-    displacement_model_error.append(function_evaluation)
-    total_model_error.append(cost_function_value)
-    return cost_function_value
+    displacement_model_1 = forward_model_run(param, 'XYXY')  
+    delta_displacement_1 = displacement_model_1 - displacement_data_1
 
-#print(cost_function([0.41, 0.03, 0.26, 0.2, 0.1, 0.2]))
+    displacement_model_2 = forward_model_run(param, 'XXYY')  
+    delta_displacement_2 = displacement_model_2 - displacement_data_2
 
-from scipy.optimize import minimize, least_squares, LinearConstraint
+    a1 = np.vstack((delta_displacement_2[:20], delta_displacement_2[20:40])).T.flatten()
+    a2 = np.vstack((delta_displacement_2[40:50], delta_displacement_2[50:60])).T.flatten()
+    delta_displacement_2_new = combine_test_results([a1, a2])
 
-constraint_matrix = np.array([[1,-1, 0, 0, 0 ,0]]) # 0, 0 ,0
-constraint = LinearConstraint(constraint_matrix, lb = [0])
-start_point = np.array([0.9, 0.6, 0.32, 0.2, 0.4, 0.3 ])  #0.2, 0.4, 0.3
-parameter_bounds = [(0, 1), (0, 1), (0, 0.45), (0, 1), (0, 1), (0, 1)] #   L-BFGS-B , 
-#res = minimize(cost_function, start_point, method='Powell', bounds=parameter_bounds,#0.50.5
-#              options={ 'ftol': 1e-40, 'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
-res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds, constraints=[constraint],
-              options={'disp': True, 'gtol': 1e-16, 'xtol': 1e-10,},  ) #'ftol': 1e-10, 'xtol': 1e-16, 'barrier_tol': 1e-16,
-print("Inferred parameters (scaled):", res.x) 
-#print('Results', res.fun, res.grad, res.v, res.cg_stop_cond)
-print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x[:4], np.array([E_scaler, E_scaler,  1, G_12_scaler]))) #1, G_12_scaler
-print("Spring Stiffness K_x, K_y:","{:e}".format(10**(12 - (12-6)*res.x[0])),  "{:e}".format(10**(12 - (12-6)*res.x[1])))
-#print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x, np.array([E_scaler, E_scaler,  1, G_12_scaler, 0, 0]))) #1, G_12_scaler
-print(p['G_12'])
-
-""" import plotly.express as px
-fig = px.line(x=[i for i in range(46,len(cost_function_values)+1)], y=cost_function_values[45:], markers=True, title='Cost Function Curve', log_y=True)
-fig.update_layout(
-    title_text='Cost Function Curve',
-)
-fig.show() """
-
-import matplotlib.pyplot as plt
-from matplotlib import cm
+    function_evaluation_1 = np.dot(delta_displacement_1, delta_displacement_1) 
+    function_evaluation_2 = np.dot(delta_displacement_2, delta_displacement_2)
+    function_evaluation_3 = np.dot(delta_displacement_2_new, delta_displacement_2_new)
+    print(function_evaluation_1 - function_evaluation_2)
+    print(function_evaluation_1 - function_evaluation_3)
 
 
-import plotly.graph_objects as go
-iteration_no = np.arange(1, len(total_model_error)+1)
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=iteration_no, y=total_model_error,  
-                    mode='lines+markers',
-                    name='Total Model Error'))
-fig.add_trace(go.Scatter(x=iteration_no, y=displacement_model_error,  
-                    mode='lines+markers',
-                    name='Displacement Model Error'))
-#fig.update_layout(yaxis_type = "log")
-fig.show()
+a = cost_function([0.42, 1e-5, 0.28, 1e-4, 1e-1, 1e-1])
+print(a)
 
-# N/m², m, kg, sec, N
-#p['length'] = 5
-#p['breadth'] = 1
-#p['load'] = [1e6,0] #[0, -10] #
-#p['rho'] = 7750
-#p['g'] = 9.81
-#p['E'] = 210e9 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-"""
-#Isotropic data, istropic identification of tensile test
-start_point = np.array([50e9, 0.15]) #, 1e8, 1e8
-parameter_bounds = [(0, np.inf), (0, 0.45)] #, (0, np.inf), (0, np.inf)
-res = minimize(cost_function, start_point, method='Nelder-Mead', bounds=parameter_bounds,#0.50.5
-              options={'disp': True, 'maxiter':400}) 
-print(res.x) 
-print(p['G_12'])
-
-E_m_trials = np.array(parameter_values['E_m'])
-E_d_trials = np.array(parameter_values['E_d'])
-cost_function_trials = np.array(cost_function_values) 
-
-"""
 
 

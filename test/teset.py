@@ -10,7 +10,7 @@ inferred_parameters[5,:] = [0.4199, 0.00234, 0.28, 0.326, 2e-6, 3e-7]
 
 import plotly.graph_objects as go
 fig1 = go.Figure()
-inferred_parameters_name = ['E_m', 'E_d', 'nu', 'G_12', 'k_x', 'k_y']
+""" inferred_parameters_name = ['E_m', 'E_d', 'nu', 'G_12', 'k_x', 'k_y']
 
 for i in range(inferred_parameters.shape[1]):
         print(sp_factor, inferred_parameters[:,i])
@@ -31,6 +31,21 @@ fig1.show()
 fig1.write_html('Inferred Parameters Vs. Sparsity Factor'+'.html')
 
 np.savetxt("foo.csv", inferred_parameters, delimiter=",")
-
+ """
 #arr = np.loadtxt("foo.csv",
 #                 delimiter=",", dtype=float)
+
+arr = np.loadtxt('Inferred Parameters Vs. Cost Function (1% Noise, Sparse Data)_RelativeError', dtype=float, delimiter=",")
+print(arr)
+sp_factor = [1e-16, 1e-12, 1e-10, 1e-8, 1e-6, 1e-4, 1e-4, 1e-2, 1e-1]
+
+fig1.add_trace(go.Scatter(x=sp_factor, y=arr,
+                        mode='lines+markers',))
+fig1.update_layout(title="Inferred Parameters Vs. Cost Function (No sparsity term, 1% Noise, Sparse Data)",
+    xaxis_title="Sparsity Factor",
+    yaxis_title="Cost Function (Log Scale)")
+fig1.update_traces(marker=dict(size=11,
+                              line=dict(width=2,
+                                        color='DarkSlateGrey')),
+                  selector=dict(mode='lines+markers'))
+fig1.show()

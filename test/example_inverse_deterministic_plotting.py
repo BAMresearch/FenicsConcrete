@@ -196,7 +196,8 @@ def cost_function(param, sparsity_factor):
     # Function to calculate the cost function
     displacement_model = forward_model_run(param)  
     #print(sparsity_factor)
-    delta_displacement = displacement_model - displacement_data
+    #delta_displacement = displacement_model - displacement_data
+    delta_displacement = (displacement_model - displacement_data)/(displacement_data + 1e-10)
     #print('Inferred Parameters',param)
     function_evaluation = np.dot(delta_displacement, delta_displacement) 
     cost_function_value = function_evaluation + sparsity_factor*LA.norm(param[np.array([1, 2, 3, 4, 5])], ord=1)
@@ -234,7 +235,8 @@ from matplotlib import cm
 
 
 # Plotting the tendenacy of the parameters to tend to zero.
-sp_factor = [1e-16, 1e-12, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3] 
+sp_factor = [1e-16, 1e-9, 1e-6, 1e-4, 1e-2, 0.1, 10, 1e2, 1e3]
+
 inferred_parameters = np.zeros((len(sp_factor), len(start_point)))
 for index, value in enumerate(sp_factor):
     print('#', index+1)
@@ -264,9 +266,13 @@ fig1.update_traces(marker=dict(size=11,
                   selector=dict(mode='markers'))
 
 fig1.show()
-fig1.write_html('Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)_1Jun'+'.html')
-np.savetxt('Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)_1Jun', inferred_parameters, delimiter=",")
+fig1.write_html('Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)_RelativeError_final'+'.html')
+np.savetxt('Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)_RelativeError_final".csv', inferred_parameters, delimiter=",")
 
+
+
+#import plotly.graph_objects as go
+#inferred_parameters = np.loadtxt('Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)_RelativeError', dtype=float, delimiter=",")
 cf_value = []
 for i in range(inferred_parameters.shape[0]):
     cf_value.append(cost_function(inferred_parameters[i], 0)) 
@@ -284,8 +290,11 @@ fig2.update_traces(marker=dict(size=11,
                                         color='DarkSlateGrey')),
                   selector=dict(mode='lines+markers'))
 fig2.show()
-fig2.write_html('Inferred Parameters Vs. Cost Function (1% Noise, Sparse Data)'+'.html')
-np.savetxt('Inferred Parameters Vs. Cost Function (1% Noise, Sparse Data)', inferred_parameters, delimiter=",")
+fig2.write_html('Inferred Parameters Vs. Cost Function (1% Noise, Sparse Data)_RelativeError_final'+'.html')
+np.savetxt('Inferred Parameters Vs. Cost Function (1% Noise, Sparse Data)_RelativeError_final.csv', cf_value, delimiter=",")
+
+
+
 """ # Plotting the model error + sparsity error
 import plotly.graph_objects as go
 iteration_no = np.arange(1, len(total_model_error)+1)
