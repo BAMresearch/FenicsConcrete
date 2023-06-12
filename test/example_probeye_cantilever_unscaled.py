@@ -178,25 +178,25 @@ import math
 ProbeyeProblem = InverseProblem("My Problem")
 
 ProbeyeProblem.add_parameter(name = "E_m", 
-                            tex=r"$YoungsModulus E_m$", 
+                            tex=r"$E_m$", 
                             info="Young's Modulus of the material",
-                            domain="[0, +oo)",
-                            prior = Normal(mean=200*10**6, std=25*10**9)) #  LogNormal(mean=float(np.log(200*10**6))-0.5*0.1**2, std=0.1)
+                            domain="(0, +oo)",
+                            prior = Uniform(low=0*10**6, high=500*10**6)) #  LogNormal(mean=float(np.log(200*10**6))-0.5*0.1**2, std=0.1)
 
 ProbeyeProblem.add_parameter(name = "E_d", 
-                            tex=r"$YoungsModulus E_m$", 
+                            tex=r"$E_d$", 
                             info="Young's Modulus of the material",
-                            domain="[0, +oo)",
-                            prior = Normal(mean=200*10**6, std=25*10**9))
+                            domain="(0, +oo)",
+                            prior = Uniform(low=0*10**6, high=500*10**6)) #Normal(mean=200*10**6, std=25*10**9)
 
 ProbeyeProblem.add_parameter(name = "nu", 
-                            tex=r"$PoissonsRatio$", 
+                            tex=r"$\nu$", 
                             info="Poisson's Ratio",
-                            domain="(0, 0.5)",
-                            prior = Uniform(low=0.01, high=0.5)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15)
+                            domain="(0, 0.45)",
+                            prior = Uniform(low=0.01, high=0.45)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15)
 
 ProbeyeProblem.add_parameter(name = "G_12", 
-                            tex=r"$Shear Modulus$", 
+                            tex=r"$G_{12}$", 
                             info="Shear Modulus",
                             domain="(0, +oo)",
                             prior = Uniform(low=0, high=150*10**6)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15)
@@ -213,11 +213,11 @@ ProbeyeProblem.add_parameter(name = "k_y",
                             #domain="(0, +oo)",
                             prior=Uniform(low=1e6, high=1e12))
 
-ProbeyeProblem.add_parameter(name = "sigma_model",
-                            #domain="(0, +oo)",
-                            #tex=r"$\sigma model$",
+ProbeyeProblem.add_parameter(name = "sigma", 
+                            tex=r"$\sigma_{model}$",
+                            domain="(0, 1)",
                             info="Standard deviation, of zero-mean Gaussian noise model",
-                            value=1e-8)
+                            prior=Uniform(low=1e-6, high=1e-5),)
 
 """ ProbeyeProblem.add_parameter(name = "sigma_x_rest",
                             #domain="(0, +oo)",
@@ -265,14 +265,14 @@ class FEMModel(ForwardModelBase):
     def interface(self):
         self.parameters = ["E_m", "E_d", "nu", "G_12", "k_x", "k_y"]   #E and nu must have been already defined beforehand using add_parameter. # three attributes are must here.
         self.input_sensors = [Sensor("dirichlet_bdy"), Sensor("neumann_bdy"), Sensor("sensors_per_edge")]#sensor provides a way for forward model to interact with experimental data.
-        self.output_sensors = [Sensor("disp", std_model="sigma_model",)]
+        self.output_sensors = [Sensor("disp", std_model="sigma")]
 
     def response(self, inp: dict) -> dict:    #forward model evaluation
         #x = inp["x"] Don't need it as weight is already given in equations
         problem.E_m.value = inp["E_m"]   
         problem.E_d.value = inp["E_d"]  
         problem.nu_12.value = inp["nu"]
-        problem.G_12.value =   82.03*10**6#inp["G_12"] + (inp["E_m"] )/(2*(1+inp["nu"]))
+        problem.G_12.value =   inp["G_12"] #+ (inp["E_m"] )/(2*(1+inp["nu"])) #82.03*10**6#
         problem.k_x.value =  inp["k_x"]
         problem.k_y.value =  inp["k_y"]
 
@@ -302,10 +302,10 @@ ProbeyeProblem.add_likelihood_model(
 )
 
 emcee_solver = EmceeSolver(ProbeyeProblem)
-inference_data = emcee_solver.run(n_steps=1500, n_initial_steps=150,n_walkers=20)
+inference_data = emcee_solver.run(n_steps=250, n_initial_steps=100) #,n_walkers=20
 
 
-true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28, "G_12": 82.03*10**6, "k_x":10**10, "k_y":10**9} 
+true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28, "G_12": 82.03*10**6, "k_x":3*10**9, "k_y":10**11} #, "k_x":10**10, "k_y":10**9
 
 # this is an overview plot that allows to visualize correlations
 pair_plot_array = create_pair_plot(
@@ -316,6 +316,7 @@ pair_plot_array = create_pair_plot(
     show_legends=True,
     title="Sampling results from emcee-Solver (pair plot)",
 )
+pair_plot_array.figure.savefig("pair_plot.png")
 
 trace_plot_array = create_trace_plot(
     inference_data,
