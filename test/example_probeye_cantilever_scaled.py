@@ -7,7 +7,7 @@ import numpy as np
 #import matplotlib.pyplot as plt
 from probeye.definition.inverse_problem import InverseProblem
 from probeye.definition.forward_model import ForwardModelBase
-from probeye.definition.distribution import Normal, Uniform, LogNormal
+from probeye.definition.distribution import Normal, Uniform, LogNormal, Exponential
 from probeye.definition.sensor import Sensor
 from probeye.definition.likelihood_model import GaussianLikelihoodModel
 
@@ -43,7 +43,7 @@ p['dim'] = 2
 # 3: Torsion Springs
 p['uncertainties'] = [0]
 
-p['constitutive'] = 'isotropic'
+p['constitutive'] = 'isotropic' #'orthotropic' 
 p['nu'] = 0.28 
 
 # Kgmms⁻2/mm², mm, kg, sec, N
@@ -161,7 +161,7 @@ displacement_data = combine_test_results(list_of_disp)
 
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['constitutive'] = 'orthotropic'
-p['uncertainties'] = [0,2]
+p['uncertainties'] = [0, 2] #,2
 p['E_m'] = 210e6
 p['E_d'] = 0.
 p['nu_12'] = 0.28 #0.3
@@ -181,37 +181,50 @@ ProbeyeProblem.add_parameter(name = "E_m",
                             tex=r"$E_m$", 
                             info="Young's Modulus of the material",
                             domain="(0, +oo)",
-                            prior = Uniform(low=0*10**6, high=500*10**6)) #  LogNormal(mean=float(np.log(200*10**6))-0.5*0.1**2, std=0.1)
+                            prior = Uniform(low=0, high=1)) #  LogNormal(mean=float(np.log(200*10**6))-0.5*0.1**2, std=0.1)
 
-ProbeyeProblem.add_parameter(name = "E_d", 
+ProbeyeProblem.add_parameter(name = "E_d", #*10**6
                             tex=r"$E_d$", 
                             info="Young's Modulus of the material",
                             domain="(0, +oo)",
-                            prior = Uniform(low=0*10**6, high=500*10**6)) #Normal(mean=200*10**6, std=25*10**9)
+                            prior = Uniform(low=0, high=500*10**6)) #Normal(mean=200*10**6, std=25*10**9) Uniform(low=0, high=400*10**6)
 
 ProbeyeProblem.add_parameter(name = "nu", 
                             tex=r"$\nu$", 
                             info="Poisson's Ratio",
-                            domain="(0, 0.45)",
+                            domain="[0, 0.45)",
                             prior = Uniform(low=0.01, high=0.45)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15)
 
-ProbeyeProblem.add_parameter(name = "G_12", 
+""" ProbeyeProblem.add_parameter(name = "G_12", 
                             tex=r"$G_{12}$", 
                             info="Shear Modulus",
                             domain="(0, +oo)",
-                            prior = Uniform(low=0, high=1)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15)
+                            prior = Uniform(low=0, high=100*10**6)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15) """
 
-ProbeyeProblem.add_parameter(name = "k_x",                     
+""" ProbeyeProblem.add_parameter(name = "k_x",       #100*10**6              
                             tex=r"$K_x$",
                             info="Spring Stiffness in horizontal direction",
-                            #domain="(0, +oo)",
-                            prior=Uniform(low=1e6, high=1e12))
+                            domain="(0, 1)",
+                            prior=Uniform(low=0, high=1)) #(low=10**6, high=10**12)) (low=0, high=1)
 
 ProbeyeProblem.add_parameter(name = "k_y",                     
                             tex=r"$K_y$",
                             info="Spring Stiffness in vertical direction",
-                            #domain="(0, +oo)",
-                            prior=Uniform(low=1e6, high=1e12))
+                            domain="(0, 1)",
+                            prior=Uniform(low=0, high=1))  """
+
+
+ProbeyeProblem.add_parameter(name = "k_x",       #100*10**6              
+                            tex=r"$K_x$",
+                            info="Spring Stiffness in horizontal direction",
+                            domain="[0, 1]",
+                            prior=Uniform(low=0, high=1))#(scale=1/(6*math.log(10)), shift=2)) #(low=10**6, high=10**12)) (low=0, high=1)
+
+ProbeyeProblem.add_parameter(name = "k_y",                     
+                            tex=r"$K_y$",
+                            info="Spring Stiffness in vertical direction",
+                            domain="[0, 1]",
+                            prior=Uniform(low=0, high=1))#(scale=1/(6*math.log(10)), shift=2)) 
 
 ProbeyeProblem.add_parameter(name = "sigma", 
                             tex=r"$\sigma_{model}$",
@@ -263,18 +276,17 @@ ProbeyeProblem.add_experiment(name="tensile_test_y",
 
 class FEMModel(ForwardModelBase):
     def interface(self):
-        self.parameters = ["E_m", "E_d", "nu", "G_12", "k_x", "k_y"]   #E and nu must have been already defined beforehand using add_parameter. # three attributes are must here.
+        self.parameters = ["E_m", "E_d", "nu", "k_x", "k_y"]  # "G_12", "k_x", "k_y",  #E and nu must have been already defined beforehand using add_parameter. # three attributes are must here.
         self.input_sensors = [Sensor("dirichlet_bdy"), Sensor("neumann_bdy"), Sensor("sensors_per_edge")]#sensor provides a way for forward model to interact with experimental data.
         self.output_sensors = [Sensor("disp", std_model="sigma")]
 
     def response(self, inp: dict) -> dict:    #forward model evaluation
-        #x = inp["x"] Don't need it as weight is already given in equations
-        problem.E_m.value = inp["E_m"]   
-        problem.E_d.value = inp["E_d"]  
+        problem.E_m.value = inp["E_m"]#*500*10**6   
+        problem.E_d.value = inp["E_d"]#*500*10**6     
         problem.nu_12.value = inp["nu"]
-        problem.G_12.value =   inp["G_12"]*250e6 + (inp["E_m"] )/(2*(1+inp["nu"])) #82.03*10**6#
-        problem.k_x.value =  inp["k_x"]
-        problem.k_y.value =  inp["k_y"]
+        problem.G_12.value = 82.03125*10**6 # inp["G_12"]#*250*10**6 # + (inp["E_m"] )/(2*(1+inp["nu"])) 82.03125*10**6 # 
+        problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
+        problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
 
         dirichlet_bdy = inp["dirichlet_bdy"]
         neumann_bdy = inp["neumann_bdy"]
@@ -302,12 +314,13 @@ ProbeyeProblem.add_likelihood_model(
 )
 
 emcee_solver = EmceeSolver(ProbeyeProblem)
-burn_in = 175
-after_burn_in = 430
+burn_in = 400
+after_burn_in = 900
 inference_data = emcee_solver.run(n_steps=after_burn_in, n_initial_steps=burn_in) #,n_walkers=20
 
-
-true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28, "G_12": 0. , "k_x":3*10**9, "k_y":10**11} #, "82.03*10**6
+#true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28} #"G_12": 82.03125*10**6
+#true_values = {"E_m": 0.42, "E_d": 0., "nu": 0.28, "G_12": 0.328} # , "G_12": 82.03125*10**6 , "k_x":3*10**9, "k_y":10**11
+true_values = {"E_m": 0.42, "E_d": 0., "nu": 0.28}
 
 # this is an overview plot that allows to visualize correlations
 pair_plot_array = create_pair_plot(
@@ -319,12 +332,12 @@ pair_plot_array = create_pair_plot(
     title="Sampling results from emcee-Solver (pair plot)",
 )
 fig = pair_plot_array.ravel()[0].figure
-fig.savefig("pair_plot_unscaled_G12"+str(burn_in)+"\n"+str(after_burn_in)+".png")
+fig.savefig("pair_plot_scaled_G12_"+str(burn_in)+"_"+str(after_burn_in)+"_spring.png")
 
 trace_plot_array = create_trace_plot(
     inference_data,
     emcee_solver.problem,
     title="Sampling results from emcee-Solver (trace plot)",
 )
-fig = pair_plot_array.ravel()[0].figure
-fig.savefig("trace_plot_unscaled_G12"+str(burn_in)+"\n"+str(after_burn_in)+".png")
+fig = trace_plot_array.ravel()[0].figure
+fig.savefig("trace_plot_scaled_G12_"+str(burn_in)+"_"+str(after_burn_in)+"_spring.png")

@@ -2,7 +2,7 @@ import numpy as np
 
 
 
-parameter_prior = 0.5
+""" parameter_prior = 0.5
 hyperparameter_z = np.random.binomial(1,parameter_prior,size=1) 
 
 if hyperparameter_z == 1:
@@ -11,4 +11,6 @@ else:
     parameter = 0
 
 print(parameter)
+ """
 
+print(np.random.exponential(scale=6*np.log(10)))

@@ -7,7 +7,7 @@ import numpy as np
 #import matplotlib.pyplot as plt
 from probeye.definition.inverse_problem import InverseProblem
 from probeye.definition.forward_model import ForwardModelBase
-from probeye.definition.distribution import Normal, Uniform, LogNormal
+from probeye.definition.distribution import Normal, Uniform, LogNormal, Exponential
 from probeye.definition.sensor import Sensor
 from probeye.definition.likelihood_model import GaussianLikelihoodModel
 
@@ -169,7 +169,7 @@ ProbeyeProblem.add_parameter(name = "E",
                             tex=r"$YoungsModulus E_m$", 
                             info="Young's Modulus of the material",
                             domain="[0, +oo)",
-                            prior = LogNormal(mean=float(np.log(200*10**6))-0.5*0.1**2, std=0.1)) # Normal(mean=200*10**6, std=25*10**9)  
+                            prior = Exponential(scale =  1, shift = 0.3 )) # Normal(mean=200*10**6, std=25*10**9)  LogNormal(mean=float(np.log(200*10**6))-0.5*0.1**2, std=0.1)
 
 
 ProbeyeProblem.add_parameter(name = "nu", 
@@ -236,7 +236,7 @@ class FEMModel(ForwardModelBase):
     def response(self, inp: dict) -> dict:    #forward model evaluation
         #x = inp["x"] Don't need it as weight is already given in equations
 
-        problem.E.value = inp["E"]    
+        problem.E.value = inp["E"]*500*10**6    
         problem.nu.value = inp["nu"]
 
 
@@ -266,10 +266,10 @@ ProbeyeProblem.add_likelihood_model(
 ) 
 
 emcee_solver = EmceeSolver(ProbeyeProblem)
-inference_data = emcee_solver.run(n_steps=2, n_initial_steps=4) #,n_walkers=25
+inference_data = emcee_solver.run(n_steps=50, n_initial_steps=25) #,n_walkers=25
 
 
-true_values = {"E": 210*10**6, "nu": 0.28} 
+true_values = {"E": 0.42, "nu": 0.28} 
 
 # this is an overview plot that allows to visualize correlations
 pair_plot_array = create_pair_plot(
