@@ -17,7 +17,7 @@ import math
 #########################################################################
 
 p = fenicsX_concrete.Parameters()  # using the current default values
-p['problem'] =  'tensile_test'    #'tensile_test' #'bending_test' 
+p['problem'] =  'tensile_test'    
 p['degree'] = 1
 p['num_elements_length'] = 50
 p['num_elements_breadth'] = 10
@@ -34,11 +34,11 @@ p['k_x'] = 1e12
 p['k_y'] = 1e12
 #p['K_torsion'] = 1e11
 
-p['constitutive'] = 'isotropic'
-p['E_m'] = 210e6 #1.72228206e+07 
-p['E_d'] = 0. #1.96009718e+08 
+p['constitutive'] = 'isotropic' 
+p['E_m'] = 210e6 
+p['E_d'] = 0. 
 p['nu_12'] = 0.28
-p['G_12'] = 210e6/(2*(1+0.28))    #p['E_m']/(2*(1+p['nu_12']))
+p['G_12'] = p['E_m']/(2*(1+p['nu_12']))
 
 
 # N/m², m, kg, sec, N

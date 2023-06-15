@@ -1,0 +1,9 @@
+{
+  "test1": {
+    "name": "E_m",
+    "tex": "$E_m$",
+    "info": "Young's Modulus of the material",
+    "domain": null,
+    "prior": "Uniform(low=0, high=1)"
+  }
+}

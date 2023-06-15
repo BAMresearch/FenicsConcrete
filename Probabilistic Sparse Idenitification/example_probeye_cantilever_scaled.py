@@ -183,7 +183,7 @@ ProbeyeProblem.add_parameter(name = "E_m",
                             domain="(0, +oo)",
                             prior = Uniform(low=0, high=1)) #  LogNormal(mean=float(np.log(200*10**6))-0.5*0.1**2, std=0.1)
 
-ProbeyeProblem.add_parameter(name = "E_d", #*10**6
+""" ProbeyeProblem.add_parameter(name = "E_d", #*10**6
                             tex=r"$E_d$", 
                             info="Young's Modulus of the material",
                             domain="(0, +oo)",
@@ -193,7 +193,7 @@ ProbeyeProblem.add_parameter(name = "nu",
                             tex=r"$\nu$", 
                             info="Poisson's Ratio",
                             domain="[0, 0.45)",
-                            prior = Uniform(low=0.01, high=0.45)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15)
+                            prior = Uniform(low=0.01, high=0.45)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15) """
 
 """ ProbeyeProblem.add_parameter(name = "G_12", 
                             tex=r"$G_{12}$", 
@@ -214,7 +214,7 @@ ProbeyeProblem.add_parameter(name = "k_y",
                             prior=Uniform(low=0, high=1))  """
 
 
-ProbeyeProblem.add_parameter(name = "k_x",       #100*10**6              
+""" ProbeyeProblem.add_parameter(name = "k_x",       #100*10**6              
                             tex=r"$K_x$",
                             info="Spring Stiffness in horizontal direction",
                             domain="[0, 1]",
@@ -230,7 +230,7 @@ ProbeyeProblem.add_parameter(name = "sigma",
                             tex=r"$\sigma_{model}$",
                             domain="(0, 1)",
                             info="Standard deviation, of zero-mean Gaussian noise model",
-                            prior=Uniform(low=1e-6, high=1e-5),)
+                            prior=Uniform(low=1e-6, high=1e-5),) """
 
 """ ProbeyeProblem.add_parameter(name = "sigma_x_rest",
                             #domain="(0, +oo)",
