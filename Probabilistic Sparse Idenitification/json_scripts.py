@@ -76,13 +76,22 @@ from probeye.postprocessing.sampling_plots import create_pair_plot
 from probeye.postprocessing.sampling_plots import create_posterior_plot
 from probeye.postprocessing.sampling_plots import create_trace_plot
 
-r"$E_m$"
+#r"$E_m$"
 """ mydict = {
-    "test1": {"name"    : "E_m",
+    "test1": [{"name"    : "E_m",
                 "tex"     : "$E_m$",  
                 "info"    : "Young's Modulus of the material",
                 "domain"  : None,
-                "prior"   : "Uniform(low=0, high=1)",} } 
+                "prior"   : ['Uniform', {'low': 0, 'high': 1}]},
+                 
+                {"name"   : "E_d",
+                "tex"     : "$E_d$",  
+                "info"    : "Young's Modulus of the material",
+                "domain"  : None,
+                "prior"   : ['Uniform', {'low': 0, 'high': 1}]}
+                ] 
+        
+    }  
             
 
 json_string = json.dumps(mydict , indent = 2)
@@ -94,9 +103,9 @@ with open('mydata.json', 'r') as f:
     #json_object_2 = json.load(f)
 
 #print(json_object['test1'])
-print(json_object.items())
+#print(json_object.items())
 
-ProbeyeProblem = InverseProblem("My Problem")
+
 
                             #name = "E", 
                             #tex=r"$YoungsModulus E_m$", 
@@ -104,10 +113,27 @@ ProbeyeProblem = InverseProblem("My Problem")
                             #domain="[0, +oo)",
                             #prior = Exponential(scale =  1, shift = 0.3 )
 
-for key, value in json_object.items():
-    ProbeyeProblem.add_parameter(name = value.get['name'], 
-                                 tex = "r" + value['tex'], 
-                                 info = value['info'], 
-                                 domain = value['domain'] if value['domain'] != None else "(-oo, +oo)",
-                                 prior = value['prior'])
+def prior_func(para :list):
+    if para[0] == 'Uniform':
+        return Uniform(low = para[1]['low'], high = para[1]['high'])
+    elif para[0] == 'Normal':
+        return Normal(mu = para[1]['mu'], sigma = para[1]['sigma'])
+    elif para[0] == 'LogNormal':
+        return LogNormal(mu = para[1]['mu'], sigma = para[1]['sigma'])
+    elif para[0] == 'Exponential':
+        return Exponential(scale = para[1]['scale'], shift = para[1]['shift'])
+    else:
+        raise ValueError("Prior distribution not implemented")
+
+ProbeyeProblem = InverseProblem("My Problem")
+for test, parameters in json_object.items():
+    for parameter in parameters:
+        #print(parameter)
+        ProbeyeProblem.add_parameter(name = parameter['name'], 
+                                     tex = "r" + parameter['tex'], 
+                                     info = parameter['info'], 
+                                     domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
+                                     prior = prior_func(parameter['prior']))
+
+print(ProbeyeProblem.parameters)
 
