@@ -1,8 +1,8 @@
 {
   "test1": [
     {
-      "name": "E_m",
-      "tex": "$E_m$",
+      "name": "E",
+      "tex": "$E$",
       "info": "Young's Modulus of the material",
       "domain": null,
       "prior": [
@@ -14,15 +14,15 @@
       ]
     },
     {
-      "name": "E_d",
-      "tex": "$E_d$",
-      "info": "Young's Modulus of the material",
+      "name": "nu",
+      "tex": "$\\nu$",
+      "info": "Poisson's Ratio of the material",
       "domain": null,
       "prior": [
         "Uniform",
         {
           "low": 0,
-          "high": 1
+          "high": 0.45
         }
       ]
     }

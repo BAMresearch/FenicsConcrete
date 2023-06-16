@@ -174,8 +174,11 @@ experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the 
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 
 #ForwardModelBase, Sensor objects, interface and response are mandatory.
-import math
+import math, json
 ProbeyeProblem = InverseProblem("My Problem")
+
+with open('mydata.json', 'r') as f:
+    json_object = json.loads(f.read()) 
 
 ProbeyeProblem.add_parameter(name = "E_m", 
                             tex=r"$E_m$", 

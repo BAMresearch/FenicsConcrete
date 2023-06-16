@@ -77,18 +77,18 @@ from probeye.postprocessing.sampling_plots import create_posterior_plot
 from probeye.postprocessing.sampling_plots import create_trace_plot
 
 #r"$E_m$"
-""" mydict = {
-    "test1": [{"name"    : "E_m",
-                "tex"     : "$E_m$",  
+mydict = {
+    "test1": [{"name"    : "E",
+                "tex"     : "E",  
                 "info"    : "Young's Modulus of the material",
                 "domain"  : None,
                 "prior"   : ['Uniform', {'low': 0, 'high': 1}]},
                  
-                {"name"   : "E_d",
-                "tex"     : "$E_d$",  
-                "info"    : "Young's Modulus of the material",
+                {"name"   : "nu",
+                "tex"     : "\nu",  
+                "info"    : "Poisson's Ratio of the material",
                 "domain"  : None,
-                "prior"   : ['Uniform', {'low': 0, 'high': 1}]}
+                "prior"   : ['Uniform', {'low': 0, 'high': 0.45}]}
                 ] 
         
     }  
@@ -96,22 +96,12 @@ from probeye.postprocessing.sampling_plots import create_trace_plot
 
 json_string = json.dumps(mydict , indent = 2)
 with open('mydata.json', 'w') as f:
-    f.write(json_string)   """
+    f.write(json_string) 
 
-with open('mydata.json', 'r') as f:
+""" with open('mydata.json', 'r') as f:
     json_object = json.loads(f.read()) 
     #json_object_2 = json.load(f)
 
-#print(json_object['test1'])
-#print(json_object.items())
-
-
-
-                            #name = "E", 
-                            #tex=r"$YoungsModulus E_m$", 
-                            #info="Young's Modulus of the material",
-                            #domain="[0, +oo)",
-                            #prior = Exponential(scale =  1, shift = 0.3 )
 
 def prior_func(para :list):
     if para[0] == 'Uniform':
@@ -135,5 +125,5 @@ for test, parameters in json_object.items():
                                      domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
                                      prior = prior_func(parameter['prior']))
 
-print(ProbeyeProblem.parameters)
+print(ProbeyeProblem.parameters) """
 

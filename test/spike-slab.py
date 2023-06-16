@@ -13,4 +13,9 @@ else:
 print(parameter)
  """
 
-print(np.random.exponential(scale=6*np.log(10)))
+#
+# print(np.random.exponential(scale=6*np.log(10)))
+
+print("\ABC")
+print(r'\ABC')
+print(r"path\to\the\thing")

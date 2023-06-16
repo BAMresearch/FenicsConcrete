@@ -1,4 +1,3 @@
-
 import os, sys
 parentdir = os.path.dirname(os.path.dirname(__file__))
 sys.path.append(parentdir)
@@ -139,18 +138,10 @@ test2_disp = np.vstack((test2_x_component, test2_y_component)).T.flatten()
 #test2_disp = run_test(experiment, problem, 'bottom', [0,1e3], 0)
 ##tests1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3,0]))
 
-# Not in Use
-#test1_disp = np.reshape(run_test(experiment, problem, 'left', [1e3, 0], 0), (-1,2), order = 'C') #np.copy is removed
-#test2_disp = np.reshape(run_test(experiment, problem, 'bottom', [0,1e3], 0), (-1,2), order='C')
-#list_of_disp = [test1_disp.flatten('F'), test2_disp.flatten('F')] #, tests1_disp
 
 list_of_disp = [test1_disp, test2_disp] #, tests1_disp
 #num_of_tests = str(len(list_of_disp)) + ' tests' 
 displacement_data = combine_test_results(list_of_disp)  
-
-#displacement_data.shape[0]
-#0.001*displacement_data
-#np.random.multivariate_normal(np.shape(displacement_data)[0], np.eye(2), 1)
 
 
 #########################################################################
@@ -162,10 +153,37 @@ displacement_data = combine_test_results(list_of_disp)
 
 
 #ForwardModelBase, Sensor objects, interface and response are mandatory.
-import math
+import math, json
 ProbeyeProblem = InverseProblem("My Problem")
 
-ProbeyeProblem.add_parameter(name = "E", 
+def prior_func(para :list):
+    if para[0] == 'Uniform':
+        return Uniform(low = para[1]['low'], high = para[1]['high'])
+    elif para[0] == 'Normal':
+        return Normal(mu = para[1]['mu'], sigma = para[1]['sigma'])
+    elif para[0] == 'LogNormal':
+        return LogNormal(mu = para[1]['mu'], sigma = para[1]['sigma'])
+    elif para[0] == 'Exponential':
+        return Exponential(scale = para[1]['scale'], shift = para[1]['shift'])
+    else:
+        raise ValueError("Prior distribution not implemented")
+
+
+with open('mydata.json', 'r') as f:
+    json_object = json.loads(f.read()) 
+
+parameters_list = []
+for test, parameters in json_object.items():
+    for parameter in parameters:
+        parameters_list.append(parameter['name'])
+        ProbeyeProblem.add_parameter(name = parameter['name'], 
+                                     tex =  parameter['tex'],
+                                     info = parameter['info'], 
+                                     domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
+                                     prior = prior_func(parameter['prior']))  
+
+
+""" ProbeyeProblem.add_parameter(name = "E", 
                             tex=r"$YoungsModulus E_m$", 
                             info="Young's Modulus of the material",
                             domain="[0, +oo)",
@@ -176,40 +194,17 @@ ProbeyeProblem.add_parameter(name = "nu",
                             tex=r"$PoissonsRatio$", 
                             info="Poisson's Ratio",
                             domain="(0, 0.45)",
-                            prior = Uniform(low=0.01, high=0.45)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15)
+                            prior = Uniform(low=0.01, high=0.45)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15) """
 
 
 ProbeyeProblem.add_parameter(name = "sigma",
                             domain="(0, +oo)",
-                            tex=r"$\sigma model$",
+                            tex=r"$\sigma_{model}$",
                             info="Standard deviation, of zero-mean Gaussian noise model",
                             prior=Uniform(low=1e-6, high=1e-5),)
 
-""" ProbeyeProblem.add_parameter(name = "sigma_x_rest",
-                            #domain="(0, +oo)",
-                            tex=r"$\sigma_{rest}x$",
-                            info="Measurement error in  x rest",
-                            prior= Normal(mean=4e-5, std=1e-6)) #0.004
 
-ProbeyeProblem.add_parameter(name = "sigma_y_rest",
-                            #domain="(0, +oo)",
-                            tex=r"$\sigma_{rest}y$",
-                            info="Measurement error y rest",
-                            prior= Normal(mean=12e-6, std=1e-7)) """
-
-#ProbeyeProblem.add_parameter(name = "sigma_x_clamp",
-#                            #domain="(0, +oo)",
-#                            tex=r"$\sigma_{clamp}x$",
-#                            info="Measurement error x clamp",
-#                            prior= Normal(mean=1e-11, std=1e-10))
-#
-#ProbeyeProblem.add_parameter(name = "sigma_y_clamp",
-#                            #domain="(0, +oo)",
-#                            tex=r"$\sigma_{clamp}y$",
-#                            info="Measurement error y clamp",
-#                            prior= Normal(mean=1e-10, std=1e-9))
-
-ProbeyeProblem.add_experiment(name="tensile_test_x",
+ProbeyeProblem.add_experiment(name="tensile_test_1",
                             sensor_data={
                                 "disp": test1_disp,
                                 "dirichlet_bdy": 0,  #Provided must be a 1D array.
@@ -217,7 +212,7 @@ ProbeyeProblem.add_experiment(name="tensile_test_x",
                                 "sensors_per_edge" : 10
                             })
 
-ProbeyeProblem.add_experiment(name="tensile_test_y",
+ProbeyeProblem.add_experiment(name="tensile_test_2",
                             sensor_data={
                                 "disp": test2_disp,
                                 "dirichlet_bdy": 1,
@@ -239,7 +234,6 @@ class FEMModel(ForwardModelBase):
         problem.E.value = inp["E"]*500*10**6    
         problem.nu.value = inp["nu"]
 
-
         dirichlet_bdy = inp["dirichlet_bdy"]
         neumann_bdy = inp["neumann_bdy"]
         sensors_per_edge = inp["sensors_per_edge"]
@@ -250,17 +244,17 @@ class FEMModel(ForwardModelBase):
 
 
 
-ProbeyeProblem.add_forward_model(FEMModel("LinearElasticOrthotropicMaterial"), experiments=["tensile_test_x", "tensile_test_y"]) #"tensile_test_y"
+ProbeyeProblem.add_forward_model(FEMModel("LinearElasticOrthotropicMaterial"), experiments=["tensile_test_1", "tensile_test_2"]) #"tensile_test_y"
 
 
 ProbeyeProblem.add_likelihood_model(
-    GaussianLikelihoodModel(experiment_name="tensile_test_x",
+    GaussianLikelihoodModel(experiment_name="tensile_test_1",
     model_error="additive",
     ) #measurement_error="sigma_x_rest"
 )
 
 ProbeyeProblem.add_likelihood_model(
-    GaussianLikelihoodModel(experiment_name="tensile_test_y",
+    GaussianLikelihoodModel(experiment_name="tensile_test_2",
     model_error="additive",
     ) #measurement_error="sigma_y_rest"
 ) 
