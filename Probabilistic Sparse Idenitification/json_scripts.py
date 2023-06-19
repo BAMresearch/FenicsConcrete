@@ -77,27 +77,75 @@ from probeye.postprocessing.sampling_plots import create_posterior_plot
 from probeye.postprocessing.sampling_plots import create_trace_plot
 
 #r"$E_m$"
-mydict = {
+
+""" mydict = {
     "test1": [{"name"    : "E",
-                "tex"     : "E",  
+                "tex"     : "$E$",  
                 "info"    : "Young's Modulus of the material",
                 "domain"  : None,
                 "prior"   : ['Uniform', {'low': 0, 'high': 1}]},
                  
                 {"name"   : "nu",
-                "tex"     : "\nu",  
+                "tex"     : "$\\nu$",  
                 "info"    : "Poisson's Ratio of the material",
                 "domain"  : None,
                 "prior"   : ['Uniform', {'low': 0, 'high': 0.45}]}
                 ] 
         
+    }   """
+
+""" mydict = {
+    "parameters": [{"name"    : "E_m",
+                "tex"     : "$E_m$",  
+                "info"    : "Young's Modulus of the material",
+                "domain"  : None,
+                "prior"   : ['Uniform', {'low': 0, 'high': 1}]},
+
+                {"name"    : "E_d",
+                "tex"     : "$E_d$",  
+                "info"    : "Young's Modulus of the material",
+                "domain"  : None,
+                "prior"   : ['Uniform', {'low': 0, 'high': 1}]},
+                 
+                {"name"   : "nu",
+                "tex"     : "$\\nu$",  
+                "info"    : "Poisson's Ratio of the material",
+                "domain"  : None,
+                "prior"   : ['Uniform', {'low': 0, 'high': 0.45}]},
+
+                {"name"   : "G_12",
+                "tex"     : "$G_{12}$",  
+                "info"    : "Shear Modulus",
+                "domain"  : None,
+                "prior"   : ['Uniform', {'low': 0, 'high': 100*10**6}]},
+
+                {"name"   : "k_x",
+                "tex"     : "$k_x$",  
+                "info"    : "Spring Stiffness in horizontal direction",
+                "domain"  : None,
+                "prior"   : ['Uniform', {'low': 0, 'high': 0.45}]},
+
+                {"name"   : "k_y",
+                "tex"     : "$k_y$",  
+                "info"    : "Spring Stiffness in vertical direction",
+                "domain"  : None,
+                "prior"   : ['Uniform', {'low': 0, 'high': 0.45}]}, 
+                ],
+    "MCMC": {
+            "parameter_scaling" : True,
+            "nburn": 125,
+            "nsteps": 125,
+            "pair_plot_name": "pair_plot_scaled_parameters.png",
+            "trace_plot_name": "trace_plot_scaled_parameters.png"
+          }
+        
     }  
             
 
-json_string = json.dumps(mydict , indent = 2)
-with open('mydata.json', 'w') as f:
+json_string = json.dumps(mydict , indent = 3)
+with open('test_config.json', 'w') as f:
     f.write(json_string) 
-
+ """
 """ with open('mydata.json', 'r') as f:
     json_object = json.loads(f.read()) 
     #json_object_2 = json.load(f)
@@ -127,3 +175,31 @@ for test, parameters in json_object.items():
 
 print(ProbeyeProblem.parameters) """
 
+
+def next_pow_two(n):
+    i = 1
+    while i < n:
+        i = i << 1
+    return i
+
+
+def autocorr_func_1d(x, norm=True):
+    x = np.atleast_1d(x)
+    if len(x.shape) != 1:
+        raise ValueError("invalid dimensions for 1D autocorrelation function")
+    n = next_pow_two(len(x))
+
+    
+    # Compute the FFT and then (from that) the auto-correlation function
+    f = np.fft.fft(x - np.mean(x), n=2 * n)
+    acf = np.fft.ifft(f * np.conjugate(f))[: len(x)].real
+    acf = acf / (len(x)*np.ones(len(x)) - np.arange(len(x)))
+    #acf /= 4 * n
+
+    # Optionally normalize
+    if norm:
+        acf /= acf[0]
+
+    return acf
+
+print(autocorr_func_1d([-2,-1,0,1,2]))

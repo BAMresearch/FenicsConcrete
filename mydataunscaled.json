@@ -9,7 +9,7 @@
         "Uniform",
         {
           "low": 0,
-          "high": 1
+          "high": 500000000
         }
       ]
     },
@@ -28,10 +28,10 @@
     }
   ],
   "MCMC": {
-    "parameter_scaling" : true,
-    "nburn": 100,
-    "nsteps": 100,
-    "pair_plot_name": "pair_plot_scaled_parameters.png",
-    "trace_plot_name": "trace_plot_scaled_parameters.png"
+    "parameter_scaling" : false,
+    "nburn": 80,
+    "nsteps": 80,
+    "pair_plot_name": "pair_plot_unscaled_parameters.png",
+    "trace_plot_name": "trace_plot_unscaled_parameters.png"
   }
 }

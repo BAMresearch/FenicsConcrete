@@ -161,7 +161,7 @@ displacement_data = combine_test_results(list_of_disp)
 
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['constitutive'] = 'orthotropic'
-p['uncertainties'] = [0, 2] #,2
+p['uncertainties'] = [0] #,2
 p['E_m'] = 210e6
 p['E_d'] = 0.
 p['nu_12'] = 0.28 #0.3
@@ -177,57 +177,33 @@ problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the 
 import math, json
 ProbeyeProblem = InverseProblem("My Problem")
 
-with open('mydata.json', 'r') as f:
+
+def prior_func_selection(para :list):
+    if para[0] == 'Uniform':
+        return Uniform(low = para[1]['low'], high = para[1]['high'])
+    elif para[0] == 'Normal':
+        return Normal(mu = para[1]['mu'], sigma = para[1]['sigma'])
+    elif para[0] == 'LogNormal':
+        return LogNormal(mu = para[1]['mu'], sigma = para[1]['sigma'])
+    elif para[0] == 'Exponential':
+        return Exponential(scale = para[1]['scale'], shift = para[1]['shift'])
+    else:
+        raise ValueError("Prior distribution not implemented")
+
+
+with open('test_config.json', 'r') as f:
     json_object = json.loads(f.read()) 
 
-ProbeyeProblem.add_parameter(name = "E_m", 
-                            tex=r"$E_m$", 
-                            info="Young's Modulus of the material",
-                            domain="(0, +oo)",
-                            prior = Uniform(low=0, high=1)) #  LogNormal(mean=float(np.log(200*10**6))-0.5*0.1**2, std=0.1)
+#Select the parameters for inference from the json file.
+parameters_list = ["E_m", "E_d", "nu"]
 
-ProbeyeProblem.add_parameter(name = "E_d", #*10**6
-                            tex=r"$E_d$", 
-                            info="Young's Modulus of the material",
-                            domain="(0, +oo)",
-                            prior = Uniform(low=0, high=1)) #Normal(mean=200*10**6, std=25*10**9) Uniform(low=0, high=400*10**6)
-
-ProbeyeProblem.add_parameter(name = "nu", 
-                            tex=r"$\nu$", 
-                            info="Poisson's Ratio",
-                            domain="[0, 0.45)",
-                            prior = Uniform(low=0.01, high=0.45)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15) 
-
-ProbeyeProblem.add_parameter(name = "G_12", 
-                            tex=r"$G_{12}$", 
-                            info="Shear Modulus",
-                            domain="(0, +oo)",
-                            prior = Uniform(low=0, high=100*10**6)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15)
-
-""" ProbeyeProblem.add_parameter(name = "k_x",       #100*10**6              
-                            tex=r"$K_x$",
-                            info="Spring Stiffness in horizontal direction",
-                            domain="(0, 1)",
-                            prior=Uniform(low=0, high=1)) #(low=10**6, high=10**12)) (low=0, high=1)
-
-ProbeyeProblem.add_parameter(name = "k_y",                     
-                            tex=r"$K_y$",
-                            info="Spring Stiffness in vertical direction",
-                            domain="(0, 1)",
-                            prior=Uniform(low=0, high=1))  """
-
-
-""" ProbeyeProblem.add_parameter(name = "k_x",       #100*10**6              
-                            tex=r"$K_x$",
-                            info="Spring Stiffness in horizontal direction",
-                            domain="[0, 1]",
-                            prior=Uniform(low=0, high=1))#(scale=1/(6*math.log(10)), shift=2)) #(low=10**6, high=10**12)) (low=0, high=1)
-
-ProbeyeProblem.add_parameter(name = "k_y",                     
-                            tex=r"$K_y$",
-                            info="Spring Stiffness in vertical direction",
-                            domain="[0, 1]",
-                            prior=Uniform(low=0, high=1))#(scale=1/(6*math.log(10)), shift=2))  """
+for parameter in json_object.get('parameters'):
+    if parameter['name'] in parameters_list:
+        ProbeyeProblem.add_parameter(name = parameter['name'], 
+                                     tex =  parameter['tex'],
+                                     info = parameter['info'], 
+                                     domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
+                                     prior = prior_func_selection(parameter['prior']))  
 
 ProbeyeProblem.add_parameter(name = "sigma", 
                             tex=r"$\sigma_{model}$",
@@ -235,31 +211,7 @@ ProbeyeProblem.add_parameter(name = "sigma",
                             info="Standard deviation, of zero-mean Gaussian noise model",
                             prior=Uniform(low=1e-6, high=1e-5),)
 
-""" ProbeyeProblem.add_parameter(name = "sigma_x_rest",
-                            #domain="(0, +oo)",
-                            tex=r"$\sigma_{rest}x$",
-                            info="Measurement error in  x rest",
-                            prior= Normal(mean=4e-5, std=1e-6)) #0.004
-
-ProbeyeProblem.add_parameter(name = "sigma_y_rest",
-                            #domain="(0, +oo)",
-                            tex=r"$\sigma_{rest}y$",
-                            info="Measurement error y rest",
-                            prior= Normal(mean=12e-6, std=1e-7)) """
-
-#ProbeyeProblem.add_parameter(name = "sigma_x_clamp",
-#                            #domain="(0, +oo)",
-#                            tex=r"$\sigma_{clamp}x$",
-#                            info="Measurement error x clamp",
-#                            prior= Normal(mean=1e-11, std=1e-10))
-#
-#ProbeyeProblem.add_parameter(name = "sigma_y_clamp",
-#                            #domain="(0, +oo)",
-#                            tex=r"$\sigma_{clamp}y$",
-#                            info="Measurement error y clamp",
-#                            prior= Normal(mean=1e-10, std=1e-9))
-
-ProbeyeProblem.add_experiment(name="tensile_test_x",
+ProbeyeProblem.add_experiment(name="tensile_test_1",
                             sensor_data={
                                 "disp": test1_disp,
                                 "dirichlet_bdy": 0,  #Provided must be a 1D array.
@@ -267,7 +219,7 @@ ProbeyeProblem.add_experiment(name="tensile_test_x",
                                 "sensors_per_edge" : 10
                             })
 
-ProbeyeProblem.add_experiment(name="tensile_test_y",
+ProbeyeProblem.add_experiment(name="tensile_test_2",
                             sensor_data={
                                 "disp": test2_disp,
                                 "dirichlet_bdy": 1,
@@ -275,21 +227,28 @@ ProbeyeProblem.add_experiment(name="tensile_test_y",
                                 "sensors_per_edge" : 5
                             })
 
-
-
 class FEMModel(ForwardModelBase):
     def interface(self):
-        self.parameters = ["E_m", "E_d", "nu"]  # "G_12", "k_x", "k_y",  #E and nu must have been already defined beforehand using add_parameter. # three attributes are must here.
+        self.parameters = parameters_list  # "G_12", "k_x", "k_y",  #E and nu must have been already defined beforehand using add_parameter. # three attributes are must here.
         self.input_sensors = [Sensor("dirichlet_bdy"), Sensor("neumann_bdy"), Sensor("sensors_per_edge")]#sensor provides a way for forward model to interact with experimental data.
         self.output_sensors = [Sensor("disp", std_model="sigma")]
 
     def response(self, inp: dict) -> dict:    #forward model evaluation
-        problem.E_m.value = inp["E_m"]#*500*10**6   
-        problem.E_d.value = inp["E_d"]#*500*10**6     
-        problem.nu_12.value = inp["nu"]
-        #problem.G_12.value = 82.03125*10**6 # inp["G_12"]#*250*10**6 # + (inp["E_m"] )/(2*(1+inp["nu"])) 82.03125*10**6 # 
-        #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
-        #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
+        if json_object.get('MCMC').get('parameter_scaling') == True:
+            problem.E_m.value = inp["E_m"]*500*10**6   
+            problem.E_d.value = inp["E_d"]*500*10**6     
+            problem.nu_12.value = inp["nu"]
+            #problem.G_12.value = 82.03125*10**6 # inp["G_12"]#*250*10**6 # + (inp["E_m"] )/(2*(1+inp["nu"])) 82.03125*10**6 # 
+            #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
+            #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
+
+        else:
+            problem.E_m.value = inp["E_m"]
+            problem.E_d.value = inp["E_d"] 
+            problem.nu_12.value = inp["nu"]
+            #problem.G_12.value = 82.03125*10**6 # inp["G_12"]#*250*10**6 # + (inp["E_m"] )/(2*(1+inp["nu"])) 82.03125*10**6 # 
+            #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
+            #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
 
         dirichlet_bdy = inp["dirichlet_bdy"]
         neumann_bdy = inp["neumann_bdy"]
@@ -301,29 +260,31 @@ class FEMModel(ForwardModelBase):
 
 
 
-ProbeyeProblem.add_forward_model(FEMModel("LinearElasticOrthotropicMaterial"), experiments=["tensile_test_x", "tensile_test_y"])
+ProbeyeProblem.add_forward_model(FEMModel("LinearElasticOrthotropicMaterial"), experiments=["tensile_test_1", "tensile_test_2"])
 
 
 ProbeyeProblem.add_likelihood_model(
-    GaussianLikelihoodModel(experiment_name="tensile_test_x",
+    GaussianLikelihoodModel(experiment_name="tensile_test_1",
     model_error="additive",
     ) #measurement_error="sigma_x_rest"
 )
 
 ProbeyeProblem.add_likelihood_model(
-    GaussianLikelihoodModel(experiment_name="tensile_test_y",
+    GaussianLikelihoodModel(experiment_name="tensile_test_2",
     model_error="additive",
     ) #measurement_error="sigma_y_rest"
 )
 
 emcee_solver = EmceeSolver(ProbeyeProblem)
-burn_in = 5
-after_burn_in = 5
-inference_data = emcee_solver.run(n_steps=after_burn_in, n_initial_steps=burn_in) #,n_walkers=20
+inference_data = emcee_solver.run(n_steps=json_object.get('MCMC').get('nsteps'), n_initial_steps=json_object.get('MCMC').get('nburn')) #,n_walkers=20
 
 #true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28} #"G_12": 82.03125*10**6
 #true_values = {"E_m": 0.42, "E_d": 0., "nu": 0.28, "G_12": 0.328} # , "G_12": 82.03125*10**6 , "k_x":3*10**9, "k_y":10**11
-true_values = {"E_m": 0.42, "E_d": 0., "nu": 0.28}
+if json_object.get('MCMC').get('parameter_scaling') == True:
+    true_values = {"E_m": 0.42, "E_d": 0., "nu": 0.28}
+else:
+    true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28}
+
 
 # this is an overview plot that allows to visualize correlations
 pair_plot_array = create_pair_plot(
@@ -335,7 +296,7 @@ pair_plot_array = create_pair_plot(
     title="Sampling results from emcee-Solver (pair plot)",
 )
 fig = pair_plot_array.ravel()[0].figure
-fig.savefig("pair_plot_scaled_G12_"+str(burn_in)+"_"+str(after_burn_in)+"_spring.png")
+fig.savefig("_nburn_"+str(json_object.get('MCMC').get('nburn'))+"_nsteps_"+str(json_object.get('MCMC').get('nsteps')) + json_object.get('MCMC').get('pair_plot_name'))
 
 trace_plot_array = create_trace_plot(
     inference_data,
@@ -343,7 +304,7 @@ trace_plot_array = create_trace_plot(
     title="Sampling results from emcee-Solver (trace plot)",
 )
 fig = trace_plot_array.ravel()[0].figure
-fig.savefig("trace_plot_scaled_G12_"+str(burn_in)+"_"+str(after_burn_in)+"_spring.png")
+fig.savefig("_nburn_"+str(json_object.get('MCMC').get('nburn'))+"_nsteps_"+str(json_object.get('MCMC').get('nsteps')) + json_object.get('MCMC').get('trace_plot_name'))
 
 
 """
@@ -355,3 +316,49 @@ for test, parameters in json_object.items():
                                      info = parameter['info'], 
                                      domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
                                      prior = prior_func_selection(parameter['prior']))   """
+
+def next_pow_two(n):
+    i = 1
+    while i < n:
+        i = i << 1
+    return i
+
+
+def autocorr_func_1d(x, norm=True):
+    x = np.atleast_1d(x)
+    if len(x.shape) != 1:
+        raise ValueError("invalid dimensions for 1D autocorrelation function")
+    n = next_pow_two(len(x))
+
+    
+    # Compute the FFT and then (from that) the auto-correlation function
+    f = np.fft.fft(x - np.mean(x), n=2 * n)
+    acf = np.fft.ifft(f * np.conjugate(f))[: len(x)].real
+    acf = acf / (len(x)*np.ones(len(x)) - np.arange(len(x)))
+    #acf /= 4 * n
+
+    # Optionally normalize
+    if norm:
+        acf /= acf[0]
+
+    return acf
+
+E_m = emcee_solver.raw_results.get_chain()[:, :, 0]
+acf = autocorr_func_1d(E_m[:,0])
+
+# Plotting the model error
+import plotly.graph_objects as go
+gap = np.arange(len(str(json_object.get('MCMC').get('nsteps'))))
+fig = go.Figure()
+#fig.add_trace(go.Scatter(x=iteration_no, y=total_model_error,  
+#                    mode='lines+markers',
+#                    name='Total Model Error'))
+fig.add_trace(go.Scatter(x=gap, y=acf,  
+                    mode='lines+markers',
+                    name='Displacement Model Error'))
+#fig.update_layout(yaxis_type = "log")
+fig.update_layout(title="Squared Relative Error in Displacements Vs. Spring Stiffness",
+    xaxis_title="Spring Stiffness",
+    yaxis_title="Squared Relative Error in Displacements")
+fig.show() 
+fig.write_html('Squared Relative Error in Displacements Vs. Spring Stiffness'+'.html')

@@ -20,7 +20,7 @@ from probeye.postprocessing.sampling_plots import create_pair_plot
 from probeye.postprocessing.sampling_plots import create_posterior_plot
 from probeye.postprocessing.sampling_plots import create_trace_plot
 import fenicsX_concrete
-from scipy import optimize
+import json
 
 #########################################################################
 #########################################################################
@@ -107,14 +107,14 @@ def combine_test_results(test_results):
     else:
         return np.concatenate((test_results[0], combine_test_results(test_results[1:])))
 
-experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
-problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
-
 def add_noise_to_data(clean_data, no_of_sensors):
     max_disp = np.amax(np.absolute(clean_data))
     min_disp = np.amin(np.absolute(clean_data))
     print('Max', max_disp, 'Min', min_disp)
     return clean_data + np.random.normal(0, 0.01 * min_disp, no_of_sensors)
+
+experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
+problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 
 #Sparse data (with sensors)
 test1_sensors_per_edge = 10
@@ -133,16 +133,10 @@ test2_x_component = add_noise_to_data(test2_disp[:,0], test2_total_sensors)
 test2_y_component = add_noise_to_data(test2_disp[:,1], test2_total_sensors)
 test2_disp = np.vstack((test2_x_component, test2_y_component)).T.flatten()
 
-#Dense data (without sensors)s
-#test1_disp = run_test(experiment, problem, 'left', [1e3, 0], 0) #np.copy is removed
-#test2_disp = run_test(experiment, problem, 'bottom', [0,1e3], 0)
-##tests1_disp = np.copy(run_test(experiment, problem, 'bottom', [1e3,0]))
-
 
 list_of_disp = [test1_disp, test2_disp] #, tests1_disp
 #num_of_tests = str(len(list_of_disp)) + ' tests' 
 displacement_data = combine_test_results(list_of_disp)  
-
 
 #########################################################################
 #########################################################################
@@ -150,13 +144,9 @@ displacement_data = combine_test_results(list_of_disp)
 #########################################################################
 #########################################################################
 
-
-
-#ForwardModelBase, Sensor objects, interface and response are mandatory.
-import math, json
 ProbeyeProblem = InverseProblem("My Problem")
 
-def prior_func(para :list):
+def prior_func_selection(para :list):
     if para[0] == 'Uniform':
         return Uniform(low = para[1]['low'], high = para[1]['high'])
     elif para[0] == 'Normal':
@@ -173,28 +163,14 @@ with open('mydata.json', 'r') as f:
     json_object = json.loads(f.read()) 
 
 parameters_list = []
-for test, parameters in json_object.items():
-    for parameter in parameters:
-        parameters_list.append(parameter['name'])
-        ProbeyeProblem.add_parameter(name = parameter['name'], 
-                                     tex =  parameter['tex'],
-                                     info = parameter['info'], 
-                                     domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
-                                     prior = prior_func(parameter['prior']))  
 
-
-""" ProbeyeProblem.add_parameter(name = "E", 
-                            tex=r"$YoungsModulus E_m$", 
-                            info="Young's Modulus of the material",
-                            domain="[0, +oo)",
-                            prior = Exponential(scale =  1, shift = 0.3 )) # Normal(mean=200*10**6, std=25*10**9)  LogNormal(mean=float(np.log(200*10**6))-0.5*0.1**2, std=0.1)
-
-
-ProbeyeProblem.add_parameter(name = "nu", 
-                            tex=r"$PoissonsRatio$", 
-                            info="Poisson's Ratio",
-                            domain="(0, 0.45)",
-                            prior = Uniform(low=0.01, high=0.45)) # LogNormal(mean=float(np.log(0.24))-0.5*0.15**2, std=0.15) """
+for parameter in json_object.get('parameters'):
+    parameters_list.append(parameter['name'])
+    ProbeyeProblem.add_parameter(name = parameter['name'], 
+                                 tex =  parameter['tex'],
+                                 info = parameter['info'], 
+                                 domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
+                                 prior = prior_func_selection(parameter['prior']))  
 
 
 ProbeyeProblem.add_parameter(name = "sigma",
@@ -220,8 +196,6 @@ ProbeyeProblem.add_experiment(name="tensile_test_2",
                                 "sensors_per_edge" : 5
                             })
 
-
-
 class FEMModel(ForwardModelBase):
     def interface(self):
         self.parameters = ["E", "nu"]   #E and nu must have been already defined beforehand using add_parameter. # three attributes are must here.
@@ -231,8 +205,12 @@ class FEMModel(ForwardModelBase):
     def response(self, inp: dict) -> dict:    #forward model evaluation
         #x = inp["x"] Don't need it as weight is already given in equations
 
-        problem.E.value = inp["E"]*500*10**6    
-        problem.nu.value = inp["nu"]
+        if json_object.get('MCMC').get('parameter_scaling') == True:
+            problem.E.value = inp["E"]*500*10**6    
+            problem.nu.value = inp["nu"]
+        else:  
+            problem.E.value = inp["E"]
+            problem.nu.value = inp["nu"]
 
         dirichlet_bdy = inp["dirichlet_bdy"]
         neumann_bdy = inp["neumann_bdy"]
@@ -241,8 +219,6 @@ class FEMModel(ForwardModelBase):
         _ = add_sensor(problem, dirichlet_bdy, sensors_per_edge)
         model_output = run_test(experiment, problem, dirichlet_bdy, neumann_bdy, 1).flatten()
         return {"disp" : model_output}
-
-
 
 ProbeyeProblem.add_forward_model(FEMModel("LinearElasticOrthotropicMaterial"), experiments=["tensile_test_1", "tensile_test_2"]) #"tensile_test_y"
 
@@ -260,10 +236,13 @@ ProbeyeProblem.add_likelihood_model(
 ) 
 
 emcee_solver = EmceeSolver(ProbeyeProblem)
-inference_data = emcee_solver.run(n_steps=50, n_initial_steps=25) #,n_walkers=25
+inference_data = emcee_solver.run(n_steps=json_object.get('MCMC').get('nsteps'), n_initial_steps=json_object.get('MCMC').get('nburn')) #,n_walkers=25
 
+if json_object.get('MCMC').get('parameter_scaling') == True:
+    true_values =  {"E": 0.42, "nu": 0.28} 
+else:
+    true_values =  {"E": 210*10**6, "nu": 0.28}
 
-true_values = {"E": 0.42, "nu": 0.28} 
 
 # this is an overview plot that allows to visualize correlations
 pair_plot_array = create_pair_plot(
@@ -274,11 +253,13 @@ pair_plot_array = create_pair_plot(
     show_legends=True,
     title="Sampling results from emcee-Solver (pair plot)",
 )
-fig = pair_plot_array.ravel()[0].figure
-fig.savefig("pair_plot.png")
+fig1 = pair_plot_array.ravel()[0].figure
+fig1.savefig(json_object.get('MCMC').get('pair_plot_name'))
 
 trace_plot_array = create_trace_plot(
     inference_data,
     emcee_solver.problem,
     title="Sampling results from emcee-Solver (trace plot)",
 )
+fig2 = trace_plot_array.ravel()[0].figure
+fig2.savefig(json_object.get('MCMC').get('trace_plot_name'))
