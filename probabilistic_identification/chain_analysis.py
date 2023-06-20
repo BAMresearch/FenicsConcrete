@@ -50,7 +50,8 @@ fig.update_layout(title="Auto Correlation Function Vs. Gap",
 fig.show() 
 fig.write_html('probabilistic_identification/extraplot.html')
 
-
+import emcee
+emcee.autocorr.integrated_time(posterior)
 
 # Compute the estimators for a few different chain lengths
 

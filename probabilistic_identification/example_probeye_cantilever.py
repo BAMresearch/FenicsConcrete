@@ -278,6 +278,9 @@ ProbeyeProblem.add_likelihood_model(
 emcee_solver = EmceeSolver(ProbeyeProblem)
 inference_data = emcee_solver.run(n_steps=json_object.get('MCMC').get('nsteps'), n_initial_steps=json_object.get('MCMC').get('nburn')) #,n_walkers=20
 
+#import emcee
+#emcee.autocorr.integrated_time(emcee_solver.raw_results.get_chain())
+
 #true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28} #"G_12": 82.03125*10**6
 #true_values = {"E_m": 0.42, "E_d": 0., "nu": 0.28, "G_12": 0.328} # , "G_12": 82.03125*10**6 , "k_x":3*10**9, "k_y":10**11
 if json_object.get('MCMC').get('parameter_scaling') == True:
