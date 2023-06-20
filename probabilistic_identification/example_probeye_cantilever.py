@@ -195,7 +195,7 @@ with open('test_config.json', 'r') as f:
     json_object = json.loads(f.read()) 
 
 #Select the parameters for inference from the json file.
-parameters_list = ["E_m", "E_d", "nu"]
+parameters_list = ["E_m", "E_d", "nu", "sigma"]
 
 for parameter in json_object.get('parameters'):
     if parameter['name'] in parameters_list:
@@ -343,22 +343,21 @@ def autocorr_func_1d(x, norm=True):
 
     return acf
 
-E_m = emcee_solver.raw_results.get_chain()[:, :, 0]
-acf = autocorr_func_1d(E_m[:,0])
+posterior = emcee_solver.raw_results.get_chain()
+np.savetxt(json_object.get('MCMC').get('chain_name'), posterior.reshape(posterior.shape[0], -1), delimiter=",")
 
 # Plotting the model error
 import plotly.graph_objects as go
-gap = np.arange(len(str(json_object.get('MCMC').get('nsteps'))))
+gap = np.arange(json_object.get('MCMC').get('nsteps'))
 fig = go.Figure()
-#fig.add_trace(go.Scatter(x=iteration_no, y=total_model_error,  
-#                    mode='lines+markers',
-#                    name='Total Model Error'))
-fig.add_trace(go.Scatter(x=gap, y=acf,  
+chain_number = 0
+for i in range(len(parameters_list)):
+    fig.add_trace(go.Scatter(x=gap, y=autocorr_func_1d(posterior[:, chain_number, i]),  
                     mode='lines+markers',
-                    name='Displacement Model Error'))
+                    name=parameters_list[i]))
 #fig.update_layout(yaxis_type = "log")
-fig.update_layout(title="Squared Relative Error in Displacements Vs. Spring Stiffness",
-    xaxis_title="Spring Stiffness",
-    yaxis_title="Squared Relative Error in Displacements")
+fig.update_layout(title="Auto Correlation Function Vs. Gap",
+    xaxis_title="Gap",
+    yaxis_title="Auto Correlation Function")
 fig.show() 
-fig.write_html('Squared Relative Error in Displacements Vs. Spring Stiffness'+'.html')
+fig.write_html(json_object.get('MCMC').get('acf_plot_name'))
