@@ -83,9 +83,10 @@
       "parameter_scaling": true,
       "nburn": 1,
       "nsteps": 10000,
-      "pair_plot_name": "pair_plot_scaled_parameters.png",
-      "trace_plot_name": "trace_plot_scaled_parameters.png",
-      "acf_plot_name": "probabilistic_identification/ACF_plot.html",
-      "chain_name": "Chain.csv"
+      "arviz_data_name": "probabilistic_identification/results/arviz_inference_data.json",
+      "pair_plot_name": "probabilistic_identification/results/pair_plot_scaled_parameters.png",
+      "trace_plot_name": "probabilistic_identification/results/trace_plot_scaled_parameters.png",
+      "acf_plot_name": "probabilistic_identification/results/probabilistic_identification/ACF_plot.html",
+      "chain_name": "probabilistic_identification/results/Chain.csv"
    }
 }

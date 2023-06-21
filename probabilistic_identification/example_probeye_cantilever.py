@@ -23,11 +23,11 @@ from probeye.postprocessing.sampling_plots import create_trace_plot
 import fenicsX_concrete
 from scipy import optimize
 
-#########################################################################
-#########################################################################
+#############################################################################################################################
+#############################################################################################################################
 #1st Step - Data Generation
-#########################################################################
-#########################################################################
+#############################################################################################################################
+#############################################################################################################################
 
 p = fenicsX_concrete.Parameters()  # using the current default values
 p['bc_setting'] = 'free'
@@ -115,7 +115,7 @@ def add_noise_to_data(clean_data, no_of_sensors):
     max_disp = np.amax(np.absolute(clean_data))
     min_disp = np.amin(np.absolute(clean_data))
     print('Max', max_disp, 'Min', min_disp)
-    return clean_data + np.random.normal(0, 0.01 * min_disp, no_of_sensors)
+    return clean_data #+ np.random.normal(0, 0.01 * min_disp, no_of_sensors) ################################################################
 
 #Sparse data (with sensors)
 test1_sensors_per_edge = 10
@@ -153,11 +153,11 @@ displacement_data = combine_test_results(list_of_disp)
 #np.random.multivariate_normal(np.shape(displacement_data)[0], np.eye(2), 1)
 
 
-#########################################################################
-#########################################################################
+#############################################################################################################################
+#############################################################################################################################
 #2nd Step - Inverse Problem
-#########################################################################
-#########################################################################
+#############################################################################################################################
+#############################################################################################################################
 
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['constitutive'] = 'orthotropic'
@@ -191,7 +191,7 @@ def prior_func_selection(para :list):
         raise ValueError("Prior distribution not implemented")
 
 
-with open('test_config.json', 'r') as f:
+with open('test_config_noerror.json', 'r') as f: ######################################################################################
     json_object = json.loads(f.read()) 
 
 #Select the parameters for inference from the json file.
@@ -209,7 +209,7 @@ ProbeyeProblem.add_parameter(name = "sigma",
                             tex=r"$\sigma_{model}$",
                             domain="(0, 1)",
                             info="Standard deviation, of zero-mean Gaussian noise model",
-                            prior=Uniform(low=1e-6, high=1e-5),)
+                            prior=Uniform(low=1e-16, high=1e-15),) ##########################################################
 
 ProbeyeProblem.add_experiment(name="tensile_test_1",
                             sensor_data={
@@ -278,6 +278,19 @@ ProbeyeProblem.add_likelihood_model(
 emcee_solver = EmceeSolver(ProbeyeProblem)
 inference_data = emcee_solver.run(n_steps=json_object.get('MCMC').get('nsteps'), n_initial_steps=json_object.get('MCMC').get('nburn')) #,n_walkers=20
 
+#######################################################################################################################################################
+#######################################################################################################################################################
+#3rd Step - Post Processing
+#######################################################################################################################################################
+#######################################################################################################################################################
+
+# Saving Arviz Data to json.
+inference_data.to_json(json_object.get('MCMC').get('arviz_data_name')) 
+
+# Saving the posterior as a csv file
+posterior = emcee_solver.raw_results.get_chain()
+np.savetxt(json_object.get('MCMC').get('chain_name'), posterior.reshape(posterior.shape[0], -1), delimiter=",")
+
 #import emcee
 #emcee.autocorr.integrated_time(emcee_solver.raw_results.get_chain())
 
@@ -298,69 +311,15 @@ pair_plot_array = create_pair_plot(
     show_legends=True,
     title="Sampling results from emcee-Solver (pair plot)",
 )
-fig = pair_plot_array.ravel()[0].figure
-fig.savefig("_nburn_"+str(json_object.get('MCMC').get('nburn'))+"_nsteps_"+str(json_object.get('MCMC').get('nsteps')) + json_object.get('MCMC').get('pair_plot_name'))
+fig1 = pair_plot_array.ravel()[0].figure
+fig1.savefig(json_object.get('MCMC').get('pair_plot_name'))
 
 trace_plot_array = create_trace_plot(
     inference_data,
     emcee_solver.problem,
     title="Sampling results from emcee-Solver (trace plot)",
 )
-fig = trace_plot_array.ravel()[0].figure
-fig.savefig("_nburn_"+str(json_object.get('MCMC').get('nburn'))+"_nsteps_"+str(json_object.get('MCMC').get('nsteps')) + json_object.get('MCMC').get('trace_plot_name'))
+fig2 = trace_plot_array.ravel()[0].figure
+fig2.savefig(json_object.get('MCMC').get('trace_plot_name'))
 
 
-"""
-for test, parameters in json_object.items():
-     for parameter in parameters:
-        parameters_list.append(parameter['name'])
-        ProbeyeProblem.add_parameter(name = parameter['name'], 
-                                     tex =  parameter['tex'],
-                                     info = parameter['info'], 
-                                     domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
-                                     prior = prior_func_selection(parameter['prior']))   """
-
-def next_pow_two(n):
-    i = 1
-    while i < n:
-        i = i << 1
-    return i
-
-
-def autocorr_func_1d(x, norm=True):
-    x = np.atleast_1d(x)
-    if len(x.shape) != 1:
-        raise ValueError("invalid dimensions for 1D autocorrelation function")
-    n = next_pow_two(len(x))
-
-    
-    # Compute the FFT and then (from that) the auto-correlation function
-    f = np.fft.fft(x - np.mean(x), n=2 * n)
-    acf = np.fft.ifft(f * np.conjugate(f))[: len(x)].real
-    acf = acf / (len(x)*np.ones(len(x)) - np.arange(len(x)))
-    #acf /= 4 * n
-
-    # Optionally normalize
-    if norm:
-        acf /= acf[0]
-
-    return acf
-
-posterior = emcee_solver.raw_results.get_chain()
-np.savetxt(json_object.get('MCMC').get('chain_name'), posterior.reshape(posterior.shape[0], -1), delimiter=",")
-
-# Plotting the model error
-import plotly.graph_objects as go
-gap = np.arange(json_object.get('MCMC').get('nsteps'))
-fig = go.Figure()
-chain_number = 0
-for i in range(len(parameters_list)):
-    fig.add_trace(go.Scatter(x=gap, y=autocorr_func_1d(posterior[:, chain_number, i]),  
-                    mode='lines+markers',
-                    name=parameters_list[i]))
-#fig.update_layout(yaxis_type = "log")
-fig.update_layout(title="Auto Correlation Function Vs. Gap",
-    xaxis_title="Gap",
-    yaxis_title="Auto Correlation Function")
-fig.show() 
-fig.write_html(json_object.get('MCMC').get('acf_plot_name'))
