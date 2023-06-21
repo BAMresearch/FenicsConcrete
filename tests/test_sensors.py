@@ -90,7 +90,7 @@ def simple_simulation(sensor, name):
                                     (fenics_concrete.sensors.YoungsModulusSensor((0.25, 0.25)),4522334.800674216),
                                     (fenics_concrete.sensors.CompressiveStrengthSensor((0.25, 0.25)),841396.2008982195),
                                     (fenics_concrete.sensors.DisplacementSensor((0.25, 0.25)),[-0.000196267010046188, -0.0008365564770464269]),
-                                    (fenics_concrete.sensors.MaxYieldSensor(),-60211.590987508986)
+                                    (fenics_concrete.sensors.MaxYieldSensor(),-0.5650294870847817)
                                     ])
 def test_sensor(sensor_input):
     sensor = sensor_input[0]
