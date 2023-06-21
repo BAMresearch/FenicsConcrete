@@ -730,7 +730,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         # check case
         if n == 1:
             # rankine for the tensile region
-            rk_yield_vals = t_stresses[:, 0] - ft[:]
+            rk_yield_vals = (t_stresses[:, 0] - ft[:]) / ft[:]  # normalized
 
             # invariants for drucker prager yield surface
             I1 = stresses[:, 0]
@@ -739,7 +739,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         elif n == 2:
 
             # rankine for the tensile region
-            rk_yield_vals = (t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2) ** 0.5 - ft[:]
+            rk_yield_vals = ((t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2) ** 0.5 - ft[:]) / ft[:]  # normalized
 
             # invariants for drucker prager yield surface
             I1 = stresses[:, 0] + stresses[:, 1]
@@ -748,7 +748,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         # 3D problem
         elif n == 3:
             # rankine for the tensile region
-            rk_yield_vals = (t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2 + t_stresses[:, 2] ** 2) ** 0.5 - ft[:]
+            rk_yield_vals = ((t_stresses[:, 0] ** 2 + t_stresses[:, 1] ** 2 + t_stresses[:, 2] ** 2) ** 0.5 - ft[:]) / ft[:]  # normalized
 
             # invariants for drucker prager yield surface
             I1 = stresses[:, 0] + stresses[:, 1] + stresses[:, 2]
@@ -761,7 +761,7 @@ class ConcreteMechanicsModel(df.NonlinearProblem):
         beta = (3.0 ** 0.5) * (fc2 - fc) / (2 * fc2 - fc)
         Hp = fc2 * fc / ((3.0 ** 0.5) * (2 * fc2 - fc))
 
-        dp_yield_vals = beta / 3 * I1 + J2 ** 0.5 - Hp
+        dp_yield_vals = ( beta / 3 * I1 + J2 ** 0.5 - Hp ) / fc  # normalized
 
         # TODO: is this "correct", does this make sense? for a compression state, what if rk yield > dp yield???
         yield_vals = np.maximum(rk_yield_vals, dp_yield_vals)
