@@ -21,7 +21,12 @@ from probeye.postprocessing.sampling_plots import create_pair_plot
 from probeye.postprocessing.sampling_plots import create_posterior_plot
 from probeye.postprocessing.sampling_plots import create_trace_plot
 import fenicsX_concrete
-from scipy import optimize
+import json #math
+#from scipy import optimize
+
+
+with open('probabilistic_identification/results_Ed0/test_config.json', 'r') as f: 
+    json_object = json.loads(f.read()) 
 
 #############################################################################################################################
 #############################################################################################################################
@@ -115,8 +120,11 @@ def add_noise_to_data(clean_data, no_of_sensors):
     max_disp = np.amax(np.absolute(clean_data))
     min_disp = np.amin(np.absolute(clean_data))
     print('Max', max_disp, 'Min', min_disp)
-    return clean_data #+ np.random.normal(0, 0.01 * min_disp, no_of_sensors) ################################################################
-
+    if json_object.get('MCMC').get('Error'):
+        return clean_data + np.random.normal(0, 0.01 * min_disp, no_of_sensors) ################################################################
+    else:
+        return clean_data
+    
 #Sparse data (with sensors)
 test1_sensors_per_edge = 10
 test1_total_sensors = add_sensor(problem, 0, test1_sensors_per_edge)
@@ -159,6 +167,7 @@ displacement_data = combine_test_results(list_of_disp)
 #############################################################################################################################
 #############################################################################################################################
 
+
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['constitutive'] = 'orthotropic'
 p['uncertainties'] = [0] #,2
@@ -174,7 +183,6 @@ experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the 
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 
 #ForwardModelBase, Sensor objects, interface and response are mandatory.
-import math, json
 ProbeyeProblem = InverseProblem("My Problem")
 
 
@@ -191,12 +199,9 @@ def prior_func_selection(para :list):
         raise ValueError("Prior distribution not implemented")
 
 
-with open('test_config_noerror.json', 'r') as f: ######################################################################################
-    json_object = json.loads(f.read()) 
-
 #Select the parameters for inference from the json file.
-parameters_list = ["E_m", "E_d", "nu", "sigma"]
-
+#parameters_list = ["E_1", "E_2", "nu", "sigma"]
+parameters_list = ["E_m", "nu", "sigma"] #"E_d",
 for parameter in json_object.get('parameters'):
     if parameter['name'] in parameters_list:
         ProbeyeProblem.add_parameter(name = parameter['name'], 
@@ -204,12 +209,6 @@ for parameter in json_object.get('parameters'):
                                      info = parameter['info'], 
                                      domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
                                      prior = prior_func_selection(parameter['prior']))  
-
-ProbeyeProblem.add_parameter(name = "sigma", 
-                            tex=r"$\sigma_{model}$",
-                            domain="(0, 1)",
-                            info="Standard deviation, of zero-mean Gaussian noise model",
-                            prior=Uniform(low=1e-16, high=1e-15),) ##########################################################
 
 ProbeyeProblem.add_experiment(name="tensile_test_1",
                             sensor_data={
@@ -234,26 +233,27 @@ class FEMModel(ForwardModelBase):
         self.output_sensors = [Sensor("disp", std_model="sigma")]
 
     def response(self, inp: dict) -> dict:    #forward model evaluation
+        #if inp["E_m"] < inp["E_d"]:
+        #    model_output = np.ones(inp["sensors_per_edge"]*4)*1e20#np.inf
+        #    return {"disp": model_output}
+        #else:
         if json_object.get('MCMC').get('parameter_scaling') == True:
-            problem.E_m.value = inp["E_m"]*500*10**6   
-            problem.E_d.value = inp["E_d"]*500*10**6     
+            problem.E_m.value = inp["E_m"]*500*10**6    #0.5*(inp["E_1"]+inp["E_2"])*500*10**6   
+            #problem.E_d.value = inp["E_d"]*500*10**6   #0.5*(inp["E_1"]-inp["E_2"])*500*10**6     
             problem.nu_12.value = inp["nu"]
             #problem.G_12.value = 82.03125*10**6 # inp["G_12"]#*250*10**6 # + (inp["E_m"] )/(2*(1+inp["nu"])) 82.03125*10**6 # 
             #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
             #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
-
         else:
             problem.E_m.value = inp["E_m"]
-            problem.E_d.value = inp["E_d"] 
+            #problem.E_d.value = inp["E_d"] 
             problem.nu_12.value = inp["nu"]
             #problem.G_12.value = 82.03125*10**6 # inp["G_12"]#*250*10**6 # + (inp["E_m"] )/(2*(1+inp["nu"])) 82.03125*10**6 # 
             #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
             #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
-
         dirichlet_bdy = inp["dirichlet_bdy"]
         neumann_bdy = inp["neumann_bdy"]
         sensors_per_edge = inp["sensors_per_edge"]
-
         _ = add_sensor(problem, dirichlet_bdy, sensors_per_edge)
         model_output = run_test(experiment, problem, dirichlet_bdy, neumann_bdy, 1).flatten()
         return {"disp" : model_output}
@@ -297,9 +297,9 @@ np.savetxt(json_object.get('MCMC').get('chain_name'), posterior.reshape(posterio
 #true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28} #"G_12": 82.03125*10**6
 #true_values = {"E_m": 0.42, "E_d": 0., "nu": 0.28, "G_12": 0.328} # , "G_12": 82.03125*10**6 , "k_x":3*10**9, "k_y":10**11
 if json_object.get('MCMC').get('parameter_scaling') == True:
-    true_values = {"E_m": 0.42, "E_d": 0., "nu": 0.28}
+    true_values = {"E_m": 0.42, "nu": 0.28} #"E_d": 0., 
 else:
-    true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28}
+    true_values = {"E_m": 210*10**6, "nu": 0.28} #"E_d": 0., 
 
 
 # this is an overview plot that allows to visualize correlations
@@ -310,6 +310,7 @@ pair_plot_array = create_pair_plot(
     focus_on_posterior=True,
     show_legends=True,
     title="Sampling results from emcee-Solver (pair plot)",
+    show=False
 )
 fig1 = pair_plot_array.ravel()[0].figure
 fig1.savefig(json_object.get('MCMC').get('pair_plot_name'))
@@ -318,8 +319,7 @@ trace_plot_array = create_trace_plot(
     inference_data,
     emcee_solver.problem,
     title="Sampling results from emcee-Solver (trace plot)",
+    show=False
 )
 fig2 = trace_plot_array.ravel()[0].figure
 fig2.savefig(json_object.get('MCMC').get('trace_plot_name'))
-
-

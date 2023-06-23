@@ -43,8 +43,10 @@ class LinearElasticity(MaterialProblem):
         self.ds = self.experiment.identify_domain_boundaries() # Domain's boundary
 
         if 0 in self.p['uncertainties'] and self.p.constitutive == 'orthotropic':
-            self.E_m = df.fem.Constant(self.experiment.mesh, self.p.E_m)
-            self.E_d = df.fem.Constant(self.experiment.mesh, self.p.E_d)
+            #self.E_m = df.fem.Constant(self.experiment.mesh, self.p.E_m)
+            #self.E_d = df.fem.Constant(self.experiment.mesh, self.p.E_d)
+            self.E_1 = df.fem.Constant(self.experiment.mesh, self.p.E_1)
+            self.E_2 = df.fem.Constant(self.experiment.mesh, self.p.E_2)
             self.nu_12 = df.fem.Constant(self.experiment.mesh, self.p.nu_12)
             self.G_12 = df.fem.Constant(self.experiment.mesh, self.p.G_12)
         
@@ -234,13 +236,29 @@ class LinearElasticity(MaterialProblem):
     def sigma(self, u):
         if self.p.constitutive == 'orthotropic':
             #ortho3 - same results as ortho2 when E_d = 0
-            denominator = self.E_m + self.E_d - (self.E_m - self.E_d)*self.nu_12**2
-            cmatrix_11 = (self.E_m + self.E_d)*(self.E_m + self.E_d) / denominator
-            cmatrix_22 = (self.E_m - self.E_d)*(self.E_m + self.E_d) / denominator
+            #denominator = self.E_m + self.E_d - (self.E_m - self.E_d)*self.nu_12**2
+            #cmatrix_11 = (self.E_m + self.E_d)*(self.E_m + self.E_d) / denominator
+            #cmatrix_22 = (self.E_m - self.E_d)*(self.E_m + self.E_d) / denominator
+            #cmatrix_33 = self.G_12
+            #cmatrix_12 = self.nu_12*(self.E_m - self.E_d)*(self.E_m + self.E_d) / denominator
+#
+            ##1st attempt
+            #c_matrix_voigt = ufl.as_matrix([[cmatrix_11, cmatrix_12, 0],
+            #                     [cmatrix_12, cmatrix_22, 0],
+            #                     [0, 0, cmatrix_33]])
+#
+            #epsilon_tensor = self.epsilon(u)
+            #epsilon_voigt = ufl.as_vector([epsilon_tensor[0,0], epsilon_tensor[1,1], 2*epsilon_tensor[0,1]])
+            #stress_voigt = ufl.dot(c_matrix_voigt, epsilon_voigt) 
+            #stress_tensor = ufl.as_tensor([[stress_voigt[0], stress_voigt[2]], [stress_voigt[2], stress_voigt[1]]])
+            #return stress_tensor
+        
+            denominator = self.E_1 - self.E_2*self.nu_12**2
+            cmatrix_11 = self.E_1**2 / denominator
+            cmatrix_22 = (self.E_1*self.E_2)/ denominator
             cmatrix_33 = self.G_12
-            cmatrix_12 = self.nu_12*(self.E_m - self.E_d)*(self.E_m + self.E_d) / denominator
+            cmatrix_12 = self.nu_12*self.E_1*self.E_2 / denominator
 
-            #1st attempt
             c_matrix_voigt = ufl.as_matrix([[cmatrix_11, cmatrix_12, 0],
                                  [cmatrix_12, cmatrix_22, 0],
                                  [0, 0, cmatrix_33]])
