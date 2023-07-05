@@ -48,7 +48,7 @@
             "Uniform",
             {
                "low": 0,
-               "high": 100000000
+               "high": 1
             }
          ]
       },
@@ -86,7 +86,7 @@
    "MCMC": {
       "parameter_scaling": true,
       "nburn": 1,
-      "nsteps": 10000,
+      "nsteps": 550,
       "arviz_data_name": "probabilistic_identification/results_reformulatedortho/arviz_inference_data.json",
       "chain_name": "probabilistic_identification/results_reformulatedortho/Chain.csv",
       "pair_plot_name": "probabilistic_identification/results_reformulatedortho/pair_plot_scaled_parameters.png",

@@ -201,7 +201,7 @@ def prior_func_selection(para :list):
 
 #Select the parameters for inference from the json file.
 #parameters_list = ["E_1", "E_2", "nu", "sigma"]
-parameters_list = ["E_2", "E_d", "nu", "sigma"] #"E_d",
+parameters_list = ["E_2", "E_d", "nu", "G_12", "sigma"] #"E_d",
 for parameter in json_object.get('parameters'):
     if parameter['name'] in parameters_list:
         ProbeyeProblem.add_parameter(name = parameter['name'], 
@@ -241,14 +241,14 @@ class FEMModel(ForwardModelBase):
             problem.E_1.value = (inp["E_d"] + inp["E_2"])*500*10**6   #0.5*(inp["E_1"]-inp["E_2"])*500*10**6    
             problem.E_2.value = inp["E_2"]*500*10**6    #0.5*(inp["E_1"]+inp["E_2"])*500*10**6   
             problem.nu_12.value = inp["nu"]
-            #problem.G_12.value = 82.03125*10**6 # inp["G_12"]#*250*10**6 # + (inp["E_m"] )/(2*(1+inp["nu"])) 82.03125*10**6 # 
+            problem.G_12.value = inp["G_12"]*250*10**6 + (inp["E_2"]*500*10**6 )/(2*(1+inp["nu"]))
             #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
             #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
         else:
             problem.E_1.value = inp["E_d"] + inp["E_2"]
             problem.E_2.value = inp["E_2"]
-            #problem.E_d.value = inp["E_d"] 
             problem.nu_12.value = inp["nu"]
+            problem.G_12.value = inp["G_12"][3] + (inp["E_2"] )/(2*(1+inp["nu"]))
             #problem.G_12.value = 82.03125*10**6 # inp["G_12"]#*250*10**6 # + (inp["E_m"] )/(2*(1+inp["nu"])) 82.03125*10**6 # 
             #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
             #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
@@ -298,9 +298,9 @@ np.savetxt(json_object.get('MCMC').get('chain_name'), posterior.reshape(posterio
 #true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28} #"G_12": 82.03125*10**6
 #true_values = {"E_m": 0.42, "E_d": 0., "nu": 0.28, "G_12": 0.328} # , "G_12": 82.03125*10**6 , "k_x":3*10**9, "k_y":10**11
 if json_object.get('MCMC').get('parameter_scaling') == True:
-    true_values = {"E_2": 0.42, "E_d": 0.,  "nu": 0.28} #"E_d": 0., 
+    true_values = {"E_2": 0.42, "E_d": 0., "nu": 0.28, "G_12": 0.} #"E_d": 0., 
 else:
-    true_values = {"E_2": 210*10**6, "E_d": 0., "nu": 0.28} #"E_d": 0., 
+    true_values = {"E_2": 210*10**6, "E_d": 0., "nu": 0.28, "G_12": 0.} #"E_d": 0., 
 
 
 # this is an overview plot that allows to visualize correlations

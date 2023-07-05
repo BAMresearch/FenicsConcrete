@@ -143,8 +143,8 @@ displacement_data = combine_test_results(list_of_disp)
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['constitutive'] = 'orthotropic'
 p['uncertainties'] = [0,2]
-p['E_m'] = 210e6
-p['E_d'] = 0.
+p['E_1'] = 210e6
+p['E_2'] = 0.
 p['nu_12'] = 0.28 #0.3
 p['G_12'] =  210e6/(2*(1+0.28)) #(0.5*1e5)/(1+0.3)
 p['k_x'] = 1e12
@@ -162,8 +162,8 @@ G_12_scaler = 250e6
 def forward_model_run(parameters):
     # Function to run the forward model
 
-    problem.E_m.value = parameters[0]*E_scaler #500e6
-    problem.E_d.value = parameters[1]*E_scaler
+    problem.E_1.value = (parameters[0] + parameters[1])*E_scaler #500e6
+    problem.E_2.value = (parameters[0] - parameters[1])*E_scaler
     problem.nu_12.value = parameters[2]
     problem.G_12.value =  parameters[3]*G_12_scaler + (parameters[0]*E_scaler)/(2*(1+parameters[2])) #(parameters[3] + (parameters[0])/(2*(1+parameters[2])))*G_12_scaler 
     problem.k_x.value =  10**(12 - (12-6)*parameters[4])  #1e15 - (1e15-1e5)*parameters[0] 
@@ -196,11 +196,11 @@ sparsity_factor = 1e-7
 def cost_function(param):
     # Function to calculate the cost function
     displacement_model = forward_model_run(param)  
-    delta_displacement = displacement_model - displacement_data
-    #delta_displacement = (displacement_model - displacement_data)/(displacement_data + 1e-10)
+    #delta_displacement = displacement_model - displacement_data
+    delta_displacement = (displacement_model - displacement_data)/(displacement_data + 1e-10)
     print('Inferred Parameters',param)
     function_evaluation = np.dot(delta_displacement, delta_displacement) 
-    cost_function_value = function_evaluation + sparsity_factor*LA.norm(param[np.array([1, 2, 3, 4, 5])], ord=1)
+    cost_function_value = function_evaluation #+ sparsity_factor*LA.norm(param[np.array([1, 2, 3, 4, 5])], ord=1)
     displacement_model_error.append(function_evaluation)
     total_model_error.append(cost_function_value)
     return cost_function_value
@@ -209,20 +209,59 @@ def cost_function(param):
 
 from scipy.optimize import minimize, least_squares, LinearConstraint
 
-constraint_matrix = np.array([[1,-1, 0, 0, 0 ,0]]) # 0, 0 ,0
+""" constraint_matrix = np.array([[1,-1, 0, 0, 0 ,0]]) # 0, 0 ,0
 constraint = LinearConstraint(constraint_matrix, lb = [0])
+constraint1 = LinearConstraint(np.array([[0,-1, -1, -1, -1 ,-1], [0, 1, 1, 1, 1 ,1]]), lb = [-0.5], ub = [0.5])
 start_point = np.array([0.9, 0.6, 0.32, 0.2, 0.4, 0.3 ])  #0.2, 0.4, 0.3
 parameter_bounds = [(0, 1), (0, 1), (0, 0.45), (0, 1), (0, 1), (0, 1)] #   L-BFGS-B , 
 #res = minimize(cost_function, start_point, method='Powell', bounds=parameter_bounds,#0.50.5
 #              options={ 'ftol': 1e-40, 'disp': True, 'maxiter':400}) #'ftol': 1e-10, 
-res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds, constraints=[constraint],
+res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds, constraints=[constraint, constraint1],
               options={'disp': True, 'gtol': 1e-16, 'xtol': 1e-10,},  ) #'ftol': 1e-10, 'xtol': 1e-16, 'barrier_tol': 1e-16,
 print("Inferred parameters (scaled):", res.x) 
 #print('Results', res.fun, res.grad, res.v, res.cg_stop_cond)
 print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x[:4], np.array([E_scaler, E_scaler,  1, G_12_scaler]))) #1, G_12_scaler
 print("Spring Stiffness K_x, K_y:","{:e}".format(10**(12 - (12-6)*res.x[0])),  "{:e}".format(10**(12 - (12-6)*res.x[1])))
 #print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x, np.array([E_scaler, E_scaler,  1, G_12_scaler, 0, 0]))) #1, G_12_scaler
-print(p['G_12'])
+print(p['G_12']) """
+
+#LASSO Regression
+def LASSO_regression(t_value):
+    G_matrix = np.empty((6,6))
+    constraint_matrix = np.array([[1,-1, 0, 0, 0 ,0]]) # 0, 0 ,0
+    constraint = LinearConstraint(constraint_matrix, lb = [0])
+    start_point = np.array([0.9, 0.6, 0.32, 0.2, 0.4, 0.3])  #0.2, 0.4, 0.3
+    parameter_bounds = [(0, 1), (0, 1), (0, 0.45), (0, 1), (0, 1), (0, 1)] #   L-BFGS-B , 
+    res = minimize(cost_function, start_point, method='trust-constr', bounds=parameter_bounds, constraints=[constraint],
+                  options={'disp': True},  ) #'ftol': 1e-10, 'xtol': 1e-16, 'barrier_tol': 1e-16,
+
+    print("RSS Step completed")
+    t = t_value
+    delta_io  = np.sign(res.x)
+    G_matrix[:,0] = 0
+    G_matrix[0,1:] = delta_io[1:]
+    constraint1 = LinearConstraint(G_matrix[0], ub = [t])
+    res = minimize(cost_function, res.x, method='trust-constr', bounds=parameter_bounds, constraints=[constraint, constraint1],
+                  options={'disp': True},  ) #'ftol': 1e-10, 'xtol': 1e-16, 'barrier_tol': 1e-16,
+    G_mat_counter = 1
+    print("1st Step LASSO completed")
+
+    while LA.norm(res.x[np.array([1, 2, 3, 4, 5])], ord=1) > t:
+        delta_io  = np.sign(res.x)
+        G_matrix[G_mat_counter,1:] = delta_io[1:]
+        constraint1 = LinearConstraint(G_matrix[:G_mat_counter+1], ub = np.ones(G_mat_counter+1)*t)
+        res = minimize(cost_function, res.x, method='trust-constr', bounds=parameter_bounds, constraints=[constraint, constraint1],
+                  options={'disp': True},  ) #'ftol': 1e-10, 'xtol': 1e-16, 'barrier_tol': 1e-16,
+        G_mat_counter += 1
+        print(G_mat_counter, "th Step LASSO completed")
+    return res
+
+#print("Inferred parameters (scaled):", res.x) 
+##print('Results', res.fun, res.grad, res.v, res.cg_stop_cond)
+#print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x[:4], np.array([E_scaler, E_scaler,  1, G_12_scaler]))) #1, G_12_scaler
+#print("Spring Stiffness K_x, K_y:","{:e}".format(10**(12 - (12-6)*res.x[0])),  "{:e}".format(10**(12 - (12-6)*res.x[1])))
+##print("Inferred Values E_m, E_d, nu, G_12: \n",np.multiply(res.x, np.array([E_scaler, E_scaler,  1, G_12_scaler, 0, 0]))) #1, G_12_scaler
+#print(p['G_12'])
 
 """ import plotly.express as px
 fig = px.line(x=[i for i in range(46,len(cost_function_values)+1)], y=cost_function_values[45:], markers=True, title='Cost Function Curve', log_y=True)
@@ -234,7 +273,7 @@ fig.show() """
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
-
+""" # Plotting the Error
 import plotly.graph_objects as go
 iteration_no = np.arange(1, len(total_model_error)+1)
 fig = go.Figure()
@@ -245,16 +284,69 @@ fig.add_trace(go.Scatter(x=iteration_no, y=displacement_model_error,
                     mode='lines+markers',
                     name='Displacement Model Error'))
 #fig.update_layout(yaxis_type = "log")
-fig.show()
+fig.show() """
 
-# N/m², m, kg, sec, N
-#p['length'] = 5
-#p['breadth'] = 1
-#p['load'] = [1e6,0] #[0, -10] #
-#p['rho'] = 7750
-#p['g'] = 9.81
-#p['E'] = 210e9 
 
+
+# Plotting the tendenacy of the parameters to tend to zero.
+t = [0.5] #, 0.4, 0.3, 0.2, 0.1, 0.05
+start_point = np.array([0.9, 0.6, 0.32, 0.2, 0.4, 0.3])    
+
+inferred_parameters = np.zeros((len(t), len(start_point)))
+for index, value in enumerate(t):
+    print('#', index+1)
+    res, G_counter = LASSO_regression(value)
+    print(G_counter)
+    inferred_parameters[index] = res.x
+
+import plotly.graph_objects as go
+fig1 = go.Figure()
+inferred_parameters_name = ['E_m', 'E_d', 'nu', 'G_12', 'K_x', 'K_y']
+
+for i in range(inferred_parameters.shape[1]):
+        fig1.add_trace(go.Scatter(x=t, y=[x for x in inferred_parameters[:,i]],
+                        mode='markers',
+                        name=inferred_parameters_name[i]))
+fig1.add_hline(y=0.1, line_dash="dot")
+fig1.update_xaxes(type="log")
+fig1.update_yaxes(type="log")
+fig1.update_layout(title="Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)",
+    xaxis_title="Sparsity Factor",
+    yaxis_title="Inferred Parameters (Log Scale)",
+    legend_title="Parameters",)
+
+fig1.update_traces(marker=dict(size=11,
+                              line=dict(width=2,
+                                        color='DarkSlateGrey')),
+                  selector=dict(mode='markers'))
+
+fig1.show()
+fig1.write_html('Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)_RelativeError_final'+'.html')
+np.savetxt('Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)_RelativeError_final".csv', inferred_parameters, delimiter=",")
+
+
+
+#import plotly.graph_objects as go
+#inferred_parameters = np.loadtxt('Inferred Parameters Vs. Sparsity Factor (1% Noise, Sparse Data)_RelativeError', dtype=float, delimiter=",")
+cf_value = []
+for i in range(inferred_parameters.shape[0]):
+    cf_value.append(cost_function(inferred_parameters[i], 0)) 
+
+fig2 = go.Figure()
+fig2.add_trace(go.Scatter(x=t, y=cf_value,
+                        mode='lines+markers',))
+fig2.update_xaxes(type="log")
+fig2.update_yaxes(type="log")
+fig2.update_layout(title="Inferred Parameters Vs. Cost Function (No sparsity term, 1% Noise, Sparse Data)",
+    xaxis_title="Sparsity Factor",
+    yaxis_title="Cost Function (Log Scale)")
+fig2.update_traces(marker=dict(size=11,
+                              line=dict(width=2,
+                                        color='DarkSlateGrey')),
+                  selector=dict(mode='lines+markers'))
+fig2.show()
+fig2.write_html('Inferred Parameters Vs. Cost Function (1% Noise, Sparse Data)_RelativeError_final'+'.html')
+np.savetxt('Inferred Parameters Vs. Cost Function (1% Noise, Sparse Data)_RelativeError_final.csv', cf_value, delimiter=",")
 
 
 

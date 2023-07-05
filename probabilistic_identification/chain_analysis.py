@@ -16,12 +16,12 @@ import emcee
 #########################################################################################################################################
 ######################################################################################################################################### 
 
-with open('probabilistic_identification/results_Ed0/test_config.json', 'r') as f:
+with open('probabilistic_identification/results_reformulatedortho/test_config.json', 'r') as f:
     json_object = json.loads(f.read()) 
 
 #inference_data = az.from_json(json_object.get('MCMC').get('arviz_data_name'))
 
-parameters_list = ["E_m", "nu", "sigma"] #["E", "nu", "sigma"]#"E_d", 
+parameters_list = ["E_2", "E_d", "nu", "sigma"] #["E", "nu", "sigma"]#"E_d", 
 chain_data = np.loadtxt(json_object.get('MCMC').get('chain_name'), delimiter=',')
 posterior = chain_data.reshape(chain_data.shape[0], chain_data.shape[1]// len(parameters_list), len(parameters_list))
 # chain_state/step number, chain_index, parameter_index
