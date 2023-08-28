@@ -26,7 +26,7 @@ def simple_simulation(sensor, name):
 
     parameters['density'] = 2350  # in kg/m^3 density of concrete
     parameters['density_binder'] = 1440  # in kg/m^3 density of the binder
-    parameters['themal_cond'] = 2.0  # effective thermal conductivity, approx in Wm^-3K^-1, concrete!
+    parameters['thermal_cond'] = 2.0  # effective thermal conductivity, approx in Wm^-3K^-1, concrete!
     # self.specific_heat_capacity = 9000  # effective specific heat capacity in J kg⁻1 K⁻1
     parameters['vol_heat_cap'] = 2.4e6  # volumetric heat cap J/(m3 K)
     parameters['b_ratio'] = 0.2  # volume percentage of binder
