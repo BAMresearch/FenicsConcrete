@@ -37,7 +37,7 @@ class ConcreteThermoMechanical(MaterialProblem):
         default_p = Parameters()
         # Material parameter for concrete model with temperature and hydration
         default_p['density'] = 2350  # in kg/m^3 density of concrete
-        default_p['themal_cond'] = 2.0  # effective thermal conductivity, approx in Wm^-3K^-1, concrete!
+        default_p['thermal_cond'] = 2.0  # effective thermal conductivity, approx in Wm^-3K^-1, concrete!
         # self.specific_heat_capacity = 9000  # effective specific heat capacity in J kg⁻1 K⁻1
         default_p['vol_heat_cap'] = 2.4e6  # volumetric heat cap J/(m3 K)
         # TODO: Q_pot needs to be removed and heat of hydration function turned into a static function will all the others...
@@ -219,7 +219,7 @@ class ConcreteTempHydrationModel(df.NonlinearProblem):
 
             # normal form
             R_ufl = df.Constant(self.p.vol_heat_cap) * (self.T) * vT * dxm
-            R_ufl += self.dt_form * df.dot(df.Constant(self.p.themal_cond) * df.grad(self.T), df.grad(vT)) * dxm
+            R_ufl += self.dt_form * df.dot(df.Constant(self.p.thermal_cond) * df.grad(self.T), df.grad(vT)) * dxm
             R_ufl += -  df.Constant(self.p.vol_heat_cap) * self.T_n * vT * dxm
             # quadrature point part
 
