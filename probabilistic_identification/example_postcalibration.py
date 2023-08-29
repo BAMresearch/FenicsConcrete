@@ -23,10 +23,17 @@ from probeye.postprocessing.sampling_plots import create_trace_plot
 import fenicsX_concrete
 import json #math
 #from scipy import optimize
-
+import pandas
+import matplotlib.pyplot as plt
 
 with open('probabilistic_identification/test_config.json', 'r') as f: 
     json_object = json.loads(f.read()) 
+
+parameters_list = ["E", "nu", "sigma"] #"E_d",
+measurement_data = np.loadtxt(json_object.get('Data').get('measurement_data'), delimiter=' ')
+posterior_data = np.loadtxt(json_object.get('MCMC').get('chain_name'), delimiter=',')
+posterior_data = posterior_data.reshape(posterior_data.shape[0], posterior_data.shape[1]// len(parameters_list), len(parameters_list))
+posterior_data = np.transpose(posterior_data, (1,0,2))
 
 # Adding sensors to the problem definition.
 def add_sensor(_problem, _dirichlet_bdy, _sensors_num_edge_hor, _sensors_num_edge_ver): 
@@ -84,7 +91,7 @@ def add_noise_to_data(clean_data, no_of_sensors):
 
 #############################################################################################################################
 #############################################################################################################################
-#1st Step - Data Generation
+#1st Step - Forward Model Runs
 #############################################################################################################################
 #############################################################################################################################
 
@@ -124,73 +131,44 @@ problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the 
 sensors_num_edge_hor = 10
 sensors_num_edge_ver = 4
 test1_sensors_total_num = add_sensor(problem, 0, sensors_num_edge_hor, sensors_num_edge_ver)
+
+
+
 test1_data = run_test(experiment, problem, 0, [1e3, 0], 1)
 
-test1_x_component = add_noise_to_data(test1_data[:,0], test1_sensors_total_num)
-test1_y_component = add_noise_to_data(test1_data[:,1], test1_sensors_total_num)
-test1_data = np.vstack((test1_x_component, test1_y_component)).T.flatten()
 
 
-# Not in Use
-#test1_disp = np.reshape(run_test(experiment, problem, 'left', [1e3, 0], 0), (-1,2), order = 'C') #np.copy is removed
-#test2_disp = np.reshape(run_test(experiment, problem, 'bottom', [0,1e3], 0), (-1,2), order='C')
-#list_of_disp = [test1_disp.flatten('F'), test2_disp.flatten('F')] #, tests1_disp
+chain_total = 2
+chain_length = 2000
+likelihood_predictive = np.zeros((chain_total,chain_length,n_tests))
 
-#list_of_disp = [test1_disp, test2_disp] #, tests1_disp
-#num_of_tests = str(len(list_of_disp)) + ' tests' 
-displacement_data = test1_data # combine_test_results(list_of_disp)  
-np.savetxt(json_object.get('Data').get('measurement_data'), displacement_data, delimiter=",")
+x_plot = np.zeros((chain_total, chain_length, n_tests))
 
-#############################################################################################################################
-#############################################################################################################################
-#2nd Step - Inverse Problem
-#############################################################################################################################
-#############################################################################################################################
+for chain_index in range(chain_total): #chain index
+    for k in range(n_tests): #data point index n_tests
+        x = x_test[k]
+        y = y_test[k]
+        for chain_draw in range(chain_length): #step number of chain/inferred parameters
 
+            problem.E.value = inp["E"] 
+            problem.nu.value = inp["nu"]
+            test1_data = run_test(experiment, problem, 0, [1e3, 0], 1)
+            a = posterior[chain_draw,chain_index,0]
+            b = posterior[chain_draw,chain_index,1]
+            sigma = posterior[chain_draw,chain_index,2]
+            likelihood_predictive[chain_index,chain_draw,k] = stats.norm.pdf(y,a*x+b,sigma)   #a*x+b + np.random.normal(loc=0, scale=sigma)
 
-# Kgmms⁻2/mm², mm, kg, sec, N
-#p['constitutive'] = 'isotropic' #'orthotropic'
-p['uncertainties'] = [0] #,2
-#p['E'] = 210e6
-#p['nu'] = 0.28 #0.3
+posterior_predictive = np.mean(np.mean(likelihood_predictive, axis=1), axis=0)
+#print(posterior_predictive)
 
-experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
-problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
-
-#ForwardModelBase, Sensor objects, interface and response are mandatory.
-ProbeyeProblem = InverseProblem("My Problem")
-
-
-def prior_func_selection(para :list):
-    if para[0] == 'Uniform':
-        return Uniform(low = para[1]['low'], high = para[1]['high'])
-    elif para[0] == 'Normal':
-        return Normal(mu = para[1]['mu'], sigma = para[1]['sigma'])
-    elif para[0] == 'LogNormal':
-        return LogNormal(mu = para[1]['mu'], sigma = para[1]['sigma'])
-    elif para[0] == 'Exponential':
-        return Exponential(scale = para[1]['scale'], shift = para[1]['shift'])
-    else:
-        raise ValueError("Prior distribution not implemented")
+plt.plot(x_test, posterior_predictive, "o", label="posterior predictive")
+plt.title("Posterior Predictive vs. Observations")
+plt.xlabel("Observed Data")
+plt.ylabel("Posterior Predictive")
+plt.legend()
+plt.show()
 
 
-#Select the parameters for inference from the json file.
-parameters_list = ["E", "nu", "sigma"] #"E_d",
-for parameter in json_object.get('parameters'):
-    if parameter['name'] in parameters_list:
-        ProbeyeProblem.add_parameter(name = parameter['name'], 
-                                     tex =  parameter['tex'],
-                                     info = parameter['info'], 
-                                     domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
-                                     prior = prior_func_selection(parameter['prior']))  
-
-ProbeyeProblem.add_experiment(name="tensile_test_1",
-                            sensor_data={
-                                "disp": test1_data,
-                                "dirichlet_bdy": 0,  #Provided must be a 1D array.
-                                "neumann_bdy": [1000, 0],
-                                "sensors_per_edge" : 10
-                            })
 
 
 class FEMModel(ForwardModelBase):
@@ -225,61 +203,8 @@ class FEMModel(ForwardModelBase):
         return {"disp" : model_output}
 
 
-
-ProbeyeProblem.add_forward_model(FEMModel("LinearElasticMaterial"), experiments=["tensile_test_1"])
-
-
-ProbeyeProblem.add_likelihood_model(
-    GaussianLikelihoodModel(experiment_name="tensile_test_1",
-    model_error="additive",
-    ) #measurement_error="sigma_x_rest"
-)
-
-emcee_solver = EmceeSolver(ProbeyeProblem)
-inference_data = emcee_solver.run(n_steps=json_object.get('MCMC').get('nsteps'), n_initial_steps=json_object.get('MCMC').get('nburn')) #,n_walkers=20
-
 #######################################################################################################################################################
 #######################################################################################################################################################
 #3rd Step - Post Processing
 #######################################################################################################################################################
 #######################################################################################################################################################
-
-# Saving Arviz Data to json.
-inference_data.to_json(json_object.get('MCMC').get('arviz_data_name')) 
-
-# Saving the posterior as a csv file
-posterior = emcee_solver.raw_results.get_chain()
-np.savetxt(json_object.get('MCMC').get('chain_name'), posterior.reshape(posterior.shape[0], -1), delimiter=",")
-
-#import emcee
-#emcee.autocorr.integrated_time(emcee_solver.raw_results.get_chain())
-
-#true_values = {"E_m": 210*10**6, "E_d": 0., "nu": 0.28} #"G_12": 82.03125*10**6
-#true_values = {"E_m": 0.42, "E_d": 0., "nu": 0.28, "G_12": 0.328} # , "G_12": 82.03125*10**6 , "k_x":3*10**9, "k_y":10**11
-#if json_object.get('MCMC').get('parameter_scaling') == True:
-#    true_values = {"E_2": 0.42, "E_d": 0., "nu": 0.28, "G_12": 0.} #"E_d": 0., 
-#else:
-true_values = {"E": 210*10**6, "nu": 0.28,} #"E_d": 0., 
-
-
-# this is an overview plot that allows to visualize correlations
-pair_plot_array = create_pair_plot(
-    inference_data,
-    emcee_solver.problem,
-    true_values=true_values,
-    focus_on_posterior=True,
-    show_legends=True,
-    title="Sampling results from emcee-Solver (pair plot)",
-    show=False
-)
-fig1 = pair_plot_array.ravel()[0].figure
-fig1.savefig(json_object.get('MCMC').get('pair_plot_name'))
-
-trace_plot_array = create_trace_plot(
-    inference_data,
-    emcee_solver.problem,
-    title="Sampling results from emcee-Solver (trace plot)",
-    show=False
-)
-fig2 = trace_plot_array.ravel()[0].figure
-fig2.savefig(json_object.get('MCMC').get('trace_plot_name'))

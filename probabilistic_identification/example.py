@@ -22,6 +22,7 @@ from probeye.postprocessing.sampling_plots import create_posterior_plot
 from probeye.postprocessing.sampling_plots import create_trace_plot
 import fenicsX_concrete
 import json #math
+import pandas as pd
 #from scipy import optimize
 
 
@@ -139,7 +140,9 @@ test1_data = np.vstack((test1_x_component, test1_y_component)).T.flatten()
 #list_of_disp = [test1_disp, test2_disp] #, tests1_disp
 #num_of_tests = str(len(list_of_disp)) + ' tests' 
 displacement_data = test1_data # combine_test_results(list_of_disp)  
-np.savetxt(json_object.get('Data').get('measurement_data'), displacement_data, delimiter=",")
+
+
+pd.DataFrame(displacement_data).to_csv(json_object.get('Data').get('measurement_data'), index=False, header=False)
 
 #############################################################################################################################
 #############################################################################################################################

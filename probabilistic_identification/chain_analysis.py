@@ -16,7 +16,7 @@ import emcee
 #########################################################################################################################################
 ######################################################################################################################################### 
 
-with open('probabilistic_identification/results_reformulatedortho/test_config.json', 'r') as f:
+with open('probabilistic_identification/alt/results_reformulatedortho/test_config.json', 'r') as f:
     json_object = json.loads(f.read()) 
 
 #inference_data = az.from_json(json_object.get('MCMC').get('arviz_data_name'))
