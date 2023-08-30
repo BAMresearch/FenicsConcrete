@@ -93,10 +93,12 @@ class MaterialProblem():
         self.sensors[sensor.name] = sensor
 
     def clean_sensor_data(self):
-        for sensor_object in self.sensors.values():
-            sensor_object.data.clear()
-        #for i in range(len(self.sensors)):
-        #    self.sensors[i].data.clear()
+    #    #for sensor_object in self.sensors.values():
+    #    #    sensor_object.data.clear()
+        for i in self.sensors:
+            self.sensors[i].data.clear()
+            self.sensors[i].time.clear()
+
 
     def delete_sensor(self):
         del self.sensors

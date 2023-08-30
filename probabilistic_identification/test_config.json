@@ -43,6 +43,7 @@
    ],
    "Data":{
       "Error": false,
+      "sensor_positions": "probabilistic_identification/sim_output/sensor_positions.csv",
       "measurement_data": "probabilistic_identification/sim_output/measurement_data.csv"
    },
    "MCMC": {

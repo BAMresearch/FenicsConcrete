@@ -25,15 +25,17 @@ import json #math
 #from scipy import optimize
 import pandas
 import matplotlib.pyplot as plt
+import scipy.stats as stats
 
 with open('probabilistic_identification/test_config.json', 'r') as f: 
     json_object = json.loads(f.read()) 
 
 parameters_list = ["E", "nu", "sigma"] #"E_d",
 measurement_data = np.loadtxt(json_object.get('Data').get('measurement_data'), delimiter=' ')
+sensor_positions = np.loadtxt(json_object.get('Data').get('sensor_positions'), delimiter=',')
 posterior_data = np.loadtxt(json_object.get('MCMC').get('chain_name'), delimiter=',')
 posterior_data = posterior_data.reshape(posterior_data.shape[0], posterior_data.shape[1]// len(parameters_list), len(parameters_list))
-posterior_data = np.transpose(posterior_data, (1,0,2))
+#posterior_data = np.transpose(posterior_data, (1,0,2))
 
 # Adding sensors to the problem definition.
 def add_sensor(_problem, _dirichlet_bdy, _sensors_num_edge_hor, _sensors_num_edge_ver): 
@@ -52,15 +54,15 @@ def add_sensor(_problem, _dirichlet_bdy, _sensors_num_edge_hor, _sensors_num_edg
             _problem.add_sensor(sensor[i])
         return len(sensor)
 
-def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
-    if dirichlet_bdy == 0:
-        dirichlet_bdy = 'left'
-    prob.p.dirichlet_bdy = dirichlet_bdy
-    exp.p.dirichlet_bdy = dirichlet_bdy
-    prob.p.load = load
-    prob.experiment.bcs = prob.experiment.create_displ_bcs(prob.experiment.V)
-    prob.apply_neumann_bc()
-    prob.calculate_bilinear_form()
+""" def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
+    #if dirichlet_bdy == 0:
+    #    dirichlet_bdy = 'left'
+    #prob.p.dirichlet_bdy = dirichlet_bdy
+    #exp.p.dirichlet_bdy = dirichlet_bdy
+    #prob.p.load = load
+    #prob.experiment.bcs = prob.experiment.create_displ_bcs(prob.experiment.V)
+    #prob.apply_neumann_bc()
+    #prob.calculate_bilinear_form()
     prob.solve()
     prob.pv_plot("Displacement.xdmf")
     if sensor_flag == 0:
@@ -71,8 +73,9 @@ def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
         for i in prob.sensors:
             displacement_at_sensors[counter] = prob.sensors[i].data[-1]
             counter += 1
-        prob.sensors = fenicsX_concrete.sensors.Sensors()
-        return displacement_at_sensors#.flatten()
+        #prob.clean_sensor_data()
+        #prob.sensors = fenicsX_concrete.sensors.Sensors()
+        return displacement_at_sensors#.flatten() """
     
 def combine_test_results(test_results):
     if len(test_results) == 1:
@@ -107,12 +110,12 @@ p['dim'] = 2
 # 1: Random E and nu fields.
 # 2: Linear Springs.
 # 3: Torsion Springs
-p['uncertainties'] = [0,2]
+p['uncertainties'] = [0]
 p['k_x'] = 1e8
 p['k_y'] = 1e8
 
 p['constitutive'] = 'isotropic' #'orthotropic' 
-p['nu'] = 0.28 
+p['nu'] = 0.28#0.28 
 
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['length'] = 5000
@@ -120,7 +123,7 @@ p['breadth'] = 1000
 p['load'] = [1e3, 0] 
 p['rho'] = 7750e-9 #kg/mm³
 p['g'] = 9.81e3 #mm/s² for units to be consistent g must be given in m/s².
-p['E'] = 210e6 #Kgmms⁻2/mm² 
+p['E'] = 210e6#210e6 #Kgmms⁻2/mm² 
 
 p['dirichlet_bdy'] = 'left'
 
@@ -131,80 +134,69 @@ problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the 
 sensors_num_edge_hor = 10
 sensors_num_edge_ver = 4
 test1_sensors_total_num = add_sensor(problem, 0, sensors_num_edge_hor, sensors_num_edge_ver)
+problem.experiment.bcs = problem.experiment.create_displ_bcs(problem.experiment.V)
+problem.apply_neumann_bc()
+problem.calculate_bilinear_form()
 
+""" E = np.array([210e6, 100e6])
+nu = np.array([0.28, 0.3])
+for i in range(2):
+    problem.E.value = E[i]
+    problem.nu.value = nu[i]
+    problem.solve() """
+    #test_data = run_test(experiment, problem, 0, [1e3, 0], 1)
+    #print('Test1')
 
+chain_total = posterior_data.shape[1]                   #number of chains
+chain_length = posterior_data.shape[0]                  #total chain length
+n_tests = 1
+#likelihood_predictive = np.zeros((chain_total,chain_length))
 
-test1_data = run_test(experiment, problem, 0, [1e3, 0], 1)
-
-
-
-chain_total = 2
-chain_length = 2000
-likelihood_predictive = np.zeros((chain_total,chain_length,n_tests))
-
-x_plot = np.zeros((chain_total, chain_length, n_tests))
+""" x_plot = np.zeros((chain_total, chain_length, n_tests))
 
 for chain_index in range(chain_total): #chain index
-    for k in range(n_tests): #data point index n_tests
-        x = x_test[k]
-        y = y_test[k]
-        for chain_draw in range(chain_length): #step number of chain/inferred parameters
-
-            problem.E.value = inp["E"] 
-            problem.nu.value = inp["nu"]
-            test1_data = run_test(experiment, problem, 0, [1e3, 0], 1)
-            a = posterior[chain_draw,chain_index,0]
-            b = posterior[chain_draw,chain_index,1]
-            sigma = posterior[chain_draw,chain_index,2]
-            likelihood_predictive[chain_index,chain_draw,k] = stats.norm.pdf(y,a*x+b,sigma)   #a*x+b + np.random.normal(loc=0, scale=sigma)
+    print('Chain #',chain_index,'is being calculated')
+    for chain_draw in range(chain_length): #step number of chain/inferred parameters
+        problem.E.value = posterior_data[chain_draw,chain_index,0]
+        problem.nu.value = posterior_data[chain_draw,chain_index,1]
+        sigma = posterior_data[chain_draw,chain_index,2]
+        model_data = run_test(experiment, problem, 0, [1e3, 0], 1).flatten()
+        likelihood_predictive[chain_index,chain_draw] = stats.multivariate_normal.pdf(measurement_data,model_data,sigma*np.identity(measurement_data.shape[0]))   #a*x+b + np.random.normal(loc=0, scale=sigma)
 
 posterior_predictive = np.mean(np.mean(likelihood_predictive, axis=1), axis=0)
-#print(posterior_predictive)
+print(posterior_predictive) """
 
-plt.plot(x_test, posterior_predictive, "o", label="posterior predictive")
+""" plt.plot(x_test, posterior_predictive, "o", label="posterior predictive")
 plt.title("Posterior Predictive vs. Observations")
 plt.xlabel("Observed Data")
 plt.ylabel("Posterior Predictive")
 plt.legend()
+plt.show() """
+
+chain_total = 2#posterior_data.shape[1]     
+chain_length = posterior_data.shape[0]
+observed_data_size = measurement_data.shape[0]
+predictions = np.zeros((chain_total, chain_length, observed_data_size))
+
+for chain_index in range(chain_total): #chain index
+    print('Chain #',chain_index,'is being calculated')
+    for chain_draw in range(chain_length): #step number of chain/inferred parameters
+        problem.E.value = posterior_data[chain_draw,chain_index,0]
+        problem.nu.value = posterior_data[chain_draw,chain_index,1]
+        sigma = posterior_data[chain_draw,chain_index,2]
+        problem.solve()
+        for i in problem.sensors:
+            problem.sensors[i].data += problem.sensors[i].data + np.random.normal(loc=0, scale=sigma)*np.ones(3)
+
+
+import arviz as az
+az.style.use("arviz-doc")
+az.rcParams["stats.hdi_prob"] = 0.90
+plotting_list = []
+for i in problem.sensors:
+    if 'top' in i.alphabetical_position:
+        plotting_list.append(i.data)
+
+ax = az.plot_hdi(sensor_positions[:,1], predictions_rearranged[:,:,:,1], plot_kwargs={"ls": "--"})
+ax.scatter(sensor_positions[:,1], measurement_data.reshape(-1,2)[:,1], color="#b5a7b6", label="generated data points")
 plt.show()
-
-
-
-
-class FEMModel(ForwardModelBase):
-    def interface(self):
-        self.parameters = parameters_list  # "G_12", "k_x", "k_y",  #E and nu must have been already defined beforehand using add_parameter. # three attributes are must here.
-        self.input_sensors = [Sensor("dirichlet_bdy"), Sensor("neumann_bdy"), Sensor("sensors_per_edge")]#sensor provides a way for forward model to interact with experimental data.
-        self.output_sensors = [Sensor("disp", std_model="sigma")]
-
-    def response(self, inp: dict) -> dict:    #forward model evaluation
-        #if inp["E_m"] < inp["E_d"]:
-        #    model_output = np.ones(inp["sensors_per_edge"]*4)*1e20#np.inf
-        #    return {"disp": model_output}
-        #else:
-        #if json_object.get('MCMC').get('parameter_scaling') == True:
-            #problem.E_1.value = (inp["E_d"] + inp["E_2"])*500*10**6   #0.5*(inp["E_1"]-inp["E_2"])*500*10**6    
-            #problem.E_2.value = inp["E_2"]*500*10**6    #0.5*(inp["E_1"]+inp["E_2"])*500*10**6   
-            #problem.nu_12.value = inp["nu"]
-            #problem.G_12.value = inp["G_12"]*250*10**6 + (inp["E_2"]*500*10**6 )/(2*(1+inp["nu"]))
-            #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
-            #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
-        #else:
-            #problem.G_12.value = 82.03125*10**6 # inp["G_12"]#*250*10**6 # + (inp["E_m"] )/(2*(1+inp["nu"])) 82.03125*10**6 # 
-            #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
-            #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
-        problem.E.value = inp["E"] 
-        problem.nu.value = inp["nu"]
-        dirichlet_bdy = inp["dirichlet_bdy"]
-        neumann_bdy = inp["neumann_bdy"]
-        sensors_per_edge = inp["sensors_per_edge"]
-        _ = add_sensor(problem, dirichlet_bdy, sensors_num_edge_hor, sensors_num_edge_ver)
-        model_output = run_test(experiment, problem, dirichlet_bdy, neumann_bdy, 1).flatten()
-        return {"disp" : model_output}
-
-
-#######################################################################################################################################################
-#######################################################################################################################################################
-#3rd Step - Post Processing
-#######################################################################################################################################################
-#######################################################################################################################################################

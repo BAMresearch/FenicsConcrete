@@ -1,0 +1,290 @@
+{
+   "DisplacementSensor": {
+      "alphabetical_position": "top",
+      "where": [
+         500.0,
+         0.0,
+         0.0
+      ],
+      "data": [
+         0.002372126714810911,
+         0.0006509301809727963
+      ]
+   },
+   "DisplacementSensor2": {
+      "alphabetical_position": "bottom",
+      "where": [
+         500.0,
+         1000.0,
+         0.0
+      ],
+      "data": [
+         0.002372126714815474,
+         -0.0006509301809758765
+      ]
+   },
+   "DisplacementSensor3": {
+      "alphabetical_position": "top",
+      "where": [
+         1000.0,
+         0.0,
+         0.0
+      ],
+      "data": [
+         0.004699657108601575,
+         0.0006726755902090172
+      ]
+   },
+   "DisplacementSensor4": {
+      "alphabetical_position": "bottom",
+      "where": [
+         1000.0,
+         1000.0,
+         0.0
+      ],
+      "data": [
+         0.004699657108610328,
+         -0.0006726755902190871
+      ]
+   },
+   "DisplacementSensor5": {
+      "alphabetical_position": "top",
+      "where": [
+         1500.0,
+         0.0,
+         0.0
+      ],
+      "data": [
+         0.007076805787109952,
+         0.0006674896747936549
+      ]
+   },
+   "DisplacementSensor6": {
+      "alphabetical_position": "bottom",
+      "where": [
+         1500.0,
+         1000.0,
+         0.0
+      ],
+      "data": [
+         0.007076805787122468,
+         -0.0006674896748147169
+      ]
+   },
+   "DisplacementSensor7": {
+      "alphabetical_position": "top",
+      "where": [
+         2000.0,
+         0.0,
+         0.0
+      ],
+      "data": [
+         0.009458183437670062,
+         0.0006666567708685422
+      ]
+   },
+   "DisplacementSensor8": {
+      "alphabetical_position": "bottom",
+      "where": [
+         2000.0,
+         1000.0,
+         0.0
+      ],
+      "data": [
+         0.009458183437685851,
+         -0.0006666567709041506
+      ]
+   },
+   "DisplacementSensor9": {
+      "alphabetical_position": "top",
+      "where": [
+         2500.0,
+         0.0,
+         0.0
+      ],
+      "data": [
+         0.011839234537407957,
+         0.0006666533301467882
+      ]
+   },
+   "DisplacementSensor10": {
+      "alphabetical_position": "bottom",
+      "where": [
+         2500.0,
+         1000.0,
+         0.0
+      ],
+      "data": [
+         0.01183923453742645,
+         -0.0006666533301999666
+      ]
+   },
+   "DisplacementSensor11": {
+      "alphabetical_position": "top",
+      "where": [
+         3000.0,
+         0.0,
+         0.0
+      ],
+      "data": [
+         0.01422019017009284,
+         0.0006666655125739634
+      ]
+   },
+   "DisplacementSensor12": {
+      "alphabetical_position": "bottom",
+      "where": [
+         3000.0,
+         1000.0,
+         0.0
+      ],
+      "data": [
+         0.014220190170113398,
+         -0.0006666655126470748
+      ]
+   },
+   "DisplacementSensor13": {
+      "alphabetical_position": "top",
+      "where": [
+         3500.0,
+         0.0,
+         0.0
+      ],
+      "data": [
+         0.01660114138495768,
+         0.0006666667543319795
+      ]
+   },
+   "DisplacementSensor14": {
+      "alphabetical_position": "bottom",
+      "where": [
+         3500.0,
+         1000.0,
+         0.0
+      ],
+      "data": [
+         0.01660114138497971,
+         -0.0006666667544267449
+      ]
+   },
+   "DisplacementSensor15": {
+      "alphabetical_position": "top",
+      "where": [
+         4000.0,
+         0.0,
+         0.0
+      ],
+      "data": [
+         0.018982093603126887,
+         0.0006666666925443913
+      ]
+   },
+   "DisplacementSensor16": {
+      "alphabetical_position": "bottom",
+      "where": [
+         4000.0,
+         1000.0,
+         0.0
+      ],
+      "data": [
+         0.018982093603149806,
+         -0.0006666666926619408
+      ]
+   },
+   "DisplacementSensor17": {
+      "alphabetical_position": "top",
+      "where": [
+         4500.0,
+         0.0,
+         0.0
+      ],
+      "data": [
+         0.021363045985558902,
+         0.0006666666678845089
+      ]
+   },
+   "DisplacementSensor18": {
+      "alphabetical_position": "bottom",
+      "where": [
+         4500.0,
+         1000.0,
+         0.0
+      ],
+      "data": [
+         0.021363045985582193,
+         -0.0006666666680253307
+      ]
+   },
+   "DisplacementSensor19": {
+      "alphabetical_position": "top",
+      "where": [
+         5000.0,
+         0.0,
+         0.0
+      ],
+      "data": [
+         0.023743998368278497,
+         0.0006666666653709568
+      ]
+   },
+   "DisplacementSensor20": {
+      "alphabetical_position": "bottom",
+      "where": [
+         5000.0,
+         1000.0,
+         0.0
+      ],
+      "data": [
+         0.023743998368301863,
+         -0.0006666666655350973
+      ]
+   },
+   "DisplacementSensor21": {
+      "alphabetical_position": "right",
+      "where": [
+         5000.0,
+         200.0,
+         0.0
+      ],
+      "data": [
+         0.023743998369286683,
+         0.00039999999881123153
+      ]
+   },
+   "DisplacementSensor22": {
+      "alphabetical_position": "right",
+      "where": [
+         5000.0,
+         400.0,
+         0.0
+      ],
+      "data": [
+         0.02374399837020075,
+         0.0001333333327771295
+      ]
+   },
+   "DisplacementSensor23": {
+      "alphabetical_position": "right",
+      "where": [
+         5000.0,
+         600.0,
+         0.0
+      ],
+      "data": [
+         0.02374399837020544,
+         -0.00013333333294128798
+      ]
+   },
+   "DisplacementSensor24": {
+      "alphabetical_position": "right",
+      "where": [
+         5000.0,
+         800.0,
+         0.0
+      ],
+      "data": [
+         0.02374399836930073,
+         -0.0003999999989753756
+      ]
+   }
+}

@@ -35,17 +35,31 @@ def add_sensor(_problem, _dirichlet_bdy, _sensors_num_edge_hor, _sensors_num_edg
     if _dirichlet_bdy == 0: #'left'
         for i in range(_sensors_num_edge_hor): 
             #print((p['length']*(i+1))/_sensors_num_edge_hor)
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[(p['length']*(i+1))/_sensors_num_edge_hor, 0, 0]]))) #1/20
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[(p['length']*(i+1))/_sensors_num_edge_hor, p['breadth'], 0]])))
+            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[(p['length']*(i+1))/_sensors_num_edge_hor, 0, 0]]), 'top')) #1/20
+            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[(p['length']*(i+1))/_sensors_num_edge_hor, p['breadth'], 0]]), 'bottom'))
         
         for i in range(_sensors_num_edge_ver):
             #print((p['breadth']*(i+1))/(_sensors_num_edge_ver+1))
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[p['length'], (p['breadth']*(i+1))/(_sensors_num_edge_ver+1), 0]])))
+            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[p['length'], (p['breadth']*(i+1))/(_sensors_num_edge_ver+1), 0]]), 'right'))
 
         for i in range(len(sensor)):
             _problem.add_sensor(sensor[i])
         return len(sensor)
-
+    
+def store_sensor_data(_problem):
+    mydict = {}
+    for i in _problem.sensors:
+       sensor = {i :    
+        {"alphabetical_position" : problem.sensors[i].alphabetical_position,
+         "where" : problem.sensors[i].where[0].tolist(),
+         "data" : problem.sensors[i].data[0].tolist()}
+        } 
+       mydict.update(sensor)
+    json_string = json.dumps(mydict , indent = 3)
+    with open('sensor_data.json', 'w') as f:
+        f.write(json_string)
+    
+    
 def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
     if dirichlet_bdy == 0:
         dirichlet_bdy = 'left'
@@ -57,6 +71,7 @@ def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
     prob.calculate_bilinear_form()
     prob.solve()
     prob.pv_plot("Displacement.xdmf")
+    store_sensor_data(prob)
     if sensor_flag == 0:
         return prob.displacement.x.array
     elif sensor_flag == 1 :
@@ -125,8 +140,14 @@ problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the 
 sensors_num_edge_hor = 10
 sensors_num_edge_ver = 4
 test1_sensors_total_num = add_sensor(problem, 0, sensors_num_edge_hor, sensors_num_edge_ver)
-test1_data = run_test(experiment, problem, 0, [1e3, 0], 1)
 
+sensor_positions = np.zeros((test1_sensors_total_num, 3))
+counter = 0
+for i in problem.sensors:
+    sensor_positions[counter] = problem.sensors[i].where[0]
+    counter += 1
+
+test1_data = run_test(experiment, problem, 0, [1e3, 0], 1)
 test1_x_component = add_noise_to_data(test1_data[:,0], test1_sensors_total_num)
 test1_y_component = add_noise_to_data(test1_data[:,1], test1_sensors_total_num)
 test1_data = np.vstack((test1_x_component, test1_y_component)).T.flatten()
@@ -142,8 +163,55 @@ test1_data = np.vstack((test1_x_component, test1_y_component)).T.flatten()
 displacement_data = test1_data # combine_test_results(list_of_disp)  
 
 
-pd.DataFrame(displacement_data).to_csv(json_object.get('Data').get('measurement_data'), index=False, header=False)
 
+subdict = {   
+    "data" : problem.sensors['DisplacementSensor'].data,
+    "where" : problem.sensors['DisplacementSensor'].where,
+    "alphabetical_position" : problem.sensors['DisplacementSensor'].alphabetical_position}
+
+mydict = {
+    "sensor1" : subdict}
+
+""" mydict = {
+    "parameters": [{"name"    : "E_m",
+                "tex"     : "$E_m$",  
+                "info"    : "Young's Modulus of the material",
+                "domain"  : None,
+                "prior"   : ['Uniform', {'low': 0, 'high': 1}]},
+
+                {"name"    : "E_d",
+                "tex"     : "$E_d$",  
+                "info"    : "Young's Modulus of the material",
+                "domain"  : None,
+                "prior"   : ['Uniform', {'low': 0, 'high': 1}]},
+                ],
+    "MCMC": {
+            "parameter_scaling" : True,
+            "nburn": 125,
+            "nsteps": 125,
+            "pair_plot_name": "pair_plot_scaled_parameters.png",
+            "trace_plot_name": "trace_plot_scaled_parameters.png"
+          }
+        
+    }   """
+            
+mydict = {
+    "sensor1" : subdict}
+json_string = json.dumps(mydict , indent = 3)
+with open('sensor_data.json', 'w') as f:
+    f.write(json_string) 
+
+
+
+
+
+
+
+
+
+
+pd.DataFrame(displacement_data).to_csv(json_object.get('Data').get('measurement_data'), index=False, header=False)
+pd.DataFrame(sensor_positions).to_csv(json_object.get('Data').get('sensor_positions'), index=False, header=False)
 #############################################################################################################################
 #############################################################################################################################
 #2nd Step - Inverse Problem
@@ -226,7 +294,6 @@ class FEMModel(ForwardModelBase):
         _ = add_sensor(problem, dirichlet_bdy, sensors_num_edge_hor, sensors_num_edge_ver)
         model_output = run_test(experiment, problem, dirichlet_bdy, neumann_bdy, 1).flatten()
         return {"disp" : model_output}
-
 
 
 ProbeyeProblem.add_forward_model(FEMModel("LinearElasticMaterial"), experiments=["tensile_test_1"])

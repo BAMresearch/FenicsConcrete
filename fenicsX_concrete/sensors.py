@@ -49,7 +49,7 @@ class Sensor:
 class DisplacementSensor(Sensor):
     """A sensor that measure displacement at a specific point"""
 
-    def __init__(self, where):
+    def __init__(self, where, alphabetical_position):
         """
         Arguments:
             where : Point
@@ -57,6 +57,7 @@ class DisplacementSensor(Sensor):
         """
         self.where = where
         self.data = []
+        self.alphabetical_position = alphabetical_position
         self.time = []
 
     def measure(self, problem, t=1.0):
