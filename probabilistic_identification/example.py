@@ -116,12 +116,12 @@ p['dim'] = 2
 # 1: Random E and nu fields.
 # 2: Linear Springs.
 # 3: Torsion Springs
-p['uncertainties'] = [0,2]
+p['uncertainties'] = [0]
 p['k_x'] = 1e8
 p['k_y'] = 1e8
 
 p['constitutive'] = 'isotropic' #'orthotropic' 
-p['nu'] = 0.28 
+p['nu'] = 0.28
 
 # Kgmms⁻2/mm², mm, kg, sec, N
 p['length'] = 5000
@@ -162,56 +162,6 @@ test1_data = np.vstack((test1_x_component, test1_y_component)).T.flatten()
 #num_of_tests = str(len(list_of_disp)) + ' tests' 
 displacement_data = test1_data # combine_test_results(list_of_disp)  
 
-
-
-subdict = {   
-    "data" : problem.sensors['DisplacementSensor'].data,
-    "where" : problem.sensors['DisplacementSensor'].where,
-    "alphabetical_position" : problem.sensors['DisplacementSensor'].alphabetical_position}
-
-mydict = {
-    "sensor1" : subdict}
-
-""" mydict = {
-    "parameters": [{"name"    : "E_m",
-                "tex"     : "$E_m$",  
-                "info"    : "Young's Modulus of the material",
-                "domain"  : None,
-                "prior"   : ['Uniform', {'low': 0, 'high': 1}]},
-
-                {"name"    : "E_d",
-                "tex"     : "$E_d$",  
-                "info"    : "Young's Modulus of the material",
-                "domain"  : None,
-                "prior"   : ['Uniform', {'low': 0, 'high': 1}]},
-                ],
-    "MCMC": {
-            "parameter_scaling" : True,
-            "nburn": 125,
-            "nsteps": 125,
-            "pair_plot_name": "pair_plot_scaled_parameters.png",
-            "trace_plot_name": "trace_plot_scaled_parameters.png"
-          }
-        
-    }   """
-            
-mydict = {
-    "sensor1" : subdict}
-json_string = json.dumps(mydict , indent = 3)
-with open('sensor_data.json', 'w') as f:
-    f.write(json_string) 
-
-
-
-
-
-
-
-
-
-
-pd.DataFrame(displacement_data).to_csv(json_object.get('Data').get('measurement_data'), index=False, header=False)
-pd.DataFrame(sensor_positions).to_csv(json_object.get('Data').get('sensor_positions'), index=False, header=False)
 #############################################################################################################################
 #############################################################################################################################
 #2nd Step - Inverse Problem
@@ -319,7 +269,7 @@ inference_data.to_json(json_object.get('MCMC').get('arviz_data_name'))
 
 # Saving the posterior as a csv file
 posterior = emcee_solver.raw_results.get_chain()
-np.savetxt(json_object.get('MCMC').get('chain_name'), posterior.reshape(posterior.shape[0], -1), delimiter=",")
+np.savetxt(json_object.get('MCMC').get('posterior_path'), posterior.reshape(posterior.shape[0], -1), delimiter=",")
 
 #import emcee
 #emcee.autocorr.integrated_time(emcee_solver.raw_results.get_chain())

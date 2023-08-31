@@ -27,32 +27,18 @@ import pandas
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 
-with open('probabilistic_identification/test_config.json', 'r') as f: 
+
+
+with open('sensor_data.json', 'r') as f: 
     json_object = json.loads(f.read()) 
 
 parameters_list = ["E", "nu", "sigma"] #"E_d",
-measurement_data = np.loadtxt(json_object.get('Data').get('measurement_data'), delimiter=' ')
-sensor_positions = np.loadtxt(json_object.get('Data').get('sensor_positions'), delimiter=',')
-posterior_data = np.loadtxt(json_object.get('MCMC').get('chain_name'), delimiter=',')
+posterior_data = np.loadtxt("probabilistic_identification/sim_output/posterior.csv", delimiter=',')
 posterior_data = posterior_data.reshape(posterior_data.shape[0], posterior_data.shape[1]// len(parameters_list), len(parameters_list))
 #posterior_data = np.transpose(posterior_data, (1,0,2))
 
-# Adding sensors to the problem definition.
-def add_sensor(_problem, _dirichlet_bdy, _sensors_num_edge_hor, _sensors_num_edge_ver): 
-    sensor = []
-    if _dirichlet_bdy == 0: #'left'
-        for i in range(_sensors_num_edge_hor): 
-            #print((p['length']*(i+1))/_sensors_num_edge_hor)
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[(p['length']*(i+1))/_sensors_num_edge_hor, 0, 0]]))) #1/20
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[(p['length']*(i+1))/_sensors_num_edge_hor, p['breadth'], 0]])))
-        
-        for i in range(_sensors_num_edge_ver):
-            #print((p['breadth']*(i+1))/(_sensors_num_edge_ver+1))
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[p['length'], (p['breadth']*(i+1))/(_sensors_num_edge_ver+1), 0]])))
 
-        for i in range(len(sensor)):
-            _problem.add_sensor(sensor[i])
-        return len(sensor)
+# Adding sensors to the problem definition.
 
 """ def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
     #if dirichlet_bdy == 0:
@@ -131,9 +117,14 @@ experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the 
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 
 #Sparse data (with sensors)
-sensors_num_edge_hor = 10
-sensors_num_edge_ver = 4
-test1_sensors_total_num = add_sensor(problem, 0, sensors_num_edge_hor, sensors_num_edge_ver)
+
+sensor = []
+for i in json_object:
+    sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([json_object.get(i).get('where')]), json_object.get(i).get('alphabetical_position'))) #1/20
+
+for i in range(len(sensor)):
+    problem.add_sensor(sensor[i])
+
 problem.experiment.bcs = problem.experiment.create_displ_bcs(problem.experiment.V)
 problem.apply_neumann_bc()
 problem.calculate_bilinear_form()
@@ -152,31 +143,10 @@ chain_length = posterior_data.shape[0]                  #total chain length
 n_tests = 1
 #likelihood_predictive = np.zeros((chain_total,chain_length))
 
-""" x_plot = np.zeros((chain_total, chain_length, n_tests))
 
-for chain_index in range(chain_total): #chain index
-    print('Chain #',chain_index,'is being calculated')
-    for chain_draw in range(chain_length): #step number of chain/inferred parameters
-        problem.E.value = posterior_data[chain_draw,chain_index,0]
-        problem.nu.value = posterior_data[chain_draw,chain_index,1]
-        sigma = posterior_data[chain_draw,chain_index,2]
-        model_data = run_test(experiment, problem, 0, [1e3, 0], 1).flatten()
-        likelihood_predictive[chain_index,chain_draw] = stats.multivariate_normal.pdf(measurement_data,model_data,sigma*np.identity(measurement_data.shape[0]))   #a*x+b + np.random.normal(loc=0, scale=sigma)
-
-posterior_predictive = np.mean(np.mean(likelihood_predictive, axis=1), axis=0)
-print(posterior_predictive) """
-
-""" plt.plot(x_test, posterior_predictive, "o", label="posterior predictive")
-plt.title("Posterior Predictive vs. Observations")
-plt.xlabel("Observed Data")
-plt.ylabel("Posterior Predictive")
-plt.legend()
-plt.show() """
-
-chain_total = 2#posterior_data.shape[1]     
+chain_total = 2 #posterior_data.shape[1]     
 chain_length = posterior_data.shape[0]
-observed_data_size = measurement_data.shape[0]
-predictions = np.zeros((chain_total, chain_length, observed_data_size))
+
 
 for chain_index in range(chain_total): #chain index
     print('Chain #',chain_index,'is being calculated')
@@ -186,17 +156,40 @@ for chain_index in range(chain_total): #chain index
         sigma = posterior_data[chain_draw,chain_index,2]
         problem.solve()
         for i in problem.sensors:
-            problem.sensors[i].data += problem.sensors[i].data + np.random.normal(loc=0, scale=sigma)*np.ones(3)
+            problem.sensors[i].data[(chain_index+1)*chain_draw] += problem.sensors[i].data[(chain_index+1)*chain_draw] + np.random.normal(loc=0, scale=sigma)*np.ones(2)
 
 
 import arviz as az
 az.style.use("arviz-doc")
 az.rcParams["stats.hdi_prob"] = 0.90
-plotting_list = []
+num_plotted_sensors = 0
 for i in problem.sensors:
-    if 'top' in i.alphabetical_position:
-        plotting_list.append(i.data)
+    if 'top' == problem.sensors[i].alphabetical_position:
+        num_plotted_sensors += 1
+model_data_plot = np.zeros((chain_total,chain_length,num_plotted_sensors))
+observed_data_plot = []
+sensor_positions = []
+axis = 0 # 0 for horizontal, 1 for vertical
 
-ax = az.plot_hdi(sensor_positions[:,1], predictions_rearranged[:,:,:,1], plot_kwargs={"ls": "--"})
-ax.scatter(sensor_positions[:,1], measurement_data.reshape(-1,2)[:,1], color="#b5a7b6", label="generated data points")
+sensor_counter = 0
+for sensor_key in problem.sensors:
+    if 'top' == problem.sensors[sensor_key].alphabetical_position:
+        chain_index = 0
+        chain_draw = 0
+        for data_index in problem.sensors[sensor_key].data:
+            model_data_plot[chain_index, chain_draw, sensor_counter] = data_index[axis]
+            chain_draw += 1
+            if chain_draw == chain_length:
+                chain_draw = 0
+                chain_index += 1
+        sensor_counter += 1
+
+for i in json_object:
+    if 'top' == json_object.get(i).get('alphabetical_position'):
+            observed_data_plot.append(json_object.get(i).get('data')[axis])
+            sensor_positions.append(json_object.get(i).get('where')[axis])
+
+#model_data_plot = np.array(model_data_plot).reshape(-1,chain_length*chain_total)
+ax = az.plot_hdi(np.array(sensor_positions), model_data_plot, plot_kwargs={"ls": "--"})
+ax.scatter(np.array(sensor_positions), observed_data_plot, color="#b5a7b6", label="generated data points")
 plt.show()

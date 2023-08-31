@@ -42,16 +42,14 @@
 
    ],
    "Data":{
-      "Error": false,
-      "sensor_positions": "probabilistic_identification/sim_output/sensor_positions.csv",
-      "measurement_data": "probabilistic_identification/sim_output/measurement_data.csv"
+      "Error": false
    },
    "MCMC": {
       "parameter_scaling": false,
       "nburn": 20,
       "nsteps": 100,
       "arviz_data_name": "probabilistic_identification/sim_output/arviz_inference_data.json",
-      "chain_name": "probabilistic_identification/sim_output/Chain.csv",
+      "posterior_path": "probabilistic_identification/sim_output/posterior.csv",
       "pair_plot_name": "probabilistic_identification/sim_output/pair_plot_scaled_parameters.png",
       "trace_plot_name": "probabilistic_identification/sim_output/trace_plot_scaled_parameters.png",
       "acf_plot_name": "probabilistic_identification/sim_output/ACF_plot.html",
