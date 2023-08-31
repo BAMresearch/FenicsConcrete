@@ -28,9 +28,10 @@ jobs:
         env:
           ANACONDA_TOKEN: ${{ secrets.ANACONDA_TOKEN }}
         run: |
-          mamba install boa
+          #mamba install boa
+          mamba install conda-build
           mamba install conda-verify
           mamba install anaconda-client
           mamba config --set anaconda_upload yes
           cd $GITHUB_WORKSPACE
-          mamba mambabuild --token "$ANACONDA_TOKEN" --user bam77 .
+          conda-build --token "$ANACONDA_TOKEN" --user bam77 .
