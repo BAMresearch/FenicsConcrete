@@ -30,14 +30,7 @@
          "name": "sigma",
          "tex": "$\\sigma$",
          "info": "Standard deviation, of zero-mean Gaussian noise model",
-         "domain": null,
-         "prior": [
-            "Uniform",
-            {
-               "low": 1e-7,
-               "high":1e-4
-            }
-         ]
+         "value": 0.0
       }
 
    ],
@@ -47,8 +40,8 @@
    },
    "MCMC": {
       "parameter_scaling": false,
-      "nburn": 50,
-      "nsteps": 100,
+      "nburn": 20,
+      "nsteps": 50,
       "arviz_data_name": "probabilistic_identification/sim_output/arviz_inference_data.json",
       "posterior_path": "probabilistic_identification/sim_output/posterior.csv",
       "pair_plot_name": "probabilistic_identification/sim_output/pair_plot_scaled_parameters.png",

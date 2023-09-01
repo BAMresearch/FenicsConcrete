@@ -91,3 +91,20 @@ class concreteSlabExperiment(Experiment):
 
         _ds = ufl.Measure("ds", domain=self.mesh, subdomain_data=facet_tag)
         return _ds
+    
+    def identify_domain_sub_boundaries(self):
+        boundaries = [(5, lambda x: np.isclose(x[1], self.p.breadth) and x[0]>4500 and x[0]<5000)] # right
+
+        facet_indices, facet_markers = [], []
+        fdim = self.mesh.topology.dim - 1
+        for (marker, locator) in boundaries:
+            facets = df.mesh.locate_entities(self.mesh, fdim, locator)
+            facet_indices.append(facets)
+            facet_markers.append(np.full_like(facets, marker))
+        facet_indices = np.hstack(facet_indices).astype(np.int32)
+        facet_markers = np.hstack(facet_markers).astype(np.int32)
+        sorted_facets = np.argsort(facet_indices)
+        facet_tag = df.mesh.meshtags(self.mesh, fdim, facet_indices[sorted_facets], facet_markers[sorted_facets])
+
+        _ds = ufl.Measure("ds", domain=self.mesh, subdomain_data=facet_tag)
+        return _ds

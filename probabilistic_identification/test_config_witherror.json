@@ -42,12 +42,11 @@
 
    ],
    "Data":{
-      "Error": false,
-      "sensor_data": "probabilistic_identification/sim_output/sensor_data.json"
+      "Error": false
    },
    "MCMC": {
       "parameter_scaling": false,
-      "nburn": 50,
+      "nburn": 20,
       "nsteps": 100,
       "arviz_data_name": "probabilistic_identification/sim_output/arviz_inference_data.json",
       "posterior_path": "probabilistic_identification/sim_output/posterior.csv",

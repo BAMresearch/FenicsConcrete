@@ -25,7 +25,6 @@ import json #math
 import pandas as pd
 #from scipy import optimize
 
-
 with open('probabilistic_identification/test_config.json', 'r') as f: 
     json_object = json.loads(f.read()) 
 
@@ -34,9 +33,9 @@ def add_sensor(_problem, _dirichlet_bdy, _sensors_num_edge_hor, _sensors_num_edg
     sensor = []
     if _dirichlet_bdy == 0: #'left'
         for i in range(_sensors_num_edge_hor): 
-            #print((p['length']*(i+1))/_sensors_num_edge_hor)
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[(p['length']*(i+1))/_sensors_num_edge_hor, 0, 0]]), 'top')) #1/20
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[(p['length']*(i+1))/_sensors_num_edge_hor, p['breadth'], 0]]), 'bottom'))
+            #print((p['length']*(i+1))/_sensors_num_edge_hor) #p['length']
+            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[(300*(i+1))/_sensors_num_edge_hor, 0, 0]]), 'top')) #1/20
+            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[(300*(i+1))/_sensors_num_edge_hor, p['breadth'], 0]]), 'bottom'))
         
         for i in range(_sensors_num_edge_ver):
             #print((p['breadth']*(i+1))/(_sensors_num_edge_ver+1))
@@ -56,8 +55,8 @@ def store_sensor_data(_problem):
         } 
        mydict.update(sensor)
     json_string = json.dumps(mydict , indent = 3)
-    with open('sensor_data.json', 'w') as f:
-        f.write(json_string)
+    with open(json_object.get('Data').get('sensor_data'), 'w') as f:
+        f.write(json_string) 
     
     
 def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
@@ -116,9 +115,9 @@ p['dim'] = 2
 # 1: Random E and nu fields.
 # 2: Linear Springs.
 # 3: Torsion Springs
-p['uncertainties'] = [0]
-p['k_x'] = 1e8
-p['k_y'] = 1e8
+p['uncertainties'] = [0, 2]
+p['k_x'] = 0.5e7
+p['k_y'] = 0.5e7
 
 p['constitutive'] = 'isotropic' #'orthotropic' 
 p['nu'] = 0.28
@@ -137,7 +136,7 @@ experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the 
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 
 #Sparse data (with sensors)
-sensors_num_edge_hor = 10
+sensors_num_edge_hor = 5
 sensors_num_edge_ver = 4
 test1_sensors_total_num = add_sensor(problem, 0, sensors_num_edge_hor, sensors_num_edge_ver)
 
@@ -170,10 +169,7 @@ displacement_data = test1_data # combine_test_results(list_of_disp)
 
 
 # Kgmms⁻2/mm², mm, kg, sec, N
-#p['constitutive'] = 'isotropic' #'orthotropic'
-p['uncertainties'] = [0] #,2
-#p['E'] = 210e6
-#p['nu'] = 0.28 #0.3
+p['uncertainties'] = [0]
 
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
@@ -196,7 +192,7 @@ def prior_func_selection(para :list):
 
 
 #Select the parameters for inference from the json file.
-parameters_list = ["E", "nu", "sigma"] #"E_d",
+parameters_list = ["E", "nu", "sigma"] #"E_d", , "sigma" , "nu"   #Tells which parameters to read.
 for parameter in json_object.get('parameters'):
     if parameter['name'] in parameters_list:
         ProbeyeProblem.add_parameter(name = parameter['name'], 
@@ -205,42 +201,28 @@ for parameter in json_object.get('parameters'):
                                      domain = parameter['domain'] if parameter['domain'] != None else "(-oo, +oo)",
                                      prior = prior_func_selection(parameter['prior']))  
 
+#ProbeyeProblem.add_parameter(name = "sigma",
+#                             value= 1e-20)
+
 ProbeyeProblem.add_experiment(name="tensile_test_1",
                             sensor_data={
                                 "disp": test1_data,
                                 "dirichlet_bdy": 0,  #Provided must be a 1D array.
-                                "neumann_bdy": [1000, 0],
-                                "sensors_per_edge" : 10
+                                "neumann_bdy": [1000, 0]
                             })
 
 
 class FEMModel(ForwardModelBase):
     def interface(self):
         self.parameters = parameters_list  # "G_12", "k_x", "k_y",  #E and nu must have been already defined beforehand using add_parameter. # three attributes are must here.
-        self.input_sensors = [Sensor("dirichlet_bdy"), Sensor("neumann_bdy"), Sensor("sensors_per_edge")]#sensor provides a way for forward model to interact with experimental data.
+        self.input_sensors = [Sensor("dirichlet_bdy"), Sensor("neumann_bdy")]#sensor provides a way for forward model to interact with experimental data.
         self.output_sensors = [Sensor("disp", std_model="sigma")]
 
     def response(self, inp: dict) -> dict:    #forward model evaluation
-        #if inp["E_m"] < inp["E_d"]:
-        #    model_output = np.ones(inp["sensors_per_edge"]*4)*1e20#np.inf
-        #    return {"disp": model_output}
-        #else:
-        #if json_object.get('MCMC').get('parameter_scaling') == True:
-            #problem.E_1.value = (inp["E_d"] + inp["E_2"])*500*10**6   #0.5*(inp["E_1"]-inp["E_2"])*500*10**6    
-            #problem.E_2.value = inp["E_2"]*500*10**6    #0.5*(inp["E_1"]+inp["E_2"])*500*10**6   
-            #problem.nu_12.value = inp["nu"]
-            #problem.G_12.value = inp["G_12"]*250*10**6 + (inp["E_2"]*500*10**6 )/(2*(1+inp["nu"]))
-            #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
-            #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
-        #else:
-            #problem.G_12.value = 82.03125*10**6 # inp["G_12"]#*250*10**6 # + (inp["E_m"] )/(2*(1+inp["nu"])) 82.03125*10**6 # 
-            #problem.k_x.value =  (2000-2000*inp["k_x"])*10**6   #10**(12-6*inp["k_x"]) #inp["k_x"]  
-            #problem.k_y.value =  (2000-2000*inp["k_y"])*10**6 #10**(12-6*inp["k_y"]) #inp["k_y"] #
         problem.E.value = inp["E"] 
         problem.nu.value = inp["nu"]
         dirichlet_bdy = inp["dirichlet_bdy"]
         neumann_bdy = inp["neumann_bdy"]
-        sensors_per_edge = inp["sensors_per_edge"]
         _ = add_sensor(problem, dirichlet_bdy, sensors_num_edge_hor, sensors_num_edge_ver)
         model_output = run_test(experiment, problem, dirichlet_bdy, neumann_bdy, 1).flatten()
         return {"disp" : model_output}
@@ -279,7 +261,7 @@ np.savetxt(json_object.get('MCMC').get('posterior_path'), posterior.reshape(post
 #if json_object.get('MCMC').get('parameter_scaling') == True:
 #    true_values = {"E_2": 0.42, "E_d": 0., "nu": 0.28, "G_12": 0.} #"E_d": 0., 
 #else:
-true_values = {"E": 210*10**6, "nu": 0.28,} #"E_d": 0., 
+true_values = {"E": 210*10**6, "nu": 0.28} #"E_d": 0., "nu": 0.28,
 
 
 # this is an overview plot that allows to visualize correlations

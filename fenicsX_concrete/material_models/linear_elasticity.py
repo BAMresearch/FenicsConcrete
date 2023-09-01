@@ -41,6 +41,7 @@ class LinearElasticity(MaterialProblem):
 
         self.p = default_p + self.p
         self.ds = self.experiment.identify_domain_boundaries() # Domain's boundary
+        self.dsn = self.experiment.identify_domain_sub_boundaries()
 
         if 0 in self.p['uncertainties'] and self.p.constitutive == 'orthotropic':
             #self.E_m = df.fem.Constant(self.experiment.mesh, self.p.E_m)
@@ -187,11 +188,12 @@ class LinearElasticity(MaterialProblem):
         # Selects the problem which you want to solve
         if self.p.problem == 'tensile_test':
             self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
+            self.L =  ufl.dot(self.T, self.v) * self.dsn(5)
             #self.ds = self.experiment.create_neumann_boundary()
-            if  self.p.dirichlet_bdy == 'left':
-                self.L =  ufl.dot(self.T, self.v) * self.ds(1) 
-            elif self.p.dirichlet_bdy == 'bottom':
-                self.L =  ufl.dot(self.T, self.v) * self.ds(3)
+            #if  self.p.dirichlet_bdy == 'left':
+            #    self.L =  ufl.dot(self.T, self.v) * self.ds(1) 
+            #elif self.p.dirichlet_bdy == 'bottom':
+            #    self.L =  ufl.dot(self.T, self.v) * self.ds(3)
 
         elif self.p.problem == 'bending_test':
             if self.p.dim == 2:
