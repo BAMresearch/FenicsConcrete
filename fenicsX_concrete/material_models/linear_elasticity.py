@@ -41,7 +41,7 @@ class LinearElasticity(MaterialProblem):
 
         self.p = default_p + self.p
         self.ds = self.experiment.identify_domain_boundaries() # Domain's boundary
-        self.dsn = self.experiment.identify_domain_sub_boundaries()
+        #self.dsn = self.experiment.identify_domain_sub_boundaries(self.p.lower_limit, self.p.upper_limit)
 
         if 0 in self.p['uncertainties'] and self.p.constitutive == 'orthotropic':
             #self.E_m = df.fem.Constant(self.experiment.mesh, self.p.E_m)

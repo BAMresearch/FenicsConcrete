@@ -92,8 +92,8 @@ class concreteSlabExperiment(Experiment):
         _ds = ufl.Measure("ds", domain=self.mesh, subdomain_data=facet_tag)
         return _ds
     
-    def identify_domain_sub_boundaries(self):
-        boundaries = [(5, lambda x: np.isclose(x[1], self.p.breadth) and x[0]>4500 and x[0]<5000)] # right
+    def identify_domain_sub_boundaries(self, _lower_limit, _upper_limit):
+        boundaries = [(5, lambda x: np.logical_and(np.isclose(x[1], self.p.breadth) , np.logical_and(x[0]>_lower_limit , x[0]<_upper_limit)))] # right np.isclose(x[1], self.p.breadth) and 4500<x[0]<5000
 
         facet_indices, facet_markers = [], []
         fdim = self.mesh.topology.dim - 1

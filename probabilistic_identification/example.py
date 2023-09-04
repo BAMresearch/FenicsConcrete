@@ -105,17 +105,17 @@ def add_noise_to_data(clean_data, no_of_sensors):
 
 p = fenicsX_concrete.Parameters()  # using the current default values
 p['bc_setting'] = 'free'
-p['problem'] =  'tensile_test'    #'tensile_test' #'bending_test' #bending+tensile_test
+p['problem'] =  'bending_test'    #'tensile_test' #'bending_test' #bending+tensile_test
 p['degree'] = 1
-p['num_elements_length'] = 50
-p['num_elements_breadth'] = 10
+p['num_elements_length'] = 10
+p['num_elements_breadth'] = 3
 p['dim'] = 2
 # Uncertainty type:
 # 0: Constant E and nu fields.
 # 1: Random E and nu fields.
 # 2: Linear Springs.
 # 3: Torsion Springs
-p['uncertainties'] = [0, 2]
+p['uncertainties'] = [0]
 p['k_x'] = 0.5e7
 p['k_y'] = 0.5e7
 
@@ -123,12 +123,16 @@ p['constitutive'] = 'isotropic' #'orthotropic'
 p['nu'] = 0.28
 
 # Kgmms⁻2/mm², mm, kg, sec, N
-p['length'] = 5000
-p['breadth'] = 1000
-p['load'] = [1e3, 0] 
-p['rho'] = 7750e-9 #kg/mm³
-p['g'] = 9.81e3 #mm/s² for units to be consistent g must be given in m/s².
-p['E'] = 210e6 #Kgmms⁻2/mm² 
+p['length'] = 1#1000
+p['breadth'] = 0.3#50
+
+p['load'] = [1e3, 0] #[1e3, 0] 
+#p['lower_limit'] = 0#.95*p['length']
+#p['upper_limit'] = p['length']
+
+p['rho'] = 7750 #7750e-9 #kg/mm³
+p['g'] = 9.81#9.81e3 #mm/s² for units to be consistent g must be given in m/s².
+p['E'] = 210e9 #200e6 #Kgmms⁻2/mm² 
 
 p['dirichlet_bdy'] = 'left'
 
@@ -146,7 +150,7 @@ for i in problem.sensors:
     sensor_positions[counter] = problem.sensors[i].where[0]
     counter += 1
 
-test1_data = run_test(experiment, problem, 0, [1e3, 0], 1)
+test1_data = run_test(experiment, problem, 0, p['load'] , 1)
 test1_x_component = add_noise_to_data(test1_data[:,0], test1_sensors_total_num)
 test1_y_component = add_noise_to_data(test1_data[:,1], test1_sensors_total_num)
 test1_data = np.vstack((test1_x_component, test1_y_component)).T.flatten()
