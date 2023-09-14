@@ -1,6 +1,6 @@
 {% set name = "fenics_concrete" %}
 {% set data = load_setup_py_data() %}
-{% set version = data['version'] %}
+{% set version = "0.9.3" %}
 package:
   name: {{ name|lower }}
   version: {{ version }}
