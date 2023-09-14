@@ -1,12 +1,12 @@
 {% set name = "fenics_concrete" %}
 {% set data = load_setup_py_data() %}
-
+{% set version = data['version'] %}
 package:
   name: {{ name|lower }}
-  version: {{ data['version'] }}
+  version: {{ version }}
 
 source:
-  url: https://github.com/BAMresearch/FenicsXConcrete/archive/refs/tags/v{{ data['version'] }}.tar.gz
+  url: https://github.com/BAMresearch/FenicsXConcrete/archive/refs/tags/v{{ version }}.tar.gz
   
 build:
   number: 0
