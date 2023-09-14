@@ -30,7 +30,6 @@ requirements:
     - numpy
     - pytest
     - loguru
-    - vmap4fenics
 
 test:
   imports:

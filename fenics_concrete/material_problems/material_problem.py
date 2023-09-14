@@ -11,7 +11,8 @@ import sys
 import warnings
 from ffc.quadrature.deprecation import QuadratureRepresentationDeprecationWarning
 
-from vmap4fenics import VMAP4Fenics
+# TODO: Fix vmap
+# from vmap4fenics import VMAP4Fenics
 # df.parameters["form_compiler"]["representation"] = "quadrature"
 warnings.simplefilter("ignore", QuadratureRepresentationDeprecationWarning)
 
@@ -46,10 +47,12 @@ class MaterialProblem():
         self.q_degree_of_hydration = None
 
         if vmapoutput:
-            self.wrapper = VMAP4Fenics.VMAP4Fenics(filename = pv_name, output_path = pv_name)
-            self.wrapper.write_metadata()
-            self.wrapper.write_unitsystem()
-            self.wrapper.write_coordinatesystem()
+            print("WARNING: VMAP output is not working!")
+            self.wrapper = None
+            #self.wrapper = VMAP4Fenics.VMAP4Fenics(filename = pv_name, output_path = pv_name)
+            #self.wrapper.write_metadata()
+            #self.wrapper.write_unitsystem()
+            #self.wrapper.write_coordinatesystem()
         else:
             self.wrapper = None
         # setup the material object to access the function

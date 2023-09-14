@@ -15,6 +15,5 @@ dependencies:
   - pytest
   - loguru
   - pip
-  - vmap4fenics
   - pip:
     - -e .
