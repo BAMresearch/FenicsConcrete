@@ -21,24 +21,28 @@
                "variance": 4
             }
          ]
+      },
+      {
+         "name": "lmbda_b",
+         "prior": [
+            "Bernoulli",
+            {
+               "p": 0.5
+            }
+         ]
+      },
+      {
+         "name": "b",
+         "hyperparameters": [
+            "lmbda_b"
+         ],
+         "prior": [
+            "Spike-Slab",
+            {
+               "mean": 0,
+               "variance": 4
+            }
+         ]
       }
-   ],
-   "Data":{
-      "Error": false,
-      "sensor_data": "probabilistic_identification/sim_output/sensor_data.json"
-   },
-   "MCMC": {
-      "parameter_scaling": false,
-      "nburn": 50,
-      "nsteps": 100,
-      "arviz_data_name": "probabilistic_identification/sim_output/arviz_inference_data.json",
-      "posterior_path": "probabilistic_identification/sim_output/posterior.csv",
-      "pair_plot_name": "probabilistic_identification/sim_output/pair_plot_scaled_parameters.png",
-      "trace_plot_name": "probabilistic_identification/sim_output/trace_plot_scaled_parameters.png",
-      "acf_plot_name": "probabilistic_identification/sim_output/ACF_plot.html",
-      "act_plot_name": "probabilistic_identification/sim_output/ACT_plot.html",
-      "mean_plot_name": "probabilistic_identification/sim_output/Mean_plot.html",
-      "az_pair_plot_name": "probabilistic_identification/sim_output/az_pair_plot_scaled_parameters.png",
-      "az_trace_plot_name": "probabilistic_identification/sim_output/az_trace_plot_scaled_parameters.png"
-   }
+   ]
 }
