@@ -41,7 +41,7 @@ class LinearElasticity(MaterialProblem):
 
         self.p = default_p + self.p
         self.ds = self.experiment.identify_domain_boundaries() # Domain's boundary
-        #self.dsn = self.experiment.identify_domain_sub_boundaries(self.p.lower_limit, self.p.upper_limit)
+        self.dsn = self.experiment.identify_domain_sub_boundaries(self.p.lower_limit, self.p.upper_limit)
 
         if 0 in self.p['uncertainties'] and self.p.constitutive == 'orthotropic':
             #self.E_m = df.fem.Constant(self.experiment.mesh, self.p.E_m)
@@ -74,7 +74,6 @@ class LinearElasticity(MaterialProblem):
         self.v = ufl.TestFunction(self.experiment.V)
         
         self.apply_neumann_bc()
-
 
         #For torsional spring
         def moment_arm_(x):
@@ -141,7 +140,6 @@ class LinearElasticity(MaterialProblem):
         else:
             self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
             
-
             self.bilinear_form = df.fem.form(self.a)
             self.solver = PETSc.KSP().create(self.experiment.mesh.comm)
             self.solver.setType(PETSc.KSP.Type.PREONLY)
@@ -186,45 +184,20 @@ class LinearElasticity(MaterialProblem):
     
     def apply_neumann_bc(self):
         # Selects the problem which you want to solve
-        if self.p.problem == 'tensile_test':
-            self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
-            self.L =  ufl.dot(self.T, self.v) * self.dsn(5)
-            #self.ds = self.experiment.create_neumann_boundary()
-            #if  self.p.dirichlet_bdy == 'left':
-            #    self.L =  ufl.dot(self.T, self.v) * self.ds(1) 
-            #elif self.p.dirichlet_bdy == 'bottom':
-            #    self.L =  ufl.dot(self.T, self.v) * self.ds(3)
+        self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
+        self.L =  ufl.dot(self.T, self.v) * self.dsn(5)
+        #self.ds = self.experiment.create_neumann_boundary()
 
-        elif self.p.problem == 'bending_test':
-            if self.p.dim == 2:
-                #f = df.Constant((0, 0))
-                f = df.fem.Constant(self.experiment.mesh, ScalarType((0, -self.p.rho*self.p.g))) #0, -self.p.rho*self.p.g
-            elif self.p.dim == 3:
-                #f = df.Constant((0, 0, 0))
-                f = df.fem.Constant(self.experiment.mesh, ScalarType((0, 0, -self.p.rho*self.p.g))) 
-            else:
-                raise Exception(f'wrong dimension {self.p.dim} for problem setup')
-              
-            self.L =  ufl.dot(f, self.v) * ufl.dx
-
-        elif self.p.problem == 'bending+tensile_test':
-            self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
-            self.L =  ufl.dot(self.T, self.v) * self.ds(1) 
+        if self.p.body_force == True:
             if self.p.dim == 2:
                 f = df.fem.Constant(self.experiment.mesh, ScalarType((0, -self.p.rho*self.p.g))) #0, -self.p.rho*self.p.g
+                self.L +=  ufl.dot(f, self.v) * ufl.dx
             elif self.p.dim == 3:
                 f = df.fem.Constant(self.experiment.mesh, ScalarType((0, 0, -self.p.rho*self.p.g))) 
+                self.L +=  ufl.dot(f, self.v) * ufl.dx
             else:
-                raise Exception(f'wrong dimension {self.p.dim} for problem setup')
-            self.L =  ufl.dot(self.T, self.v) * self.ds(1)  + ufl.dot(f, self.v) * ufl.dx
-
-        elif self.p.problem == 'tensile_xy_test':
-            self.T1 = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
-            self.T2 = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[1], self.p.load[0])))
-            self.L =  ufl.dot(self.T1, self.v) * self.ds(1) + ufl.dot(self.T2, self.v) * self.ds(3) 
-        else:
-            print('wrong problem type')
-            exit()
+                raise Exception(f'wrong dimension {self.p.dim} for problem setup')              
+            
 
     # Stress computation for linear elastic problem 
     def epsilon(self, u):
