@@ -62,13 +62,13 @@ problem.add_parameter(
     prior=HalfCauchy(loc=0, scale=1),
 )
 
-problem.add_parameter(
+""" problem.add_parameter(
     "c_sqr_a",
     #tex="$\lambda_a$",
     #info="Lambda of Slope of the graph",
     domain="[0, +oo)",
     prior=InvGamma(shape=2, scale=8),
-)
+) """
 
 problem.add_parameter(
     "tau_a",
@@ -78,19 +78,19 @@ problem.add_parameter(
     prior=HalfCauchy(loc=0, scale=1),
 )
 
-problem.add_parameter(
-    "a",
-    tex="$a$",
-    #info="Slope of the graph",
-    prior=RegularisedHorseShoe(mean=0, lmbda="lmbda_a", c_sqr="c_sqr_a", tau="tau_a"),
-)
-
 """ problem.add_parameter(
     "a",
     tex="$a$",
     #info="Slope of the graph",
-    prior=HorseShoe(mean=0, lmbda="lmbda_a", tau="tau_a"),
+    prior=RegularisedHorseShoe(mean=0, lmbda="lmbda_a", c_sqr="c_sqr_a", tau="tau_a"),
 ) """
+
+problem.add_parameter(
+    "a",
+    tex="$a$",
+    #info="Slope of the graph",
+    prior=HorseShoe(mean=0, lmbda="lmbda_a", tau="tau_a"),
+)
 
 problem.add_parameter(
     "b",
@@ -133,8 +133,8 @@ posterior = emcee_solver.raw_results.get_chain()
 
 
 # this is optional, since in most cases we don't know the ground truth
-#true_values = {"a": a_true, "b": b_true, "lmbda_a": 0, "tau_a": 0}
-true_values = {"a": a_true, "b": b_true, "lmbda_a": 0, "c_sqr_a":0, "tau_a": 0}
+true_values = {"a": a_true, "b": b_true, "lmbda_a": 0, "tau_a": 0}
+#true_values = {"a": a_true, "b": b_true, "lmbda_a": 0, "c_sqr_a":0, "tau_a": 0}
 #true_values = {"a": 0, "b": b_true, "lmbda_a": 0, "sigma": std_noise}
 
 # this is an overview plot that allows to visualize correlations

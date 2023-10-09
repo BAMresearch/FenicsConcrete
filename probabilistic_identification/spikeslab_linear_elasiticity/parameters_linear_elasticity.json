@@ -1,0 +1,98 @@
+{
+   "parameters": [
+      {
+         "name": "lmbda_a",
+         "prior": [
+            "Bernoulli",
+            {
+               "p": 0.5
+            }
+         ]
+      },
+      {
+         "name": "a",
+         "hyperparameters": [
+            "lmbda_a"
+         ],
+         "prior": [
+            "Spike-Slab",
+            {
+               "mean": 0,
+               "variance": 0.05
+            }
+         ]
+      },
+      {
+         "name": "lmbda_b",
+         "prior": [
+            "Bernoulli",
+            {
+               "p": 0.5
+            }
+         ]
+      },
+      {
+         "name": "b",
+         "hyperparameters": [
+            "lmbda_b"
+         ],
+         "prior": [
+            "Spike-Slab",
+            {
+               "mean": 0,
+               "variance": 10
+            }
+         ]
+      },
+      {
+         "name": "lmbda_c",
+         "prior": [
+            "Bernoulli",
+            {
+               "p": 0.5
+            }
+         ]
+      },
+      {
+         "name": "c",
+         "hyperparameters": [
+            "lmbda_c"
+         ],
+         "prior": [
+            "Spike-Slab",
+            {
+               "mean": 0,
+               "variance": 25
+            }
+         ]
+      },
+      {
+         "name": "lmbda_d",
+         "prior": [
+            "Bernoulli",
+            {
+               "p": 0.5
+            }
+         ]
+      },
+      {
+         "name": "d",
+         "hyperparameters": [
+            "lmbda_d"
+         ],
+         "prior": [
+            "Spike-Slab",
+            {
+               "mean": 0,
+               "variance": 25
+            }
+         ]
+      }
+   ],
+   "MCMC": {
+      "nsteps": 3200,
+      "posterior_path": "probabilistic_identification/sim_output/posterior.csv",
+      "true_values" :  [1, -0.04, 0, 0, 0, 0, 0, 0],
+      "param_list":["lmda_a", "a[T^2]", "lmda_b", "b[T]", "lmda_c", "c[log T]", "lmda_d", "d[e^(-T)]"]
+   }
+}

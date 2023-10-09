@@ -1,0 +1,26 @@
+{
+   "parameters": [
+      {
+         "name": "lmbda_a",
+         "prior": [
+            "Bernoulli",
+            {
+               "p": 0.5
+            }
+         ]
+      },
+      {
+         "name": "a",
+         "hyperparameters": [
+            "lmbda_a"
+         ],
+         "prior": [
+            "Spike-Slab",
+            {
+               "mean": 7.5,
+               "variance": 2
+            }
+         ]
+      }
+   ]
+}
