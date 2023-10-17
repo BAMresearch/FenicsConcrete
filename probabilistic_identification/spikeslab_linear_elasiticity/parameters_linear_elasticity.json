@@ -90,8 +90,8 @@
       }
    ],
    "MCMC": {
-      "nsteps": 3200,
-      "posterior_path": "probabilistic_identification/sim_output/posterior.csv",
+      "nsteps": 1750,
+      "posterior": "posterior_discrete.txt",
       "true_values" :  [1, -0.04, 0, 0, 0, 0, 0, 0],
       "param_list":["lmda_a", "a[T^2]", "lmda_b", "b[T]", "lmda_c", "c[log T]", "lmda_d", "d[e^(-T)]"]
    }
