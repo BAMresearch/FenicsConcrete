@@ -42,6 +42,14 @@ class LinearElasticity(MaterialProblem):
         self.p = default_p + self.p
         self.ds = self.experiment.identify_domain_boundaries() # Domain's boundary
         self.dsn = self.experiment.identify_domain_sub_boundaries(self.p.lower_limit, self.p.upper_limit)
+  
+        # Constant E and nu fields.
+        if 0 in self.p['uncertainties'] and self.p.constitutive == 'isotropic':
+            self.E = df.fem.Constant(self.experiment.mesh, self.p.E)
+            self.nu = df.fem.Constant(self.experiment.mesh, self.p.nu)
+
+            #self.lambda_ = df.fem.Constant(self.experiment.mesh, E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)))
+            #self.mu = df.fem.Constant(self.experiment.mesh, E / (2.0 * (1.0 + nu)))
 
         if 0 in self.p['uncertainties'] and self.p.constitutive == 'orthotropic':
             #self.E_m = df.fem.Constant(self.experiment.mesh, self.p.E_m)
@@ -50,14 +58,6 @@ class LinearElasticity(MaterialProblem):
             self.E_2 = df.fem.Constant(self.experiment.mesh, self.p.E_2)
             self.nu_12 = df.fem.Constant(self.experiment.mesh, self.p.nu_12)
             self.G_12 = df.fem.Constant(self.experiment.mesh, self.p.G_12)
-        
-        # Constant E and nu fields.
-        if 0 in self.p['uncertainties'] and self.p.constitutive == 'isotropic':
-            self.E = df.fem.Constant(self.experiment.mesh, self.p.E)
-            self.nu = df.fem.Constant(self.experiment.mesh, self.p.nu)
-
-            #self.lambda_ = df.fem.Constant(self.experiment.mesh, E * nu / ((1.0 + nu) * (1.0 - 2.0 * nu)))
-            #self.mu = df.fem.Constant(self.experiment.mesh, E / (2.0 * (1.0 + nu)))
 
         # Random E and nu fields.
         if 1 in self.p['uncertainties']:
@@ -138,7 +138,7 @@ class LinearElasticity(MaterialProblem):
             self.solver.getPC().setType(PETSc.PC.Type.LU)
             #self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=[bc1, bc2], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
         else:
-            self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
+            self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx 
             
             self.bilinear_form = df.fem.form(self.a)
             self.solver = PETSc.KSP().create(self.experiment.mesh.comm)
@@ -265,7 +265,12 @@ class LinearElasticity(MaterialProblem):
             epsilon_voigt = ufl.as_vector([epsilon_tensor[0,0], epsilon_tensor[1,1], 2*epsilon_tensor[0,1]])
             stress_voigt = ufl.dot(c_matrix_voigt, epsilon_voigt) 
             stress_tensor = ufl.as_tensor([[stress_voigt[0], stress_voigt[2]], [stress_voigt[2], stress_voigt[1]]])
-            return stress_tensor
+
+            self.delta_theta = df.fem.Function(self.experiment.V_scalar) #self.V.mesh.geometry.dim
+            self.delta_theta.interpolate(lambda x: 2.0*x[0])
+            #self.delta_theta = df.fem.Constant(self.experiment.mesh, 2.0)
+            self.beta = 0.2
+            return stress_tensor + ufl.inner(self.beta*ufl.Identity(2), self.delta_theta) * ufl.dx
             #return self.lambda_ * ufl.nabla_div(u) * ufl.Identity(u.geometric_dimension()) + 2*self.mu*self.epsilon(u)
     
     def project_fenicsx(self, v, V, dx, u=None):
@@ -308,7 +313,7 @@ class LinearElasticity(MaterialProblem):
             self.displacement.x.scatter_forward()
 
         else:
-            # Assemble the bilinear form A   and apply Dirichlet boundary condition to the matrix
+            # Assemble the bilinear form A and apply Dirichlet boundary condition to the matrix
             self.A = df.fem.petsc.assemble_matrix(self.bilinear_form, bcs=self.experiment.bcs)
             self.A.assemble()
             self.solver.setOperators(self.A)
