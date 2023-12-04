@@ -29,29 +29,8 @@ def add_sensor(length, breadth, _problem, _dirichlet_bdy, _sensors_num_edge_hor,
             _problem.add_sensor(sensor[i])
         return len(sensor)
     
-""" def store_sensor_data(_problem):
-    mydict = {}
-    for i in _problem.sensors:
-       sensor = {i :    
-        {"alphabetical_position" : problem.sensors[i].alphabetical_position,
-         "where" : problem.sensors[i].where[0].tolist(),
-         "data" : problem.sensors[i].data[0].tolist()}
-        } 
-       mydict.update(sensor)
-    json_string = json.dumps(mydict , indent = 3)
-    with open(json_object.get('Data').get('sensor_data'), 'w') as f:
-        f.write(json_string)  """
-    
     
 def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
-    #if dirichlet_bdy == 0:
-    #    dirichlet_bdy = 'left'
-    #prob.p.dirichlet_bdy = dirichlet_bdy
-    #exp.p.dirichlet_bdy = dirichlet_bdy
-    #prob.p.load = load
-    #prob.experiment.bcs = prob.experiment.create_displ_bcs(prob.experiment.V)
-    #prob.apply_neumann_bc()
-    #prob.calculate_bilinear_form()
     prob.solve()
     prob.pv_plot("Displacement.xdmf")
     #store_sensor_data(prob)
@@ -66,14 +45,6 @@ def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
     elif sensor_flag == 0:
         return prob.displacement.x.array
 
-def add_noise_to_data(clean_data, no_of_sensors):
-    #max_disp = np.amax(np.absolute(clean_data))
-    #min_disp = np.amin(np.absolute(clean_data))
-    #print('Max', max_disp, 'Min', min_disp)
-    #if json_object.get('MCMC').get('Error'):
-    #    return clean_data + np.random.normal(0, 0.01 * min_disp, no_of_sensors) ################################################################
-    #else:
-    return clean_data + np.random.normal(0, 1e-5, no_of_sensors)
 
 
 
@@ -87,7 +58,7 @@ p['dim'] = 2
 # Uncertainty type:
 # 0: Constant E and nu fields.
 # 1: Random E and nu fields.
-# 2: Linear Springs.
+# 2: Linear Springs. 
 # 3: Torsion Springs
 p['uncertainties'] = [0]
 #p['k_x'] = 0.5e7
@@ -124,28 +95,12 @@ for i in problem.sensors:
     sensor_positions[counter] = problem.sensors[i].where[0]
     counter += 1
 
-#Sparse data (with sensors)
+problem.solve()
+problem.pv_plot("Displacement.xdmf")
 
-temperature_data = np.arange(15, 35, 5) # in degree celsius
-youngs_modulus = np.zeros(len(temperature_data))
-data = np.zeros((2*test1_sensors_total_num, len(temperature_data)))
-for counter, temp in enumerate(temperature_data):
-    youngs_modulus[counter] = (235 - 0.04 * temp ** 2)*10**9
-    problem.E.value = youngs_modulus[counter] #Remember problem.p.E is still at its initial value.
+#print("works till here")
+#test1_data = run_test(experiment, problem, 0, p['load'] , 1)
 
-    #Adding sensors to the problem definition.
-    #test1_sensors_total_num = add_sensor(problem, 0, sensors_num_edge_hor, sensors_num_edge_ver)
-    #sensor_positions = np.zeros((test1_sensors_total_num, 3))
-    #counter = 0
-    #for i in problem.sensors:
-    #    sensor_positions[counter] = problem.sensors[i].where[0]
-    #    counter += 1
-
-    test1_data = run_test(experiment, problem, 0, p['load'] , 1)
-    test1_x_component = add_noise_to_data(test1_data[:,0], test1_sensors_total_num)
-    test1_y_component = add_noise_to_data(test1_data[:,1], test1_sensors_total_num)
-
-    # Data stored in the form of XYXY components.
-    data[:,counter] = np.vstack((test1_x_component, test1_y_component)).T.flatten()
-
-displacement_data = data.flatten('F')
+#import dolfinx as df
+##from dolfinx.fem.petsc import assemble_matrix
+#help(df.fem.petsc)

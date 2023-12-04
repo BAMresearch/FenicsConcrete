@@ -28,8 +28,11 @@ class concreteSlabExperiment(Experiment):
             exit()
 
         # define function space ets.
-        self.V = df.fem.VectorFunctionSpace(self.mesh, ("Lagrange", self.p.degree)) # 2 for quadratic elements
-        self.V_scalar = df.fem.FunctionSpace(self.mesh, ("Lagrange", self.p.degree))
+        self.V = df.fem.functionspace(self.mesh, ("Lagrange", self.p.degree, (self.mesh.geometry.dim,))) # 2 for quadratic elements
+        self.V_scalar = df.fem.FunctionSpace(self.mesh, ("Lagrange", self.p.degree, (self.mesh.geometry.dim-1,)))
+        
+        #self.V = df.fem.VectorFunctionSpace(self.mesh, ("Lagrange", self.p.degree)) # 2 for quadratic elements
+        #self.V_scalar = df.fem.FunctionSpace(self.mesh, ("Lagrange", self.p.degree))
 
         # boundary conditions only after function space
         self.bcs = self.create_displ_bcs(self.V)
