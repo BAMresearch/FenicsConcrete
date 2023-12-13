@@ -23,6 +23,9 @@ class concreteSlabExperiment(Experiment):
             self.mesh = df.mesh.create_rectangle(comm=MPI.COMM_WORLD,
                             points=((0.0, 0.0), (self.p.length, self.p.breadth)), n=(self.p.num_elements_length, self.p.num_elements_breadth),
                             cell_type=df.mesh.CellType.quadrilateral)
+        elif self.p.dim == 3:
+            self.mesh = df.mesh.create_box(comm=MPI.COMM_WORLD, points=[np.array([0, 0, 0]), np.array([self.p.length, self.p.breadth, self.height])],
+                         n=[self.p.num_elements_length, self.p.num_elements_breadth, self.p.num_elements_height], cell_type=df.mesh.CellType.hexahedron)         
         else:
             print(f'wrong dimension {self.p.dim} for problem setup')
             exit()
@@ -39,15 +42,13 @@ class concreteSlabExperiment(Experiment):
 
     def create_displ_bcs(self, V):
         # define displacement boundary
-
         if self.p.dirichlet_bdy == 'left':
             def clamped_boundary(x):          # fenics will individually call this function for every node and will note the true or false value.
-                return np.isclose(x[0], 0)
-            
-        elif self.p.dirichlet_bdy == 'bottom':
-            def clamped_boundary(x):          # fenics will individually call this function for every node and will note the true or false value.
-                return np.isclose(x[1], 0)
-
+                if self.p.dim == 2:
+                    return np.isclose(x[0], 0)
+                elif self.p.dim == 3:
+                    return np.isclose(x[0], 0) and np.isclose(x[1], 0)
+        
 
         displ_bcs = []
 

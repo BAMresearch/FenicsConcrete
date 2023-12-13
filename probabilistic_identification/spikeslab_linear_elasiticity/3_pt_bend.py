@@ -50,9 +50,10 @@ def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
 p = fenicsX_concrete.Parameters()  # using the current default values
 p['bc_setting'] = 'free'
 p['degree'] = 1
-p['num_elements_length'] = 25
+p['num_elements_length'] = 5
 p['num_elements_breadth'] = 5
-p['dim'] = 2
+p['num_elements_height'] = 10
+p['dim'] = 3
 # Uncertainty type:
 # 0: Constant E and nu fields.
 # 1: Random E and nu fields.
@@ -66,12 +67,14 @@ p['constitutive'] = 'isotropic' #'orthotropic'
 p['nu'] = 0.28
 
 # Kgmms⁻2/mm², mm, kg, sec, N
-p['length'] = 1#1000
+p['length'] = 0.5#1000
 p['breadth'] = 0.05#50
-
+p['height'] = 1
 p['load'] = [0, -2e7] #[1e3, 0] 
-p['lower_limit'] = 0.9*p['length']
-p['upper_limit'] = p['length']
+p['lower_limit_h'] = 0.9*p['height']
+p['upper_limit_h'] = p['height']
+p['lower_limit_l'] = 0*p['length']
+p['upper_limit_l'] = p['length']
 p['rho'] = 7750 #7750e-9 #kg/mm³
 p['g'] = 9.81 #9.81e3 #mm/s² for units to be consistent g must be given in m/s².
 p['E'] = 210e9 #200e6 #Kgmms⁻2/mm² 
@@ -79,19 +82,19 @@ p['E'] = 210e9 #200e6 #Kgmms⁻2/mm²
 p['dirichlet_bdy'] = 'left'
 p['body_force'] = False
 
-sensors_num_edge_hor = 5
-sensors_num_edge_ver = 4
+#sensors_num_edge_hor = 5
+#sensors_num_edge_ver = 4
 
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 
 #Adding sensors to the problem definition.
-test1_sensors_total_num = add_sensor(p['length'], p['breadth'], problem, 0, sensors_num_edge_hor, sensors_num_edge_ver)
-sensor_positions = np.zeros((test1_sensors_total_num, 3))
-counter = 0
-for i in problem.sensors:
-    sensor_positions[counter] = problem.sensors[i].where[0]
-    counter += 1
+#test1_sensors_total_num = add_sensor(p['length'], p['breadth'], problem, 0, sensors_num_edge_hor, sensors_num_edge_ver)
+#sensor_positions = np.zeros((test1_sensors_total_num, 3))
+#counter = 0
+#for i in problem.sensors:
+#    sensor_positions[counter] = problem.sensors[i].where[0]
+#    counter += 1
 
 problem.solve()
 problem.pv_plot("Displacement.xdmf")
