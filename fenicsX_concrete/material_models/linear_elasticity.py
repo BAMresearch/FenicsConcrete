@@ -42,8 +42,10 @@ class LinearElasticity(MaterialProblem):
 
         self.p = default_p + self.p
         self.ds = self.experiment.identify_domain_boundaries() # Domain's boundary
-        self.ds_sub = self.experiment.identify_domain_sub_boundaries(self.p.lower_limit, self.p.upper_limit)
-  
+        #self.ds_sub = self.experiment.identify_domain_sub_boundaries(1, self.p.dim_y, 0, self.p.lower_limit_x, self.p.upper_limit_x)
+        self.ds_sub = self.experiment.identify_domain_sub_boundaries(1, 0, 0, self.p.lower_limit_x, self.p.upper_limit_x, 2, self.p.lower_limit_z, self.p.upper_limit_z)
+        
+
         # Constant E and nu fields.
         if 0 in self.p['uncertainties'] and self.p.constitutive == 'isotropic':
             self.E = df.fem.Constant(self.experiment.mesh, self.p.E)
@@ -158,8 +160,11 @@ class LinearElasticity(MaterialProblem):
     
     def apply_neumann_bc(self):
         # Selects the problem which you want to solve
-        self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
-        self.L =  ufl.dot(self.T, self.v) * self.ds_sub(5)
+        if self.p.dim == 2:
+            self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
+        elif self.p.dim == 3:
+            self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1], self.p.load[2]))) #self.p.load
+        self.L =  ufl.dot(self.T, self.v) * self.ds_sub(1)
 
              
     # Stress computation for linear elastic problem 
