@@ -32,74 +32,60 @@ class concreteSlabExperiment(Experiment):
 
         # define function space ets.
         self.V = df.fem.functionspace(self.mesh, ("Lagrange", self.p.degree, (self.mesh.geometry.dim,))) # 2 for quadratic elements
-        self.V_scalar = df.fem.FunctionSpace(self.mesh, ("Lagrange", self.p.degree, (self.mesh.geometry.dim-1,)))
+        #self.V_scalar = df.fem.FunctionSpace(self.mesh, ("Lagrange", self.p.degree, (self.mesh.geometry.dim-1,)))
 
-        # boundary conditions only after function space
+        # Dirichlet boundary
+        #dirichlet_bdy_1 = self.boundary_locator([2, 0])
+        dirichlet_bdy_sub1 = self.boundary_locator([1, self.p.dim_y, 0, 0, self.p.dim_x, 2, 0.1, 0.2])
+        dirichlet_bdy_sub2 = self.boundary_locator([1, self.p.dim_y, 0, 0, self.p.dim_x, 2, 0.8, 0.9+1e-5])
+
         self.bcs =[]
-        #self.bcs.append(self.create_displ_bcs(self.V, self.p.dirichlet_bc[0], self.p.dirichlet_bc[1])) #2D case example fixing x boundary at location 0
-        #self.bcs.append(self.create_displ_bcs(2, 0))  
-        self.bcs.append(self.create_displ_bcs(1, self.p.dim_y, 0, 0, self.p.dim_x, 2, 0.1, 0.2))
-        self.bcs.append(self.create_displ_bcs(1, self.p.dim_y, 0, 0, self.p.dim_x, 2, 0.8, 0.9))
+        self.bcs.append(self.create_displ_bc(dirichlet_bdy_sub1))
+        self.bcs.append(self.create_displ_bc(dirichlet_bdy_sub2))
+
+
+        dirichlet_bdy = [(1, dirichlet_bdy_sub1),
+                         (2, dirichlet_bdy_sub2)]
         
+        self.create_facet_tag(dirichlet_bdy, "facet_tags_dirichlet.xdmf")
+
+        # Neumann boundary
         
-    def create_displ_bcs(self, *args):
-        # define displacement boundary      
-        def clamped_boundary_2D(x):          # fenics will individually call this function for every node and will note the true or false value.
-            if len(args) == 2:
-                return np.isclose(x[args[0]], args[1])
-            elif len(args) == 5:
-                return np.logical_and(np.logical_and(np.isclose(x[args[0]], args[1]), np.logical_and(x[args[2]]>=args[3] , x[args[2]]<=args[4])), np.logical_and(x[args[5]]>=args[6] , x[args[5]]<=args[7]))
+        neumann_bdy_sub1 = self.boundary_locator([1, 0, 0, self.p.lower_limit_x, self.p.upper_limit_x, 2, self.p.lower_limit_z, self.p.upper_limit_z])
         
-        def clamped_boundary_3D(x):
-            if len(args) == 2:
-                return np.isclose(x[args[0]], args[1])
-            elif len(args) == 8:
-                return np.logical_and(np.logical_and(np.isclose(x[args[0]], args[1]), np.logical_and(x[args[2]]>=args[3] , x[args[2]]<=args[4])), np.logical_and(x[args[5]]>=args[6] , x[args[5]]<=args[7]))
- 
+        neumann_bdy = [(1, neumann_bdy_sub1)]
+
+        self.ds = self.create_facet_tag(neumann_bdy, "facet_tags_neumann.xdmf", True)
+
+
+    def boundary_locator(self, bdy_def):
+        if len(bdy_def) == 2:
+            return lambda x : np.isclose(x[bdy_def[0]], bdy_def[1])
+        
+        elif len(bdy_def) == 5:
+            return lambda x : np.logical_and(np.isclose(x[bdy_def[0]], bdy_def[1]) , np.logical_and(x[bdy_def[2]]>=bdy_def[3] , x[bdy_def[2]]<=bdy_def[4]))
+        
+        elif len(bdy_def) == 8:
+            return lambda x : np.logical_and(np.logical_and(np.isclose(x[bdy_def[0]], bdy_def[1]), 
+                                            np.logical_and(x[bdy_def[2]]>=bdy_def[3] , x[bdy_def[2]]<=bdy_def[4])), 
+                                            np.logical_and(x[bdy_def[5]]>=bdy_def[6] , x[bdy_def[5]]<=bdy_def[7]))
+
+    def create_displ_bc(self, boundary_locator):
         if self.p.dim == 2:
             #displ_bcs.append(df.fem.DirichletBC(V, df.Constant((0, 0)), self.boundary_left()))
-            return(df.fem.dirichletbc(np.array([0, 0], dtype=ScalarType), df.fem.locate_dofs_geometrical(self.V, clamped_boundary_2D), self.V))
+            return(df.fem.dirichletbc(np.array([0, 0], dtype=ScalarType), df.fem.locate_dofs_geometrical(self.V, boundary_locator), self.V))
 
         elif self.p.dim == 3:
-            return (df.fem.dirichletbc(np.array([0, 0, 0], dtype=ScalarType), df.fem.locate_dofs_geometrical(self.V, clamped_boundary_3D), self.V))
+            return (df.fem.dirichletbc(np.array([0, 0, 0], dtype=ScalarType), df.fem.locate_dofs_geometrical(self.V, boundary_locator), self.V))
         
         else:
             print(f'wrong dimension {self.p.dim} for problem setup')
             exit()
-
-
-    def identify_domain_boundaries(self):
-        boundaries = [(1, lambda x: np.isclose(x[0], self.p.dim_x)), # x_upperlimit
-            (2, lambda x: np.isclose(x[0], 0)), # x_lowlimit                              
-            (3, lambda x: np.isclose(x[1], self.p.dim_y)),    # y_upperlimit
-            (4, lambda x: np.isclose(x[1], 0))]   # y_lowlimit
-        if self.p.dim == 3:
-            boundaries.append((5, lambda x: np.isclose(x[2], self.p.dim_z)))   # z_upperlimit
-            boundaries.append((6, lambda x: np.isclose(x[2], 0))) #z_lowlimit
-
-        facet_indices, facet_markers = [], []
-        fdim = self.mesh.topology.dim - 1
-        for (marker, locator) in boundaries:
-            facets = df.mesh.locate_entities(self.mesh, fdim, locator)
-            facet_indices.append(facets)
-            facet_markers.append(np.full_like(facets, marker))
-        facet_indices = np.hstack(facet_indices).astype(np.int32)
-        facet_markers = np.hstack(facet_markers).astype(np.int32)
-        sorted_facets = np.argsort(facet_indices)
-        facet_tag = df.mesh.meshtags(self.mesh, fdim, facet_indices[sorted_facets], facet_markers[sorted_facets])
-
-        _ds = ufl.Measure("ds", domain=self.mesh, subdomain_data=facet_tag)
-        return _ds
     
-    def identify_domain_sub_boundaries(self, *args):
-        if self.p.dim == 2:
-            boundaries = [(1, lambda x: np.logical_and(np.isclose(x[args[0]], args[1]) , np.logical_and(x[args[2]]>=args[3] , x[args[2]]<=args[4])))] # right np.isclose(x[1], self.p.breadth) and 4500<x[0]<5000
-        elif self.p.dim == 3:       
-            boundaries = [(1, lambda x: np.logical_and(np.logical_and(np.isclose(x[args[0]], args[1]), np.logical_and(x[args[2]]>=args[3] , x[args[2]]<=args[4])), np.logical_and(x[args[5]]>=args[6] , x[args[5]]<=args[7])))]
-
+    def create_facet_tag(self, boundary, file_name, ufl_bdy=False):
         facet_indices, facet_markers = [], []
         fdim = self.mesh.topology.dim - 1
-        for (marker, locator) in boundaries:
+        for (marker, locator) in boundary:
             facets = df.mesh.locate_entities(self.mesh, fdim, locator)
             facet_indices.append(facets)
             facet_markers.append(np.full_like(facets, marker))
@@ -109,9 +95,10 @@ class concreteSlabExperiment(Experiment):
         facet_tag = df.mesh.meshtags(self.mesh, fdim, facet_indices[sorted_facets], facet_markers[sorted_facets])
 
         self.mesh.topology.create_connectivity(fdim, self.mesh.topology.dim)
-        with df.io.XDMFFile(self.mesh.comm, "facet_tags.xdmf", "w") as xdmf:
+        with df.io.XDMFFile(self.mesh.comm, file_name, "w") as xdmf:
             xdmf.write_mesh(self.mesh)
             xdmf.write_meshtags(facet_tag,self.mesh.geometry)
         
-        _ds = ufl.Measure("ds", domain=self.mesh, subdomain_data=facet_tag)
-        return _ds
+        if ufl_bdy == True:
+            _ds = ufl.Measure("ds", domain=self.mesh, subdomain_data=facet_tag)
+            return _ds

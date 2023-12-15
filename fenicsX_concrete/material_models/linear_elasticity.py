@@ -40,11 +40,11 @@ class LinearElasticity(MaterialProblem):
     def setup(self):
         default_p = Parameters()
 
-        self.p = default_p + self.p
-        self.ds = self.experiment.identify_domain_boundaries() # Domain's boundary
+        self.p = default_p + self.p 
+        #self.ds = self.experiment.identify_domain_boundaries() # Domain's boundary
         #self.ds_sub = self.experiment.identify_domain_sub_boundaries(1, self.p.dim_y, 0, self.p.lower_limit_x, self.p.upper_limit_x)
-        self.ds_sub = self.experiment.identify_domain_sub_boundaries(1, 0, 0, self.p.lower_limit_x, self.p.upper_limit_x, 2, self.p.lower_limit_z, self.p.upper_limit_z)
         
+        #self.ds = ufl.Measure("ds", domain=self.experiment.mesh)       
 
         # Constant E and nu fields.
         if 0 in self.p['uncertainties'] and self.p.constitutive == 'isotropic':
@@ -164,7 +164,7 @@ class LinearElasticity(MaterialProblem):
             self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
         elif self.p.dim == 3:
             self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1], self.p.load[2]))) #self.p.load
-        self.L =  ufl.dot(self.T, self.v) * self.ds_sub(1)
+        self.L =  ufl.dot(self.T, self.v) * self.experiment.ds(1)
 
              
     # Stress computation for linear elastic problem 
