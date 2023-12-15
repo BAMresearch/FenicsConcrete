@@ -9,6 +9,7 @@ from fenicsX_concrete.material_models.material import MaterialProblem
 from fenicsX_concrete.helpers import Parameters
 import numpy as np
 from petsc4py import PETSc
+from slepc4py import SLEPc
 
 # this is necessary, otherwise this warning will not stop
 # https://fenics.readthedocs.io/projects/ffc/en/latest/_modules/ffc/quadrature/deprecation.html
@@ -41,10 +42,6 @@ class LinearElasticity(MaterialProblem):
         default_p = Parameters()
 
         self.p = default_p + self.p 
-        #self.ds = self.experiment.identify_domain_boundaries() # Domain's boundary
-        #self.ds_sub = self.experiment.identify_domain_sub_boundaries(1, self.p.dim_y, 0, self.p.lower_limit_x, self.p.upper_limit_x)
-        
-        #self.ds = ufl.Measure("ds", domain=self.experiment.mesh)       
 
         # Constant E and nu fields.
         if 0 in self.p['uncertainties'] and self.p.constitutive == 'isotropic':
@@ -74,14 +71,17 @@ class LinearElasticity(MaterialProblem):
         self.u_trial = ufl.TrialFunction(self.experiment.V)
         self.v = ufl.TestFunction(self.experiment.V)
         
+        weight_load = df.fem.Constant(self.experiment.mesh, ScalarType(self.p.weight)) 
+        self.M =  ufl.dot(weight_load, self.v) * ufl.dx
+
         self.apply_neumann_bc()
 
         if self.p.body_force == True:
             if self.p.dim == 2:
-                f = df.fem.Constant(self.experiment.mesh, ScalarType((0, -self.p.rho*self.p.g))) #0, -self.p.rho*self.p.g
+                f = df.fem.Constant(self.experiment.mesh, ScalarType(self.p.weight)) #0, -self.p.rho*self.p.g
                 self.L +=  ufl.dot(f, self.v) * ufl.dx
             elif self.p.dim == 3:
-                f = df.fem.Constant(self.experiment.mesh, ScalarType((0, 0, -self.p.rho*self.p.g))) 
+                f = df.fem.Constant(self.experiment.mesh, ScalarType(self.p.weight)) 
                 self.L +=  ufl.dot(f, self.v) * ufl.dx
             else:
                 raise Exception(f'wrong dimension {self.p.dim} for problem setup') 
@@ -161,12 +161,11 @@ class LinearElasticity(MaterialProblem):
     def apply_neumann_bc(self):
         # Selects the problem which you want to solve
         if self.p.dim == 2:
-            self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1]))) #self.p.load
+            self.T = df.fem.Constant(self.experiment.mesh, ScalarType(self.p.load)) #self.p.load
         elif self.p.dim == 3:
-            self.T = df.fem.Constant(self.experiment.mesh, ScalarType((self.p.load[0], self.p.load[1], self.p.load[2]))) #self.p.load
+            self.T = df.fem.Constant(self.experiment.mesh, ScalarType(self.p.load)) #self.p.load
         self.L =  ufl.dot(self.T, self.v) * self.experiment.ds(1)
 
-             
     # Stress computation for linear elastic problem 
     def epsilon(self, u):
         return ufl.sym(ufl.grad(u)) 
@@ -234,6 +233,33 @@ class LinearElasticity(MaterialProblem):
             # go through all sensors and measure
             self.sensors[sensor_name].measure(self, t)
 
+    def solve_eigenvalue_problem(self,):
+        # Create eigensolver
+        K = assemble_matrix(self.a, bcs=self.experiment.bcs)
+        K.assemble()
+        M = assemble_matrix(self.M, bcs=self.experiment.bcs)
+        M.assemble()
+
+        # Create eigensolver
+        eigensolver = SLEPc.EPS().create(comm=self.experiment.mesh.comm)
+        eigensolver.setOperators(self.K, self.M)
+        eigensolver.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
+
+        tol = 1e-9
+        eigensolver.setTolerances(tol=tol)
+
+        eigensolver.setDimensions(nev=1)
+        eigensolver.solve()
+        eigensolver.view()
+        eigensolver.errorView()
+
+        ## Extract largest eigenpair
+        #r, c, rx, cx = eigensolver.getEigenpair(0)
+        #if self.experiment.mesh.comm.rank == 0:
+        #    print("Largest eigenvalue: ", r)
+        #self.displacement.vector[:] = rx
+        
+
     def pv_plot(self, name, t=0):
         # paraview output
         
@@ -246,24 +272,11 @@ class LinearElasticity(MaterialProblem):
         #with df.io.XDMFFile(self.experiment.mesh.comm, "Strain_DG0.xdmf", "w") as xdmf:
         #    xdmf.write_mesh(self.experiment.mesh)
         #    xdmf.write_function(self.strain_DG0)
-        #
-        #with df.io.XDMFFile(self.experiment.mesh.comm, "Strain_CG1.xdmf", "w") as xdmf:
-        #    xdmf.write_mesh(self.experiment.mesh)
-        #    xdmf.write_function(self.strain_CG1)
 
         # Strain Plot
         #with df.io.XDMFFile(self.experiment.mesh.comm, "Strain.xdmf", "w") as xdmf:
         #    xdmf.write_mesh(self.experiment.mesh)
         #    xdmf.write_function(self.strain)
-        #
-        ## Strain derivative Plot
-        #with df.io.XDMFFile(self.experiment.mesh.comm, "Displacement_Double_Derivative.xdmf", "w") as xdmf:
-        #    xdmf.write_mesh(self.experiment.mesh)
-        #    xdmf.write_function(self.displacement_double_derivative)
-
-        #with df.io.XDMFFile(self.experiment.mesh.comm, "Strain_commonspace.xdmf", "w") as xdmf:
-        #    xdmf.write_mesh(self.experiment.mesh)
-        #    xdmf.write_function(self.strain_commonspace) 
 
         # Youngs Modulus Plot
         #with df.io.XDMFFile(self.experiment.mesh.comm, "Youngs_Modulus.xdmf", "w") as xdmf:

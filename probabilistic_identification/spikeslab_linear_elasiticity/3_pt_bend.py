@@ -74,13 +74,13 @@ p['lower_limit_x'] = 0.5*(p['dim_x'] - 0.1)  #0*p['dim_x']
 p['upper_limit_x'] = 0.5*(p['dim_x'] + 0.1) + 1e-5  #p['dim_x']
 p['lower_limit_z'] = 0.5*(p['dim_z'] - 0.1)  #0.8*p['dim_z']
 p['upper_limit_z'] = 0.5*(p['dim_z'] + 0.1)  #p['dim_z']
-p['rho'] = 7750 #7750e-9 #kg/mm³
-p['g'] = 9.81 #9.81e3 #mm/s² for units to be consistent g must be given in m/s².
 p['E'] = 210e9 #200e6 #Kgmms⁻2/mm² 
 
-p['dirichlet_bc'] = [2, 0] # 1st entry: 0 for x, 1 for y, 2 for z, 2nd entry: location on the axis
-p['body_force'] = False
 
+p['body_force'] = False
+p['rho'] = 7750 #7750e-9 #kg/mm³
+p['g'] = 9.81 #9.81e3 #mm/s² for units to be consistent g must be given in m/s².
+p['weight'] = [0, -p['rho']*p['g'], 0] #Kgmms⁻2/mm²
 #sensors_num_edge_hor = 5
 #sensors_num_edge_ver = 4
 
