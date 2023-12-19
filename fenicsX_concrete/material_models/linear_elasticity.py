@@ -72,7 +72,7 @@ class LinearElasticity(MaterialProblem):
         self.v = ufl.TestFunction(self.experiment.V)
         
         weight_load = df.fem.Constant(self.experiment.mesh, ScalarType(self.p.weight)) 
-        self.M =  ufl.dot(weight_load, self.v) * ufl.dx
+        self.M =  1e-3*ufl.dot(self.v, self.u_trial) * ufl.dx
 
         self.apply_neumann_bc()
 
@@ -235,23 +235,45 @@ class LinearElasticity(MaterialProblem):
 
     def solve_eigenvalue_problem(self,):
         # Create eigensolver
-        K = assemble_matrix(self.a, bcs=self.experiment.bcs)
+        K = assemble_matrix(df.fem.form(self.a), bcs=self.experiment.bcs, diagonal=1)
         K.assemble()
-        M = assemble_matrix(self.M, bcs=self.experiment.bcs)
+        M = assemble_matrix(df.fem.form(self.M), bcs=self.experiment.bcs, diagonal=1) #diagonal=1/62831
         M.assemble()
 
         # Create eigensolver
         eigensolver = SLEPc.EPS().create(comm=self.experiment.mesh.comm)
-        eigensolver.setOperators(self.K, self.M)
-        eigensolver.setProblemType(SLEPc.EPS.ProblemType.GNHEP)
+        eigensolver.setOperators(K, M)
+        eigensolver.setProblemType(SLEPc.EPS.ProblemType.GHEP)
 
-        tol = 1e-9
-        eigensolver.setTolerances(tol=tol)
+        #tol = 1e-9
+        #eigensolver.setTolerances(tol=tol)
 
-        eigensolver.setDimensions(nev=1)
+        #eigensolver.setType(SLEPc.EPS.Type.KRYLOVSCHUR)
+        st = eigensolver.getST()
+        st.setType(SLEPc.ST.Type.SINVERT)
+        st.setShift(0.)
+
+        #st = SLEPc.ST().create(self.experiment.mesh.comm)
+        #st.setType(SLEPc.ST.Type.SINVERT)
+        #st.setShift(0.1)
+        #st.setFromOptions()
+        #eigensolver.setST(st)
+        #eigensolver.setOperators(K, M)
+        #eigensolver.setFromOptions()
+        #eigensolver.setWhichEigenpairs(SLEPc.EPS.Which.TARGET_REAL)
+        #eigensolver.setshift(0.0)
+
+        eigensolver.setDimensions(nev=10)
         eigensolver.solve()
-        eigensolver.view()
-        eigensolver.errorView()
+        print(eigensolver.getConverged())
+        #eigensolver.view()
+        #eigensolver.errorView()
+
+        vals = [(i, np.sqrt(eigensolver.getEigenvalue(i))) for i in range(eigensolver.getConverged())]
+        vals.sort(key=lambda x: x[1].real)
+        #vals = [(i, np.sqrt(-eigensolver.getEigenvalue(i))) for i in range(eigensolver.getConverged())]
+        #print(vals)
+        #eigensolver.getEigenpair
 
         ## Extract largest eigenpair
         #r, c, rx, cx = eigensolver.getEigenpair(0)

@@ -1,0 +1,29 @@
+Help on built-in function getEigenpair:
+
+ggeettEEiiggeennppaaiirr(...) method of slepc4py.SLEPc.EPS instance
+    getEigenpair(self, i: int, Vr: Vec = None, Vi: Vec = None)
+    
+    Gets the i-th solution of the eigenproblem as computed by
+    `solve()`.  The solution consists of both the eigenvalue and
+    the eigenvector.
+    
+    Parameters
+    ----------
+    i: int
+       Index of the solution to be obtained.
+    Vr: Vec
+        Placeholder for the returned eigenvector (real part).
+    Vi: Vec
+        Placeholder for the returned eigenvector (imaginary part).
+    
+    Returns
+    -------
+    e: scalar (possibly complex)
+       The computed eigenvalue.
+    
+    Notes
+    -----
+    The index ``i`` should be a value between ``0`` and
+    ``nconv-1`` (see `getConverged()`). Eigenpairs are indexed
+    according to the ordering criterion established with
+    `setWhichEigenpairs()`.

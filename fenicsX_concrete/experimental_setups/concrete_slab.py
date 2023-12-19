@@ -35,17 +35,18 @@ class concreteSlabExperiment(Experiment):
         #self.V_scalar = df.fem.FunctionSpace(self.mesh, ("Lagrange", self.p.degree, (self.mesh.geometry.dim-1,)))
 
         # Dirichlet boundary
-        #dirichlet_bdy_1 = self.boundary_locator([2, 0])
-        dirichlet_bdy_sub1 = self.boundary_locator([1, self.p.dim_y, 0, 0, self.p.dim_x, 2, 0.1, 0.2])
-        dirichlet_bdy_sub2 = self.boundary_locator([1, self.p.dim_y, 0, 0, self.p.dim_x, 2, 0.8, 0.9+1e-5])
+        dirichlet_bdy_sub1 = self.boundary_locator([2, 0])
+        #dirichlet_bdy_sub1 = self.boundary_locator([1, self.p.dim_y, 0, 0, self.p.dim_x, 2, 0.1, 0.2])
+        #dirichlet_bdy_sub2 = self.boundary_locator([1, self.p.dim_y, 0, 0, self.p.dim_x, 2, 0.8, 0.9+1e-5])
 
         self.bcs =[]
         self.bcs.append(self.create_displ_bc(dirichlet_bdy_sub1))
-        self.bcs.append(self.create_displ_bc(dirichlet_bdy_sub2))
+        #self.bcs.append(self.create_displ_bc(dirichlet_bdy_sub2))
 
+        dirichlet_bdy = [(1, dirichlet_bdy_sub1),]
 
-        dirichlet_bdy = [(1, dirichlet_bdy_sub1),
-                         (2, dirichlet_bdy_sub2)]
+        #dirichlet_bdy = [(1, dirichlet_bdy_sub1),
+        #                 (2, dirichlet_bdy_sub2)]
         
         self.create_facet_tag(dirichlet_bdy, "facet_tags_dirichlet.xdmf")
 
