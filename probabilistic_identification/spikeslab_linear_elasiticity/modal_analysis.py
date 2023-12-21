@@ -47,38 +47,40 @@ def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
 
 
 p = fenicsX_concrete.Parameters()  # using the current default values
+p['bc_setting'] = 'free'
+p['degree'] = 1
+p['num_elements_z'] = 150
+p['num_elements_x'] = int(0.5/20*p['num_elements_z'])+1
+p['num_elements_y'] = int(1/20*p['num_elements_z'])+1#4
+#p['num_elements_z'] = 30#20
+p['dim'] = 3
 # Uncertainty type:
 # 0: Constant E and nu fields.
 # 1: Random E and nu fields.
 # 2: Linear Springs. 
 # 3: Torsion Springs
 p['uncertainties'] = [0]
+#p['k_x'] = 0.5e7
 #p['k_y'] = 0.5e7
 
 p['constitutive'] = 'isotropic' #'orthotropic' 
-p['nu'] = 0. #0.28
+p['nu'] = 0.#0.28
 
 
 # Kgmms⁻2/mm², mm, kg, sec, N
-p['dim_x'] = 0.5 #1#
-p['dim_y'] = 0.05 #0.5#
-p['dim_z'] = 1. #20#
+p['dim_x'] = 0.5#0.5
+p['dim_y'] = 1#0.05
+p['dim_z'] = 20.#1.
 p['load'] = [0, 2e7, 0] #[1e3, 0] 
 p['lower_limit_x'] = 0.5*(p['dim_x'] - 0.1)  #0*p['dim_x']
 p['upper_limit_x'] = 0.5*(p['dim_x'] + 0.1) + 1e-5  #p['dim_x']
 p['lower_limit_z'] = 0.5*(p['dim_z'] - 0.1)  #0.8*p['dim_z']
 p['upper_limit_z'] = 0.5*(p['dim_z'] + 0.1)  #p['dim_z']
-p['E'] = 210e9 #200e6 #Kgmms⁻2/mm² 1e5#
+p['E'] = 1e5#210e9 #200e6 #Kgmms⁻2/mm² 
 
-p['bc_setting'] = 'free'
-p['degree'] = 1
-p['num_elements_x'] = int(p['dim_x']/p['dim_z']*100)+1
-p['num_elements_y'] = int(p['dim_y']/p['dim_z']*100)+1
-p['num_elements_z'] = 100#100#20
-p['dim'] = 3
 
 p['body_force'] = False
-p['rho'] = 7750 #7750e-9 #kg/mm³ 1e-3#
+p['rho'] = 7750 #7750e-9 #kg/mm³
 p['g'] = 9.81 #9.81e3 #mm/s² for units to be consistent g must be given in m/s².
 p['weight'] = [0, -p['rho']*p['g'], 0] #Kgmms⁻2/mm²
 #sensors_num_edge_hor = 5
@@ -95,10 +97,11 @@ problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the 
 #    sensor_positions[counter] = problem.sensors[i].where[0]
 #    counter += 1
 
-#problem.solve()
+problem.solve()
 problem.solve_eigenvalue_problem()
-problem.pv_eigenvalue_plot()
 #problem.pv_plot("Displacement.xdmf")
+problem.pv_eigenvalue_plot()
+#print("works till here")
 #test1_data = run_test(experiment, problem, 0, p['load'] , 1)
 
 #import dolfinx as df

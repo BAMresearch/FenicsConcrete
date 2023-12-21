@@ -7,29 +7,7 @@ import numpy as np
 import fenicsX_concrete
 import json 
 
-#with open('test_config.json', 'r') as f: 
-#    json_object = json.loads(f.read()) 
 
-# Adding sensors to the problem definition.
-def add_sensor(length, breadth, _problem, _dirichlet_bdy, _sensors_num_edge_hor, _sensors_num_edge_ver): 
-    sensor = []
-    if _dirichlet_bdy == 0: #'left'
-        for i in range(_sensors_num_edge_hor): 
-            #print((p['length']*(i+1))/_sensors_num_edge_hor) #p['length']
-            x_coord = (length*(i+1))/_sensors_num_edge_hor
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[x_coord, 0, 0]]), 'top')) #1/20
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[x_coord, breadth, 0]]), 'bottom'))
-        
-        for i in range(_sensors_num_edge_ver):
-            #print((p['breadth']*(i+1))/(_sensors_num_edge_ver+1))
-            y_coord = (breadth*(i+1))/(_sensors_num_edge_ver+1)
-            sensor.append(fenicsX_concrete.sensors.DisplacementSensor(np.array([[length, y_coord, 0]]), 'right'))
-
-        for i in range(len(sensor)):
-            _problem.add_sensor(sensor[i])
-        return len(sensor)
-    
-    
 def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
     prob.solve()
     prob.pv_plot("Displacement.xdmf")
@@ -47,6 +25,12 @@ def run_test(exp, prob, dirichlet_bdy, load, sensor_flag = 0):
 
 
 p = fenicsX_concrete.Parameters()  # using the current default values
+p['bc_setting'] = 'free'
+p['degree'] = 1
+p['num_elements_x'] = 10
+p['num_elements_y'] = 4
+p['num_elements_z'] = 30#20
+p['dim'] = 3
 # Uncertainty type:
 # 0: Constant E and nu fields.
 # 1: Random E and nu fields.
@@ -56,29 +40,23 @@ p['uncertainties'] = [0]
 #p['k_y'] = 0.5e7
 
 p['constitutive'] = 'isotropic' #'orthotropic' 
-p['nu'] = 0. #0.28
+p['nu'] = 0.28#0.28
 
 
 # Kgmms⁻2/mm², mm, kg, sec, N
-p['dim_x'] = 0.5 #1#
-p['dim_y'] = 0.05 #0.5#
-p['dim_z'] = 1. #20#
+p['dim_x'] = 0.5
+p['dim_y'] = 0.05
+p['dim_z'] = 1.
 p['load'] = [0, 2e7, 0] #[1e3, 0] 
 p['lower_limit_x'] = 0.5*(p['dim_x'] - 0.1)  #0*p['dim_x']
 p['upper_limit_x'] = 0.5*(p['dim_x'] + 0.1) + 1e-5  #p['dim_x']
 p['lower_limit_z'] = 0.5*(p['dim_z'] - 0.1)  #0.8*p['dim_z']
 p['upper_limit_z'] = 0.5*(p['dim_z'] + 0.1)  #p['dim_z']
-p['E'] = 210e9 #200e6 #Kgmms⁻2/mm² 1e5#
+p['E'] = 210e9 #200e6 #Kgmms⁻2/mm² 
 
-p['bc_setting'] = 'free'
-p['degree'] = 1
-p['num_elements_x'] = int(p['dim_x']/p['dim_z']*100)+1
-p['num_elements_y'] = int(p['dim_y']/p['dim_z']*100)+1
-p['num_elements_z'] = 100#100#20
-p['dim'] = 3
 
 p['body_force'] = False
-p['rho'] = 7750 #7750e-9 #kg/mm³ 1e-3#
+p['rho'] = 7750 #7750e-9 #kg/mm³
 p['g'] = 9.81 #9.81e3 #mm/s² for units to be consistent g must be given in m/s².
 p['weight'] = [0, -p['rho']*p['g'], 0] #Kgmms⁻2/mm²
 #sensors_num_edge_hor = 5
@@ -95,7 +73,7 @@ problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the 
 #    sensor_positions[counter] = problem.sensors[i].where[0]
 #    counter += 1
 
-#problem.solve()
+problem.solve()
 problem.solve_eigenvalue_problem()
 problem.pv_eigenvalue_plot()
 #problem.pv_plot("Displacement.xdmf")

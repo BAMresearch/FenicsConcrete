@@ -10,6 +10,8 @@ from fenicsX_concrete.helpers import Parameters
 import numpy as np
 from petsc4py import PETSc
 from slepc4py import SLEPc
+from scipy.optimize import root
+import math
 
 # this is necessary, otherwise this warning will not stop
 # https://fenics.readthedocs.io/projects/ffc/en/latest/_modules/ffc/quadrature/deprecation.html
@@ -72,7 +74,7 @@ class LinearElasticity(MaterialProblem):
         self.v = ufl.TestFunction(self.experiment.V)
         
         weight_load = df.fem.Constant(self.experiment.mesh, ScalarType(self.p.weight)) 
-        self.M =  1e-3*ufl.dot(self.v, self.u_trial) * ufl.dx
+        self.M =  self.p.rho*ufl.dot(self.v, self.u_trial) * ufl.dx
 
         self.apply_neumann_bc()
 
@@ -145,8 +147,11 @@ class LinearElasticity(MaterialProblem):
         self.nu_randomfield = self.random_field_generator(self.field_function_space,'squared_exp', Nu_mean, 0.3, 0.05, Nu_variance, 3, 0.01)
         self.nu_randomfield.create_random_field(_type='random', _dist='LN')
 
-        lame1 = (self.E_randomfield.field.vector[:] * self.nu_randomfield.field.vector[:])/((1 + self.nu_randomfield.field.vector[:])*(1-2*self.nu_randomfield.field.vector[:]))
-        lame2 = self.E_randomfield.field.vector[:]/(2*(1+self.nu_randomfield.field.vector[:]))
+        lame1 = (self.E_randomfield.field.vector.array * self.nu_randomfield.field.vector.array)/((1 + self.nu_randomfield.field.vector.array)*(1-2*self.nu_randomfield.field.vector.array))
+        lame2 = self.E_randomfield.field.vector.array/(2*(1+self.nu_randomfield.field.vector.array))
+
+        #lame1 = (self.E_randomfield.field.vector[:] * self.nu_randomfield.field.vector[:])/((1 + self.nu_randomfield.field.vector[:])*(1-2*self.nu_randomfield.field.vector[:]))
+        #lame2 = self.E_randomfield.field.vector[:]/(2*(1+self.nu_randomfield.field.vector[:]))
         return lame1, lame2
     
     def calculate_bilinear_form(self):
@@ -169,6 +174,17 @@ class LinearElasticity(MaterialProblem):
     # Stress computation for linear elastic problem 
     def epsilon(self, u):
         return ufl.sym(ufl.grad(u)) 
+    
+    def damage_coordinate(self, z_coordinate):
+
+        def damage_basis_function(x,t=z_coordinate):
+            size_x = x.shape[1]
+            damage_field = np.zeros(size_x)
+            damage_region_quadrature_pts = np.where((x[2,:] <= t + 0.05) & (x[2,:] >= t - 0.05))
+            damage_field[damage_region_quadrature_pts] =   np.exp(-(x[2,[damage_region_quadrature_pts]]-t)**2/0.05**2) 
+            return damage_field
+     
+        return damage_basis_function
 
     #Deterministic
     def sigma(self, u):
@@ -178,7 +194,25 @@ class LinearElasticity(MaterialProblem):
             #self.delta_theta = df.fem.Constant(self.experiment.mesh, 5.0)
             #self.beta = 0.2
             #return stress_tensor #+ ufl.Identity(len(u))*self.delta_theta*self.beta
-            return self.lambda_ * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2*self.mu*self.epsilon(u) #+ ufl.Identity(len(u))*self.delta_theta*self.beta
+            #function_space_scalar = df.fem.functionspace(self.experiment.mesh, ("Lagrange", self.p.degree, (1,)))
+            V_scalar = df.fem.functionspace(self.experiment.mesh, ("Lagrange", 1))
+            
+
+            damage_locations = [0.3, 0.7]
+            damage_basis_functions = []
+            xdmf = df.io.XDMFFile(self.experiment.mesh.comm, "damage_distribution.xdmf", "w")
+            xdmf.write_mesh(self.experiment.mesh)
+
+            for counter, value in enumerate(damage_locations):
+                damage_basis_functions.append(df.fem.Function(V_scalar))
+                damage_basis_functions[counter].interpolate(self.damage_coordinate(value)) #interpolates the damage basis function over the domain
+                xdmf.write_function(damage_basis_functions[counter], counter)
+
+            xdmf.close()
+
+            omega = 0.#sum(damage_basis_functions)
+            unity = df.fem.Constant(self.experiment.mesh, 1.0) #(unity - omega) * 
+            return  (unity-omega)*(self.lambda_ * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2 * self.mu*self.epsilon(u)) #+ ufl.Identity(len(u))*self.delta_theta*self.beta
 
         elif self.p.constitutive == 'orthotropic':    
             denominator = self.E_1 - self.E_2*self.nu_12**2
@@ -198,11 +232,10 @@ class LinearElasticity(MaterialProblem):
             return stress_tensor
         
     def solve(self, t=1.0):  
-        if 0 in self.p['uncertainties']:
-            problem = LinearProblem(self.a, self.L, bcs=self.experiment.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
-            self.displacement = problem.solve()
+        problem = LinearProblem(self.a, self.L, bcs=self.experiment.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        self.displacement = problem.solve()
 
-        elif 2 in self.p['uncertainties']:
+        if 2 in self.p['uncertainties']:
             # Assemble the bilinear form A   and apply Dirichlet boundary condition to the matrix
             self.A = df.fem.petsc.assemble_matrix(self.bilinear_form, bcs=[] ) 
             self.A.assemble()
@@ -235,21 +268,21 @@ class LinearElasticity(MaterialProblem):
 
     def solve_eigenvalue_problem(self,):
         # Create eigensolver
-        K = assemble_matrix(df.fem.form(self.a), bcs=self.experiment.bcs, diagonal=1)
-        K.assemble()
-        M = assemble_matrix(df.fem.form(self.M), bcs=self.experiment.bcs, diagonal=1) #diagonal=1/62831
-        M.assemble()
+        self.stiffness_matrix = assemble_matrix(df.fem.form(self.a), bcs=self.experiment.bcs, diagonal=1)
+        self.stiffness_matrix.assemble()
+        self.mass_matrix = assemble_matrix(df.fem.form(self.M), bcs=self.experiment.bcs, diagonal=1) #diagonal=1/62831
+        self.mass_matrix.assemble()
 
         # Create eigensolver
-        eigensolver = SLEPc.EPS().create(comm=self.experiment.mesh.comm)
-        eigensolver.setOperators(K, M)
-        eigensolver.setProblemType(SLEPc.EPS.ProblemType.GHEP)
+        self.eigensolver = SLEPc.EPS().create(comm=self.experiment.mesh.comm)
+        self.eigensolver.setOperators(self.stiffness_matrix, self.mass_matrix)
+        self.eigensolver.setProblemType(SLEPc.EPS.ProblemType.GHEP)
 
         #tol = 1e-9
         #eigensolver.setTolerances(tol=tol)
 
         #eigensolver.setType(SLEPc.EPS.Type.KRYLOVSCHUR)
-        st = eigensolver.getST()
+        st = self.eigensolver.getST()
         st.setType(SLEPc.ST.Type.SINVERT)
         st.setShift(0.)
 
@@ -263,23 +296,101 @@ class LinearElasticity(MaterialProblem):
         #eigensolver.setWhichEigenpairs(SLEPc.EPS.Which.TARGET_REAL)
         #eigensolver.setshift(0.0)
 
-        eigensolver.setDimensions(nev=10)
-        eigensolver.solve()
-        print(eigensolver.getConverged())
+        self.eigensolver.setDimensions(nev=65)
+        self.eigensolver.solve()
+        self.eigensolver.view()
+        self.eigensolver.errorView()
+        #print(self.eigensolver.getConverged())
+        
         #eigensolver.view()
         #eigensolver.errorView()
 
-        vals = [(i, np.sqrt(eigensolver.getEigenvalue(i))) for i in range(eigensolver.getConverged())]
-        vals.sort(key=lambda x: x[1].real)
-        #vals = [(i, np.sqrt(-eigensolver.getEigenvalue(i))) for i in range(eigensolver.getConverged())]
-        #print(vals)
-        #eigensolver.getEigenpair
+        #vals = [(i, np.sqrt(eigensolver.getEigenvalue(i))) for i in range(eigensolver.getConverged())]
+        #vals.sort(key=lambda x: x[1].real)
+    def pv_eigenvalue_plot(self, t=0):
+        xdmf = df.io.XDMFFile(self.experiment.mesh.comm, "eigenvector.xdmf", "w")
+        xdmf.write_mesh(self.experiment.mesh)
+        eig_v = []
+        ef = 0 
+        evs = self.eigensolver.getConverged()
+        print("Number of converged eigenpairs %d" % evs)
+        ur = df.fem.Function(self.experiment.V)
+        vr, vi = self.stiffness_matrix.createVecs()
 
-        ## Extract largest eigenpair
-        #r, c, rx, cx = eigensolver.getEigenpair(0)
-        #if self.experiment.mesh.comm.rank == 0:
-        #    print("Largest eigenvalue: ", r)
-        #self.displacement.vector[:] = rx
+        
+        falpha = lambda x: math.cos(x)*math.cosh(x)+1
+        alpha = lambda n: root(falpha, (2*n+1)*math.pi/2.)['x'][0]
+
+        if evs > 0:
+
+            for i in range(evs): #evs          
+                eigen_value =self.eigensolver.getEigenpair(i, vr, vi)
+                
+                if (~np.isclose(eigen_value.real, 1.0)):
+                    #Calculation of eigenfrequency from real part of eigenvalue
+                    freq_3D = np.sqrt(eigen_value.real)/2/np.pi
+
+                    # Beam eigenfrequency
+                    if ef % 2 == 0:
+                        # exact solution should correspond to weak axis bending
+                        I_bend = self.p.dim_x*self.p.dim_y**3/12.
+                    else:
+                        # exact solution should correspond to strong axis bending
+                        I_bend = self.p.dim_y*self.p.dim_x**3/12.
+
+                    freq_beam = alpha(ef/2)**2*np.sqrt(self.p.E*I_bend/(self.p.rho*self.p.dim_x*self.p.dim_y*self.p.dim_z**4))/2/np.pi
+
+                    print(
+                        "Solid FE: {0:8.5f} [Hz] "
+                        "Beam theory: {1:8.5f} [Hz]".format(freq_3D, freq_beam))
+
+                    #ur = df.fem.Function(self.experiment.V)
+                    ur.vector.array[:] = vr
+                    xdmf.write_function(ur,ef)
+                    #xdmf.write_function(ur.copy())
+                    #eig_v.append(vr.copy())
+                    ef += 1
+        xdmf.close()
+
+    def pv_eigenvalue_plotly(self, t=0):
+        xdmf = df.io.XDMFFile(self.experiment.mesh.comm, "eigenvector.xdmf", "w")
+        xdmf.write_mesh(self.experiment.mesh)
+        eig_v = []
+        ef = 0 
+        evs = self.eigensolver.getConverged()
+        print("Number of converged eigenpairs %d" % evs)
+        ur = df.fem.Function(self.experiment.V)
+        vr, vi = self.stiffness_matrix.createVecs()
+        if evs > 0:
+        
+            for i in range(55,evs): #evs          
+                self.eigensolver.getEigenpair(i, vr, vi)
+                
+                #if (~np.isclose(e_val.real, 1.0)):
+                    #Calculation of eigenfrequency from real part of eigenvalue
+                    #freq_3D = np.sqrt(e_val.real)/2/np.pi
+
+                    # Beam eigenfrequency
+                    #if ef % 2 == 0:
+                        # exact solution should correspond to weak axis bending
+                    #    I_bend = H*B**3/12.
+                    #else:
+                        # exact solution should correspond to strong axis bending
+                    #    I_bend = B*H**3/12.
+
+                    #freq_beam = alpha(ef/2)**2*np.sqrt(E*I_bend/(rho*B*H*L**4))/2/np.pi
+
+                    #print(
+                    #    "Solid FE: {0:8.5f} [Hz] "
+                    #    "Beam theory: {1:8.5f} [Hz]".format(freq_3D, freq_beam))
+
+                #ur = df.fem.Function(self.experiment.V)
+                ur.vector.array[:] = vr
+                xdmf.write_function(ur,ef)
+                #xdmf.write_function(ur.copy())
+                #eig_v.append(vr.copy())
+                ef += 1
+        xdmf.close()
         
 
     def pv_plot(self, name, t=0):

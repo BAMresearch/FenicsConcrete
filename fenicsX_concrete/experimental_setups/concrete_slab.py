@@ -32,7 +32,7 @@ class concreteSlabExperiment(Experiment):
 
         # define function space ets.
         self.V = df.fem.functionspace(self.mesh, ("Lagrange", self.p.degree, (self.mesh.geometry.dim,))) # 2 for quadratic elements
-        #self.V_scalar = df.fem.FunctionSpace(self.mesh, ("Lagrange", self.p.degree, (self.mesh.geometry.dim-1,)))
+        #self.V_scalar = df.fem.functionspace(self.mesh, ("Lagrange", self.p.degree, (self.mesh.geometry.dim-1,)))
 
         # Dirichlet boundary
         dirichlet_bdy_sub1 = self.boundary_locator([2, 0])
