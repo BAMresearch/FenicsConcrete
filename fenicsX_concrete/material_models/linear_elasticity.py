@@ -180,8 +180,10 @@ class LinearElasticity(MaterialProblem):
         def damage_basis_function(x,t=z_coordinate):
             size_x = x.shape[1]
             damage_field = np.zeros(size_x)
-            damage_region_quadrature_pts = np.where((x[2,:] <= t + 0.05) & (x[2,:] >= t - 0.05))
-            damage_field[damage_region_quadrature_pts] =   np.exp(-(x[2,[damage_region_quadrature_pts]]-t)**2/0.05**2) 
+            damage_affected_region = 0.05
+            k = -(damage_affected_region - t)**2/math.log(0.0001)
+            damage_region_quadrature_pts = np.where((x[2,:] < t + damage_affected_region) & (x[2,:] > t - damage_affected_region))
+            damage_field[damage_region_quadrature_pts] =   np.exp(-(x[2,[damage_region_quadrature_pts]]-t)**2/k) 
             return damage_field
      
         return damage_basis_function
@@ -210,7 +212,7 @@ class LinearElasticity(MaterialProblem):
 
             xdmf.close()
 
-            omega = 0.#sum(damage_basis_functions)
+            omega = sum(damage_basis_functions)
             unity = df.fem.Constant(self.experiment.mesh, 1.0) #(unity - omega) * 
             return  (unity-omega)*(self.lambda_ * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2 * self.mu*self.epsilon(u)) #+ ufl.Identity(len(u))*self.delta_theta*self.beta
 
@@ -266,6 +268,7 @@ class LinearElasticity(MaterialProblem):
             # go through all sensors and measure
             self.sensors[sensor_name].measure(self, t)
 
+
     def solve_eigenvalue_problem(self,):
         # Create eigensolver
         self.stiffness_matrix = assemble_matrix(df.fem.form(self.a), bcs=self.experiment.bcs, diagonal=1)
@@ -307,6 +310,8 @@ class LinearElasticity(MaterialProblem):
 
         #vals = [(i, np.sqrt(eigensolver.getEigenvalue(i))) for i in range(eigensolver.getConverged())]
         #vals.sort(key=lambda x: x[1].real)
+
+
     def pv_eigenvalue_plot(self, t=0):
         xdmf = df.io.XDMFFile(self.experiment.mesh.comm, "eigenvector.xdmf", "w")
         xdmf.write_mesh(self.experiment.mesh)
@@ -350,48 +355,7 @@ class LinearElasticity(MaterialProblem):
                     #xdmf.write_function(ur.copy())
                     #eig_v.append(vr.copy())
                     ef += 1
-        xdmf.close()
-
-    def pv_eigenvalue_plotly(self, t=0):
-        xdmf = df.io.XDMFFile(self.experiment.mesh.comm, "eigenvector.xdmf", "w")
-        xdmf.write_mesh(self.experiment.mesh)
-        eig_v = []
-        ef = 0 
-        evs = self.eigensolver.getConverged()
-        print("Number of converged eigenpairs %d" % evs)
-        ur = df.fem.Function(self.experiment.V)
-        vr, vi = self.stiffness_matrix.createVecs()
-        if evs > 0:
-        
-            for i in range(55,evs): #evs          
-                self.eigensolver.getEigenpair(i, vr, vi)
-                
-                #if (~np.isclose(e_val.real, 1.0)):
-                    #Calculation of eigenfrequency from real part of eigenvalue
-                    #freq_3D = np.sqrt(e_val.real)/2/np.pi
-
-                    # Beam eigenfrequency
-                    #if ef % 2 == 0:
-                        # exact solution should correspond to weak axis bending
-                    #    I_bend = H*B**3/12.
-                    #else:
-                        # exact solution should correspond to strong axis bending
-                    #    I_bend = B*H**3/12.
-
-                    #freq_beam = alpha(ef/2)**2*np.sqrt(E*I_bend/(rho*B*H*L**4))/2/np.pi
-
-                    #print(
-                    #    "Solid FE: {0:8.5f} [Hz] "
-                    #    "Beam theory: {1:8.5f} [Hz]".format(freq_3D, freq_beam))
-
-                #ur = df.fem.Function(self.experiment.V)
-                ur.vector.array[:] = vr
-                xdmf.write_function(ur,ef)
-                #xdmf.write_function(ur.copy())
-                #eig_v.append(vr.copy())
-                ef += 1
-        xdmf.close()
-        
+        xdmf.close()   
 
     def pv_plot(self, name, t=0):
         # paraview output

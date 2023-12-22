@@ -35,26 +35,23 @@ class concreteSlabExperiment(Experiment):
         #self.V_scalar = df.fem.functionspace(self.mesh, ("Lagrange", self.p.degree, (self.mesh.geometry.dim-1,)))
 
         # Dirichlet boundary
-        dirichlet_bdy_sub1 = self.boundary_locator([2, 0])
-        #dirichlet_bdy_sub1 = self.boundary_locator([1, self.p.dim_y, 0, 0, self.p.dim_x, 2, 0.1, 0.2])
-        #dirichlet_bdy_sub2 = self.boundary_locator([1, self.p.dim_y, 0, 0, self.p.dim_x, 2, 0.8, 0.9+1e-5])
 
+        dirichlet_bdy = []
         self.bcs =[]
-        self.bcs.append(self.create_displ_bc(dirichlet_bdy_sub1))
-        #self.bcs.append(self.create_displ_bc(dirichlet_bdy_sub2))
 
-        dirichlet_bdy = [(1, dirichlet_bdy_sub1),]
-
-        #dirichlet_bdy = [(1, dirichlet_bdy_sub1),
-        #                 (2, dirichlet_bdy_sub2)]
+        for counter, location in enumerate(self.p.dirichlet_bdy, 1):
+            sub_boundary = self.boundary_locator(location)
+            dirichlet_bdy.append((counter, sub_boundary))
+            self.bcs.append(self.create_displ_bc(sub_boundary))
         
         self.create_facet_tag(dirichlet_bdy, "facet_tags_dirichlet.xdmf")
 
         # Neumann boundary
-        
-        neumann_bdy_sub1 = self.boundary_locator([1, 0, 0, self.p.lower_limit_x, self.p.upper_limit_x, 2, self.p.lower_limit_z, self.p.upper_limit_z])
-        
-        neumann_bdy = [(1, neumann_bdy_sub1)]
+
+        neumann_bdy = []
+
+        for counter, location in enumerate(self.p.neumann_bdy, 1):
+            neumann_bdy.append((counter, self.boundary_locator(location)))
 
         self.ds = self.create_facet_tag(neumann_bdy, "facet_tags_neumann.xdmf", True)
 
