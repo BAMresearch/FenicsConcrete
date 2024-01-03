@@ -55,28 +55,31 @@ p = fenicsX_concrete.Parameters()  # using the current default values
 p['uncertainties'] = [0]
 #p['k_y'] = 0.5e7
 
-p['constitutive'] = 'isotropic' #'orthotropic' 
-p['nu'] = 0.28
 
+# Geometry
 # Kgmms⁻2/mm², mm, kg, sec, N
+p['dim'] = 3
 p['dim_x'] = 0.5 #1#
 p['dim_y'] = 0.05 #0.5#
 p['dim_z'] = 1. #20#
-p['E'] = 100e7 #210e9 #200e6 #Kgmms⁻2/mm² 1e5#
 
-p['bc_setting'] = 'free'
+# Material properties
+p['constitutive'] = 'isotropic' #'orthotropic' 
+p['E'] = 35e9 #210e9 #200e6 #Kgmms⁻2/mm² 1e5#
+p['nu'] = 0.2 #0.28
+
+# Mesh
+#p['bc_setting'] = 'free'
 p['degree'] = 1
-p['num_elements_x'] = int(p['dim_x']/p['dim_z']*45)+1
-p['num_elements_y'] = int(p['dim_y']/p['dim_z']*45)+1
-p['num_elements_z'] = 45#100#20
-p['dim'] = 3
+p['num_elements_z'] = 45
+p['num_elements_x'] = int(p['dim_x']/p['dim_z']*p['num_elements_z'])+1
+p['num_elements_y'] = int(p['dim_y']/p['dim_z']*p['num_elements_z'])+1
 
+# Gravity
 p['body_force'] = False
 p['rho'] = 2500 #7750 #7750e-9 #kg/mm³ 1e-3#
 p['g'] = 9.81 #9.81e3 #mm/s² for units to be consistent g must be given in m/s².
 p['weight'] = [0, -p['rho']*p['g'], 0] #Kgmms⁻2/mm²
-#sensors_num_edge_hor = 5
-#sensors_num_edge_ver = 4
 
 #Dirichlet Boundary
 p['dirichlet_bdy'] = [[2, 0]]
@@ -90,10 +93,13 @@ p['upper_limit_x'] = 0.5*(p['dim_x'] + 0.1) + 1e-5  #p['dim_x']
 p['lower_limit_z'] = 0.5*(p['dim_z'] - 0.1)  #0.8*p['dim_z']
 p['upper_limit_z'] = 0.5*(p['dim_z'] + 0.1)  #p['dim_z']
 p['neumann_bdy'] = [[1, 0, 0, p['lower_limit_x'], p['upper_limit_x'], 2, p['lower_limit_z'], p['upper_limit_z']]]
+p['damage_locations'] = [0.3, 0.7]
 
 experiment = fenicsX_concrete.concreteSlabExperiment(p)         # Specifies the domain, discretises it and apply Dirichlet BCs
 problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the material law and weak forms.
 
+#sensors_num_edge_hor = 5
+#sensors_num_edge_ver = 4
 #Adding sensors to the problem definition.
 #test1_sensors_total_num = add_sensor(p['length'], p['breadth'], problem, 0, sensors_num_edge_hor, sensors_num_edge_ver)
 #sensor_positions = np.zeros((test1_sensors_total_num, 3))
@@ -103,11 +109,12 @@ problem = fenicsX_concrete.LinearElasticity(experiment, p)      # Specifies the 
 #    counter += 1
 
 #problem.solve()
-#problem.solve_eigenvalue_problem()
-problem.pv_eigenvalue_plot()
-problem.pv_plot("Displacement.xdmf")
+#problem.pv_plot("Displacement.xdmf")
+problem.solve_eigenvalue_problem()
+problem.pv_eigenvalue_plot("eigenvectors_1.xdmf")
+problem.damage_locations.value = [0.1, 0.9]
+problem.add_damage()
+problem.solve_eigenvalue_problem()
+problem.pv_eigenvalue_plot("eigenvectors_2.xdmf")
 #test1_data = run_test(experiment, problem, 0, p['load'] , 1)
 
-#import dolfinx as df
-##from dolfinx.fem.petsc import assemble_matrix
-#help(df.fem.petsc)

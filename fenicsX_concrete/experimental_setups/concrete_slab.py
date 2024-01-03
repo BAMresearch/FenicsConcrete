@@ -15,7 +15,7 @@ class concreteSlabExperiment(Experiment):
         super().__init__(p)
 
     def setup(self, bc='full'):
-        self.bc = bc  # different boundary settings
+        #self.bc = bc  # different boundary settings
 
         # elements per spatial direction
         if self.p.dim == 2:

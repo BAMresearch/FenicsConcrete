@@ -81,11 +81,6 @@ class LinearElasticity(MaterialProblem):
         self.M =  self.p.rho*ufl.dot(self.v, self.u_trial) * ufl.dx
 
         self.apply_neumann_bc()
-        self.add_damage()
-        unity = df.fem.Constant(self.experiment.mesh, 1.0)
-        self.a = ufl.inner((unity-self.omega)*self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
-        self.stiffness_matrix = assemble_matrix(df.fem.form(self.a), bcs=self.experiment.bcs, diagonal=1)
-        self.stiffness_matrix.assemble()
 
         if self.p.body_force == True:
             if self.p.dim == 2:
@@ -167,6 +162,7 @@ class LinearElasticity(MaterialProblem):
     def add_damage(self,):
         #damage_locations = [0.3 ,0.7]
         damage_basis_functions = []
+
         #xdmf = df.io.XDMFFile(self.experiment.mesh.comm, "damage_distribution.xdmf", "w")
         #xdmf.write_mesh(self.experiment.mesh)
         for counter, value in enumerate(self.damage_locations.value):
@@ -179,13 +175,16 @@ class LinearElasticity(MaterialProblem):
     #Deterministic
     def sigma(self, u):
         if self.p.constitutive == 'isotropic':
+            self.add_damage()
             #self.delta_theta = df.fem.Function(self.experiment.V_scalar) #self.V.mesh.geometry.dim
             #self.delta_theta.interpolate(lambda x: 2.0*x[0])
             #self.delta_theta = df.fem.Constant(self.experiment.mesh, 5.0)
             #self.beta = 0.2
             #return stress_tensor #+ ufl.Identity(len(u))*self.delta_theta*self.beta
             #function_space_scalar = df.fem.functionspace(self.experiment.mesh, ("Lagrange", self.p.degree, (1,)))
-            return  self.lambda_ * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2 * self.mu*self.epsilon(u) #+ ufl.Identity(len(u))*self.delta_theta*self.beta
+            
+            unity = df.fem.Constant(self.experiment.mesh, 1.0) #(unity - omega) * 
+            return  (unity-self.omega)*(self.lambda_ * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2 * self.mu*self.epsilon(u)) #+ ufl.Identity(len(u))*self.delta_theta*self.beta
 
         elif self.p.constitutive == 'orthotropic':    
             denominator = self.E_1 - self.E_2*self.nu_12**2
@@ -241,8 +240,10 @@ class LinearElasticity(MaterialProblem):
 
 
     def solve_eigenvalue_problem(self,):
+        self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
         # Create eigensolver
-
+        self.stiffness_matrix = assemble_matrix(df.fem.form(self.a), bcs=self.experiment.bcs, diagonal=1)
+        self.stiffness_matrix.assemble()
         self.mass_matrix = assemble_matrix(df.fem.form(self.M), bcs=self.experiment.bcs, diagonal=1) #diagonal=1/62831
         self.mass_matrix.assemble()
 

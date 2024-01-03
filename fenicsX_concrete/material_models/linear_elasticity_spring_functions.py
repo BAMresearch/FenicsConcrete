@@ -81,11 +81,6 @@ class LinearElasticity(MaterialProblem):
         self.M =  self.p.rho*ufl.dot(self.v, self.u_trial) * ufl.dx
 
         self.apply_neumann_bc()
-        self.add_damage()
-        unity = df.fem.Constant(self.experiment.mesh, 1.0)
-        self.a = ufl.inner((unity-self.omega)*self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
-        self.stiffness_matrix = assemble_matrix(df.fem.form(self.a), bcs=self.experiment.bcs, diagonal=1)
-        self.stiffness_matrix.assemble()
 
         if self.p.body_force == True:
             if self.p.dim == 2:
@@ -97,8 +92,41 @@ class LinearElasticity(MaterialProblem):
             else:
                 raise Exception(f'wrong dimension {self.p.dim} for problem setup') 
 
-         
-        #self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=self.experiment.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        #For torsional spring
+        def moment_arm_(x):
+            length_x = x[1].shape[0]
+            moment_arm_array = np.zeros(length_x)
+            transformed_coordinates_vector = np.absolute(x[1]) - 0.5*self.p.breadth
+            for i in range(length_x):
+                if transformed_coordinates_vector[i]!=0:   #### must be corrected
+                    moment_arm_array[i] = 1/transformed_coordinates_vector[i]**2
+            return moment_arm_array
+    
+        #For torsional spring
+        def clamped_neutral_axis(x):          
+            return np.logical_and(np.isclose(x[0], 0), np.isclose(x[1],0.5*self.p.breadth))
+            #return np.isclose(x[0], 0)
+
+        if 2 in self.p['uncertainties']:
+            #Linear Spring
+            self.k_x = df.fem.Constant(self.experiment.mesh, self.p.k_x)
+            self.k_y = df.fem.Constant(self.experiment.mesh, self.p.k_y)
+    
+            self.spring_stiffness = ufl.as_matrix([[self.k_x, 0], [0, self.k_y]])
+            self.spring_stress = ufl.dot(self.spring_stiffness,self.u_trial)
+
+            #self.ds = self.experiment.create_neumann_boundary()  
+            self.internal_force_term = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx #- ufl.dot(self.spring_stress, self.v) * self.ds(2)
+            
+            self.calculate_bilinear_form()
+
+            self.solver = PETSc.KSP().create(self.experiment.mesh.comm)
+            self.solver.setType(PETSc.KSP.Type.PREONLY)
+            self.solver.getPC().setType(PETSc.PC.Type.LU)
+            #self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=[], petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
+        else:
+            self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx 
+            #self.weak_form_problem = df.fem.petsc.LinearProblem(self.a, self.L, bcs=self.experiment.bcs, petsc_options={"ksp_type": "preonly", "pc_type": "lu"})
 
     # Random E and nu fields.
     def random_field_generator(self, field_function_space, cov_name, mean, correlation_length1, correlation_length2, variance, no_eigen_values, ktol):
@@ -167,6 +195,7 @@ class LinearElasticity(MaterialProblem):
     def add_damage(self,):
         #damage_locations = [0.3 ,0.7]
         damage_basis_functions = []
+
         #xdmf = df.io.XDMFFile(self.experiment.mesh.comm, "damage_distribution.xdmf", "w")
         #xdmf.write_mesh(self.experiment.mesh)
         for counter, value in enumerate(self.damage_locations.value):
@@ -185,7 +214,9 @@ class LinearElasticity(MaterialProblem):
             #self.beta = 0.2
             #return stress_tensor #+ ufl.Identity(len(u))*self.delta_theta*self.beta
             #function_space_scalar = df.fem.functionspace(self.experiment.mesh, ("Lagrange", self.p.degree, (1,)))
-            return  self.lambda_ * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2 * self.mu*self.epsilon(u) #+ ufl.Identity(len(u))*self.delta_theta*self.beta
+            
+            unity = df.fem.Constant(self.experiment.mesh, 1.0) #(unity - omega) * 
+            return  (unity-self.omega)*(self.lambda_ * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2 * self.mu*self.epsilon(u)) #+ ufl.Identity(len(u))*self.delta_theta*self.beta
 
         elif self.p.constitutive == 'orthotropic':    
             denominator = self.E_1 - self.E_2*self.nu_12**2
@@ -241,8 +272,10 @@ class LinearElasticity(MaterialProblem):
 
 
     def solve_eigenvalue_problem(self,):
+        self.add_damage()
         # Create eigensolver
-
+        self.stiffness_matrix = assemble_matrix(df.fem.form(self.a), bcs=self.experiment.bcs, diagonal=1)
+        self.stiffness_matrix.assemble()
         self.mass_matrix = assemble_matrix(df.fem.form(self.M), bcs=self.experiment.bcs, diagonal=1) #diagonal=1/62831
         self.mass_matrix.assemble()
 
