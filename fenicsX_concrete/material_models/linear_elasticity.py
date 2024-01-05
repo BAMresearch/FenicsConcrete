@@ -47,7 +47,7 @@ class LinearElasticity(MaterialProblem):
 
         #Variable definitions for damage modelling
         self.V_scalar = df.fem.functionspace(self.experiment.mesh, ("Lagrange", 1)) 
-        self.damage_locations = df.fem.Constant(self.experiment.mesh, self.p.damage_locations)
+        #self.damage_locations = df.fem.Constant(self.experiment.mesh, self.p.damage_locations)
 
         # Constant E and nu fields.
         if 0 in self.p['uncertainties'] and self.p.constitutive == 'isotropic':
@@ -77,15 +77,11 @@ class LinearElasticity(MaterialProblem):
         self.u_trial = ufl.TrialFunction(self.experiment.V)
         self.v = ufl.TestFunction(self.experiment.V)
         
-        weight_load = df.fem.Constant(self.experiment.mesh, ScalarType(self.p.weight)) 
         self.M =  self.p.rho*ufl.dot(self.v, self.u_trial) * ufl.dx
+        self.mass_matrix = assemble_matrix(df.fem.form(self.M), bcs=self.experiment.bcs, diagonal=1) #diagonal=1/62831
+        self.mass_matrix.assemble()
 
         self.apply_neumann_bc()
-        self.add_damage()
-        unity = df.fem.Constant(self.experiment.mesh, 1.0)
-        self.a = ufl.inner((unity-self.omega)*self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
-        self.stiffness_matrix = assemble_matrix(df.fem.form(self.a), bcs=self.experiment.bcs, diagonal=1)
-        self.stiffness_matrix.assemble()
 
         if self.p.body_force == True:
             if self.p.dim == 2:
@@ -164,12 +160,11 @@ class LinearElasticity(MaterialProblem):
      
         return damage_basis_function
 
-    def add_damage(self,):
-        #damage_locations = [0.3 ,0.7]
+    def assign_damage(self,):
         damage_basis_functions = []
         #xdmf = df.io.XDMFFile(self.experiment.mesh.comm, "damage_distribution.xdmf", "w")
         #xdmf.write_mesh(self.experiment.mesh)
-        for counter, value in enumerate(self.damage_locations.value):
+        for counter, value in enumerate(self.p.damage_locations):
             damage_basis_functions.append(df.fem.Function(self.V_scalar))
             damage_basis_functions[counter].interpolate(self.damage_coordinate(value)) #interpolates the damage basis function over the domain
             #xdmf.write_function(damage_basis_functions[counter], counter)
@@ -179,13 +174,16 @@ class LinearElasticity(MaterialProblem):
     #Deterministic
     def sigma(self, u):
         if self.p.constitutive == 'isotropic':
+            self.assign_damage()
             #self.delta_theta = df.fem.Function(self.experiment.V_scalar) #self.V.mesh.geometry.dim
             #self.delta_theta.interpolate(lambda x: 2.0*x[0])
             #self.delta_theta = df.fem.Constant(self.experiment.mesh, 5.0)
             #self.beta = 0.2
             #return stress_tensor #+ ufl.Identity(len(u))*self.delta_theta*self.beta
             #function_space_scalar = df.fem.functionspace(self.experiment.mesh, ("Lagrange", self.p.degree, (1,)))
-            return  self.lambda_ * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2 * self.mu*self.epsilon(u) #+ ufl.Identity(len(u))*self.delta_theta*self.beta
+            
+            unity = df.fem.Constant(self.experiment.mesh, 1.0) #(unity - omega) * 
+            return  (unity-self.omega)*(self.lambda_ * ufl.nabla_div(u) * ufl.Identity(len(u)) + 2 * self.mu*self.epsilon(u)) #+ ufl.Identity(len(u))*self.delta_theta*self.beta
 
         elif self.p.constitutive == 'orthotropic':    
             denominator = self.E_1 - self.E_2*self.nu_12**2
@@ -241,10 +239,9 @@ class LinearElasticity(MaterialProblem):
 
 
     def solve_eigenvalue_problem(self,):
-        # Create eigensolver
-
-        self.mass_matrix = assemble_matrix(df.fem.form(self.M), bcs=self.experiment.bcs, diagonal=1) #diagonal=1/62831
-        self.mass_matrix.assemble()
+        self.a = ufl.inner(self.sigma(self.u_trial), self.epsilon(self.v)) * ufl.dx
+        self.stiffness_matrix = assemble_matrix(df.fem.form(self.a), bcs=self.experiment.bcs, diagonal=1)
+        self.stiffness_matrix.assemble()
 
         # Create eigensolver
         self.eigensolver = SLEPc.EPS().create(comm=self.experiment.mesh.comm)
@@ -269,10 +266,10 @@ class LinearElasticity(MaterialProblem):
         #eigensolver.setWhichEigenpairs(SLEPc.EPS.Which.TARGET_REAL)
         #eigensolver.setshift(0.0)
 
-        self.eigensolver.setDimensions(nev=65)
+        self.eigensolver.setDimensions(nev=30)
         self.eigensolver.solve()
-        self.eigensolver.view()
-        self.eigensolver.errorView()
+        #self.eigensolver.view()
+        #self.eigensolver.errorView()
         #print(self.eigensolver.getConverged())
         
         #eigensolver.view()
@@ -281,11 +278,31 @@ class LinearElasticity(MaterialProblem):
         #vals = [(i, np.sqrt(eigensolver.getEigenvalue(i))) for i in range(eigensolver.getConverged())]
         #vals.sort(key=lambda x: x[1].real)
 
+    def eigendata_retrieval(self,):
+        eig_val = []
+        eig_vec = []
+        ef = 0 
+        evs = self.eigensolver.getConverged()
+        #print("Number of converged eigenpairs %d" % evs)
+        ur = df.fem.Function(self.experiment.V)
+        vr, vi = self.stiffness_matrix.createVecs()
+        
+        if evs > 0:
+            for i in range(evs): #evs          
+                eigen_value =self.eigensolver.getEigenpair(i, vr, vi)
+                if (~np.isclose(eigen_value.real, 1.0)):
+                    freq_3D = np.sqrt(eigen_value.real)/2/np.pi
+                    eig_val.append(freq_3D)
+                    eig_vec.append(vr.copy())
+                    ef += 1
+        return eig_val, eig_vec
+
 
     def pv_eigenvalue_plot(self, name, t=0):
         xdmf = df.io.XDMFFile(self.experiment.mesh.comm, name, "w")
         xdmf.write_mesh(self.experiment.mesh)
-        eig_v = []
+        eig_val = []
+        eig_vec = []
         ef = 0 
         evs = self.eigensolver.getConverged()
         print("Number of converged eigenpairs %d" % evs)
@@ -296,7 +313,6 @@ class LinearElasticity(MaterialProblem):
         alpha = lambda n: root(falpha, (2*n+1)*math.pi/2.)['x'][0]
 
         if evs > 0:
-
             for i in range(evs): #evs          
                 eigen_value =self.eigensolver.getEigenpair(i, vr, vi)
                 
@@ -322,9 +338,12 @@ class LinearElasticity(MaterialProblem):
                     ur.vector.array[:] = vr
                     xdmf.write_function(ur,freq_3D) #
                     #xdmf.write_function(ur.copy())
-                    #eig_v.append(vr.copy())
+                    eig_val.append(freq_3D)
+                    eig_vec.append(vr.copy())
                     ef += 1
-        xdmf.close()   
+        xdmf.close()
+        #df.fem.assemble_scalar(df.fem.form(self.M_))
+        return eig_val, eig_vec   
 
     def pv_plot(self, name, t=0):
         # paraview output
